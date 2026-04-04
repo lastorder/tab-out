@@ -530,6 +530,95 @@ async function renderDashboard() {
     abandonedSection.style.display = 'none';
   }
 
+  // --- Uncategorized tabs section ---
+  // Tabs that are open but don't match ANY mission. These fell through the cracks
+  // — either visited too long ago, or filtered as noise, or not in the AI batch.
+  // We group them by domain so they're not a mess.
+  if (extensionAvailable && openTabs.length > 0) {
+    const matchedTabUrls = new Set();
+    for (const m of missions) {
+      const matched = getOpenTabsForMission(m.urls || []);
+      matched.forEach(t => matchedTabUrls.add(t.url));
+    }
+    const unmatchedTabs = openTabs.filter(t => !matchedTabUrls.has(t.url));
+
+    // Filter out chrome:// and extension pages
+    const realUnmatched = unmatchedTabs.filter(t => {
+      return t.url && !t.url.startsWith('chrome') && !t.url.startsWith('about:');
+    });
+
+    // Group by domain
+    const domainGroups = {};
+    for (const tab of realUnmatched) {
+      let domain;
+      try { domain = new URL(tab.url).hostname; } catch { domain = 'other'; }
+      if (!domainGroups[domain]) domainGroups[domain] = [];
+      domainGroups[domain].push(tab);
+    }
+
+    let uncatSection = document.getElementById('uncategorizedSection');
+    if (realUnmatched.length > 0) {
+      if (!uncatSection) {
+        // Create the section if it doesn't exist in HTML
+        uncatSection = document.createElement('div');
+        uncatSection.id = 'uncategorizedSection';
+        uncatSection.className = 'abandoned-section';
+        const abandonedEl = document.getElementById('abandonedSection');
+        const footer = document.querySelector('footer');
+        if (abandonedEl) {
+          abandonedEl.after(uncatSection);
+        } else {
+          footer.before(uncatSection);
+        }
+      }
+
+      const domainEntries = Object.entries(domainGroups).sort((a, b) => b[1].length - a[1].length);
+
+      uncatSection.style.display = 'block';
+      uncatSection.innerHTML = `
+        <div class="section-header">
+          <h2>Uncategorized tabs</h2>
+          <div class="section-line"></div>
+          <div class="section-count">${realUnmatched.length} tab${realUnmatched.length !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="missions">
+          ${domainEntries.map(([domain, tabs]) => `
+            <div class="mission-card" data-domain="${domain}">
+              <div class="status-bar" style="background: var(--muted);"></div>
+              <div class="mission-content">
+                <div class="mission-top">
+                  <span class="mission-name">${domain}</span>
+                  <span class="open-tabs-badge">${ICONS.tabs} ${tabs.length} tab${tabs.length !== 1 ? 's' : ''} open</span>
+                </div>
+                <div class="mission-summary">Open tabs not matched to any mission.</div>
+                <div class="mission-pages">
+                  ${tabs.slice(0, 4).map(t => {
+                    const label = t.title || t.url;
+                    const display = label.length > 40 ? label.slice(0, 40) + '…' : label;
+                    return `<span class="page-chip">${display}</span>`;
+                  }).join('')}
+                  ${tabs.length > 4 ? `<span class="page-chip">+${tabs.length - 4} more</span>` : ''}
+                </div>
+                <div class="actions">
+                  <button class="action-btn close-tabs" data-action="close-uncat" data-domain="${domain}">
+                    ${ICONS.close}
+                    Close ${tabs.length} tab${tabs.length !== 1 ? 's' : ''}
+                  </button>
+                </div>
+              </div>
+              <div class="mission-meta">
+                <div class="mission-page-count">${tabs.length}</div>
+                <div class="mission-page-label">tab${tabs.length !== 1 ? 's' : ''}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    } else if (uncatSection) {
+      uncatSection.style.display = 'none';
+    }
+  }
+
   // --- Footer stats ---
   const statMissions = document.getElementById('statMissions');
   const statTabs     = document.getElementById('statTabs');
@@ -690,6 +779,28 @@ document.addEventListener('click', async (e) => {
     const urls = (mission.urls || []).map(u => u.url);
     await focusTabsByUrls(urls);
     showToast(`Focused on "${mission.name}"`);
+  }
+
+  // ---- close-uncat: close uncategorized tabs by domain ----
+  else if (action === 'close-uncat') {
+    const domain = actionEl.dataset.domain;
+    if (!domain) return;
+
+    // Find all open tabs matching this domain and close them
+    const tabsToClose = openTabs.filter(t => {
+      try { return new URL(t.url).hostname === domain; }
+      catch { return false; }
+    });
+    const urls = tabsToClose.map(t => t.url);
+    await closeTabsByUrls(urls);
+
+    // Animate card removal
+    if (card) {
+      card.classList.add('closing');
+      setTimeout(() => card.remove(), 400);
+    }
+    showToast(`Closed ${tabsToClose.length} tab${tabsToClose.length !== 1 ? 's' : ''} from ${domain}`);
+    await updateStaleCount();
   }
 });
 
