@@ -1,4 +1,4 @@
-# Chrome Web Store Listing — Tab Out
+# Chrome Web Store Listing. Tab Out
 
 Everything below is ready to copy-paste into the Chrome Web Store Developer Dashboard.
 
@@ -14,30 +14,30 @@ Tab Out
 
 ## Summary
 
-*(132 characters max — this appears as the one-line description in search results)*
+*(132 characters max. this appears as the one-line description in search results)*
 
 ```
 Keep tabs on your tabs. AI-powered new tab page that groups your open tabs into missions and lets you close them with style.
 ```
 
-*(124 characters — within the limit)*
+*(124 characters. within the limit)*
 
 ---
 
 ## Description
 
-*(Paste this into the "Detailed description" field. Plain text only — no markdown.)*
+*(Paste this into the "Detailed description" field. Plain text only. no markdown.)*
 
 ```
-Tab Out replaces your new tab page with a living dashboard of everything you have open. Instead of a sea of identical browser tabs, Tab Out groups them into Missions — named clusters that give your chaos a shape.
+Tab Out replaces your new tab page with a living dashboard of everything you have open. Instead of a sea of identical browser tabs, Tab Out groups them into Missions. named clusters that give your chaos a shape.
 
 KEY FEATURES
 
 Mission Mode (AI-powered)
-Tab Out talks to a local AI server on your machine. Tell it your focus — "deep work on the investor deck" or "quick research on Tokyo restaurants" — and it will sort your open tabs into named missions using AI. Click a mission to jump to it. Close a whole mission when you're done.
+Tab Out talks to a local AI server on your machine. Tell it your focus. "deep work on the investor deck" or "quick research on Tokyo restaurants". and it will sort your open tabs into named missions using AI. Click a mission to jump to it. Close a whole mission when you're done.
 
 Domain Grouping (no AI required)
-Not in the mood for AI? One click groups your tabs by domain — all GitHub tabs together, all Notion tabs together, all that YouTube rabbit hole neatly labeled.
+Not in the mood for AI? One click groups your tabs by domain. all GitHub tabs together, all Notion tabs together, all that YouTube rabbit hole neatly labeled.
 
 Duplicate Tab Cleanup
 Tab Out scans for duplicate tabs and highlights them so you can close them instantly. One click, gone.
@@ -50,7 +50,7 @@ Every tab in the dashboard is clickable. Click a tab title to jump to that tab i
 
 IMPORTANT: LOCAL SERVER REQUIRED
 
-Tab Out works with a companion local server that runs on your own computer. This is what enables the AI features — your tabs never leave your machine and are never sent to a third-party service. The server must be running in the background for AI grouping to work; domain grouping and the rest of the dashboard work without it.
+Tab Out works with a companion local server that runs on your own computer. This is what enables the AI features. your tabs never leave your machine and are never sent to a third-party service. The server must be running in the background for AI grouping to work; domain grouping and the rest of the dashboard work without it.
 
 Setup instructions and the server code are open source and free:
 https://github.com/zarazhangrui/tab-out
@@ -87,10 +87,10 @@ English
 The Chrome Web Store requires at least 1 screenshot (1280x800 or 640x400 px).
 Suggested shots:
 
-1. **Mission view** — the main dashboard showing tabs grouped into named missions
-2. **AI grouping in action** — the input box with a focus query typed in
-3. **Domain grouping** — tabs neatly sorted by website
-4. **Confetti moment** — the celebration screen after closing a mission
+1. **Mission view**. the main dashboard showing tabs grouped into named missions
+2. **AI grouping in action**. the input box with a focus query typed in
+3. **Domain grouping**. tabs neatly sorted by website
+4. **Confetti moment**. the celebration screen after closing a mission
 
 To take a screenshot at exactly 1280x800:
 - Open a new tab (Tab Out will load)
@@ -113,7 +113,7 @@ background would match the extension's aesthetic.
 
 ---
 
-## Developer Notes (not published — for your reference)
+## Developer Notes (not published. for your reference)
 
 Before submitting, make sure you have:
 - [ ] Replaced `[your-github-username]` in the description with your actual GitHub username
