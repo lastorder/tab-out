@@ -48,6 +48,12 @@ body::before {
   padding: 48px 32px 80px;
 }
 
+/* When the saved-for-later sidebar is open, expand the container
+   so the tab grid still has room for 2-3 columns */
+.container:has(.dashboard-columns) {
+  max-width: 1300px;
+}
+
 /* ---- Header ---- */
 header {
   display: flex;
@@ -888,15 +894,15 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   align-items: flex-start;
 }
 
-/* Open tabs column takes most of the space */
+/* Open tabs column keeps the grid layout */
 .dashboard-columns .active-section {
   flex: 1;
-  min-width: 0;
+  min-width: 600px;
 }
 
 /* Saved for later column — fixed width on the right, scrolls independently */
 .deferred-column {
-  width: 300px;
+  width: 280px;
   flex-shrink: 0;
   position: sticky;
   top: 32px;
