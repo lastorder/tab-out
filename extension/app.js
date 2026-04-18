@@ -779,6 +779,8 @@ function checkTabOutDupes() {
 
 // Stores the desired tab ID order for the current window (set during render)
 let _desiredTabOrder = [];
+// Pinned active groups (spliced/synthetic) — kept for close handler lookup
+let _pinnedActiveGroups = [];
 
 /**
  * checkTabSortOrder(orderedGroups, realTabs)
@@ -1278,6 +1280,9 @@ async function renderStaticDashboard() {
     }
   }
 
+  // Keep pinned active groups accessible for the close-domain-tabs handler
+  _pinnedActiveGroups = orderedGroups.slice();
+
   // Remaining domain groups follow after pinned groups
   orderedGroups.push(...domainGroups);
 
@@ -1560,9 +1565,8 @@ document.addEventListener('click', async (e) => {
   // ---- Close all tabs in a domain group ----
   if (action === 'close-domain-tabs') {
     const domainId = actionEl.dataset.domainId;
-    const group    = domainGroups.find(g => {
-      return 'domain-' + g.domain.replace(/[^a-z0-9]/g, '-') === domainId;
-    });
+    const matchId = g => 'domain-' + g.domain.replace(/[^a-z0-9]/g, '-') === domainId;
+    const group = domainGroups.find(matchId) || _pinnedActiveGroups.find(matchId);
     if (!group) return;
 
     const urls      = group.tabs.map(t => t.url);
