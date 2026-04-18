@@ -271,6 +271,43 @@ header {
   display: none !important;
 }
 
+/* ---- Pinned placeholder — grayed-out card for sites not currently open ---- */
+.pinned-placeholder {
+  opacity: 0.5;
+  border-style: dashed;
+  border-color: var(--warm-gray);
+  cursor: pointer;
+  transition: opacity 0.2s ease, box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.pinned-placeholder:hover {
+  opacity: 0.85;
+}
+
+.pinned-placeholder::before {
+  display: none;
+}
+
+.pinned-favicon {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  filter: grayscale(0.6);
+  transition: filter 0.2s;
+}
+
+.pinned-placeholder:hover .pinned-favicon {
+  filter: grayscale(0);
+}
+
+.pinned-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+  font-style: italic;
+}
+
 /* Old side status bar — hidden, replaced by top border via ::before */
 .status-bar {
   display: none;

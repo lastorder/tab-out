@@ -693,6 +693,25 @@ function smartTitle(title, url) {
 
 
 /* ----------------------------------------------------------------
+   PINNED SITES — always visible at the top of Open Tabs
+
+   Sites listed here always appear at the front of the dashboard.
+   If a site has open tabs, it shows as a normal domain card.
+   If not, it shows as a grayed-out placeholder you can click to open.
+
+   Override with LOCAL_PINNED_SITES in config.local.js:
+     const LOCAL_PINNED_SITES = [
+       { url: 'https://example.com', label: 'Example' },
+     ];
+   ---------------------------------------------------------------- */
+const DEFAULT_PINNED_SITES = [
+  { url: 'https://calendar.google.com', label: 'Google Calendar' },
+  { url: 'https://mail.google.com',     label: 'Gmail' },
+  { url: 'https://chat.google.com',     label: 'Google Chat' },
+];
+
+
+/* ----------------------------------------------------------------
    SVG ICON STRINGS
    ---------------------------------------------------------------- */
 const ICONS = {
@@ -892,6 +911,33 @@ function renderDomainCard(group) {
       <div class="mission-meta">
         <div class="mission-page-count">${tabCount}</div>
         <div class="mission-page-label">tabs</div>
+      </div>
+    </div>`;
+}
+
+
+/**
+ * renderPinnedPlaceholderCard(site)
+ *
+ * Renders a grayed-out placeholder card for a pinned site that has
+ * no open tabs. Clicking the card opens the site in the current tab.
+ */
+function renderPinnedPlaceholderCard(site, index) {
+  let hostname = '';
+  try { hostname = new URL(site.url).hostname; } catch {}
+  const label = site.label || friendlyDomain(hostname);
+  const faviconUrl = hostname ? `https://www.google.com/s2/favicons?domain=${hostname}&sz=32` : '';
+  const safeUrl = (site.url || '').replace(/"/g, '&quot;');
+
+  return `
+    <div class="mission-card domain-card pinned-placeholder" data-action="open-pinned-site" data-pinned-url="${safeUrl}" data-pinned-index="${index}">
+      <div class="status-bar"></div>
+      <div class="mission-content">
+        <div class="mission-top">
+          ${faviconUrl ? `<img class="pinned-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
+          <span class="mission-name">${label}</span>
+        </div>
+        <div class="pinned-hint">Click to open</div>
       </div>
     </div>`;
 }
@@ -1142,16 +1188,63 @@ async function renderStaticDashboard() {
     return b.tabs.length - a.tabs.length;
   });
 
+  // --- Pinned sites (always visible at the top) ---
+  const pinnedSites = typeof LOCAL_PINNED_SITES !== 'undefined' ? LOCAL_PINNED_SITES : DEFAULT_PINNED_SITES;
+  const pinnedCardsHtml = [];
+  let pinnedActiveCount = 0;
+
+  for (let i = 0; i < pinnedSites.length; i++) {
+    const site = pinnedSites[i];
+    let hostname = '';
+    try { hostname = new URL(site.url).hostname; } catch { continue; }
+
+    // First check if a domain group exists for this hostname
+    const groupIdx = domainGroups.findIndex(g => g.domain === hostname);
+    if (groupIdx !== -1) {
+      const [group] = domainGroups.splice(groupIdx, 1);
+      pinnedCardsHtml.push(renderDomainCard(group));
+      pinnedActiveCount++;
+    } else {
+      // No domain group — tabs might be in the landing pages group.
+      // Check all real tabs for a hostname match.
+      const matchingTabs = realTabs.filter(t => {
+        try { return new URL(t.url).hostname === hostname; } catch { return false; }
+      });
+
+      if (matchingTabs.length > 0) {
+        pinnedCardsHtml.push(renderDomainCard({ domain: hostname, tabs: matchingTabs }));
+        pinnedActiveCount++;
+        // Remove claimed tabs from other groups (e.g. Homepages) to avoid duplicates
+        const claimedIds = new Set(matchingTabs.map(t => t.id));
+        for (const g of domainGroups) {
+          g.tabs = g.tabs.filter(t => !claimedIds.has(t.id));
+        }
+        domainGroups = domainGroups.filter(g => g.tabs.length > 0);
+      } else {
+        pinnedCardsHtml.push(renderPinnedPlaceholderCard(site, i));
+      }
+    }
+  }
+
   // --- Render domain cards ---
   const openTabsSection      = document.getElementById('openTabsSection');
   const openTabsMissionsEl   = document.getElementById('openTabsMissions');
   const openTabsSectionCount = document.getElementById('openTabsSectionCount');
   const openTabsSectionTitle = document.getElementById('openTabsSectionTitle');
 
-  if (domainGroups.length > 0 && openTabsSection) {
+  const totalDomains = pinnedActiveCount + domainGroups.length;
+  const hasContent   = pinnedCardsHtml.length > 0 || domainGroups.length > 0;
+
+  if (hasContent && openTabsSection) {
     if (openTabsSectionTitle) openTabsSectionTitle.textContent = 'Open tabs';
-    openTabsSectionCount.innerHTML = `${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''} &nbsp;&middot;&nbsp; <button class="action-btn close-tabs" data-action="close-all-open-tabs" style="font-size:11px;padding:3px 10px;">${ICONS.close} Close all ${realTabs.length} tabs</button>`;
-    openTabsMissionsEl.innerHTML = domainGroups.map(g => renderDomainCard(g)).join('');
+    const domainCountText = totalDomains > 0
+      ? `${totalDomains} domain${totalDomains !== 1 ? 's' : ''} &nbsp;&middot;&nbsp; `
+      : '';
+    const closeAllBtn = realTabs.length > 0
+      ? `<button class="action-btn close-tabs" data-action="close-all-open-tabs" style="font-size:11px;padding:3px 10px;">${ICONS.close} Close all ${realTabs.length} tabs</button>`
+      : '';
+    openTabsSectionCount.innerHTML = domainCountText + closeAllBtn;
+    openTabsMissionsEl.innerHTML = pinnedCardsHtml.join('') + domainGroups.map(g => renderDomainCard(g)).join('');
     openTabsSection.style.display = 'block';
   } else if (openTabsSection) {
     openTabsSection.style.display = 'none';
@@ -1199,6 +1292,55 @@ document.addEventListener('click', async (e) => {
       setTimeout(() => { banner.style.display = 'none'; banner.style.opacity = '1'; }, 400);
     }
     showToast('Closed extra Tab Out tabs');
+    return;
+  }
+
+  // ---- Open a pinned site (from placeholder card) ----
+  if (action === 'open-pinned-site') {
+    const url = actionEl.dataset.pinnedUrl;
+    const pinnedIndex = parseInt(actionEl.dataset.pinnedIndex, 10) || 0;
+    if (!url) return;
+
+    // If a tab with this hostname already exists, focus it instead
+    let hostname = '';
+    try { hostname = new URL(url).hostname; } catch {}
+
+    const allTabs = await chrome.tabs.query({ currentWindow: true });
+
+    if (hostname) {
+      const existing = allTabs.find(t => {
+        try { return new URL(t.url).hostname === hostname; } catch { return false; }
+      });
+
+      if (existing) {
+        await chrome.tabs.update(existing.id, { active: true });
+        await chrome.windows.update(existing.windowId, { focused: true });
+        return;
+      }
+    }
+
+    // Determine the correct tab-bar position:
+    // Look backwards through the pinned list for the nearest sibling that is
+    // already open, and place the new tab right after it. If none are open,
+    // place at index 0.
+    const pinnedSites = typeof LOCAL_PINNED_SITES !== 'undefined' ? LOCAL_PINNED_SITES : DEFAULT_PINNED_SITES;
+    let insertIndex = 0;
+
+    for (let i = pinnedIndex - 1; i >= 0; i--) {
+      let siblingHost = '';
+      try { siblingHost = new URL(pinnedSites[i].url).hostname; } catch { continue; }
+
+      const siblingTab = allTabs.find(t => {
+        try { return new URL(t.url).hostname === siblingHost; } catch { return false; }
+      });
+
+      if (siblingTab) {
+        insertIndex = siblingTab.index + 1;
+        break;
+      }
+    }
+
+    await chrome.tabs.create({ url, index: insertIndex, active: true });
     return;
   }
 
@@ -1479,4 +1621,20 @@ document.addEventListener('input', async (e) => {
 /* ----------------------------------------------------------------
    INITIALIZE
    ---------------------------------------------------------------- */
+
+// Debounced re-render: coalesces rapid tab events into a single update
+let _renderTimer = null;
+function scheduleRender() {
+  if (_renderTimer) clearTimeout(_renderTimer);
+  _renderTimer = setTimeout(() => renderDashboard(), 300);
+}
+
+// Re-render when tabs are created, removed, or navigate to a new URL
+chrome.tabs.onCreated.addListener(() => scheduleRender());
+chrome.tabs.onRemoved.addListener(() => scheduleRender());
+chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => {
+  if (changeInfo.url || changeInfo.status === 'complete') scheduleRender();
+});
+
+// Initial render
 renderDashboard();
