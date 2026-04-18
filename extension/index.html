@@ -47,6 +47,23 @@
   </div>
 
   <!-- ================================================================
+       TAB SORT BANNER — appears when tab order doesn't match dashboard
+       ================================================================ -->
+  <div class="tab-cleanup-banner tab-sort-banner" id="tabSortBanner" style="display:none">
+    <div class="tab-cleanup-left">
+      <div class="tab-cleanup-icon tab-sort-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 7.5 7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5" />
+        </svg>
+      </div>
+      <div class="tab-cleanup-text">
+        Your tabs are out of order. Sort them to match this view?
+      </div>
+    </div>
+    <button class="tab-cleanup-btn tab-sort-btn" data-action="sort-tabs">Sort tabs</button>
+  </div>
+
+  <!-- ================================================================
        MAIN CONTENT AREA — two-column layout
        Left: open tabs (domain/mission cards)
        Right: saved for later checklist

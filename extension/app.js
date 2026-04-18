@@ -45,6 +45,7 @@ async function fetchOpenTabs() {
       title:    t.title,
       windowId: t.windowId,
       active:   t.active,
+      index:    t.index,
       // Flag Tab Out's own pages so we can detect duplicate new tabs
       isTabOut: t.url === newtabUrl || t.url === 'chrome://newtab/',
     }));
@@ -773,6 +774,53 @@ function checkTabOutDupes() {
 
 
 /* ----------------------------------------------------------------
+   TAB SORT ORDER CHECK
+   ---------------------------------------------------------------- */
+
+// Stores the desired tab ID order for the current window (set during render)
+let _desiredTabOrder = [];
+
+/**
+ * checkTabSortOrder(orderedGroups, realTabs)
+ *
+ * Compares the actual tab-bar order in the current window against the
+ * dashboard's group order. If they differ, shows a banner offering to
+ * sort tabs to match.
+ */
+async function checkTabSortOrder(orderedGroups, realTabs) {
+  const banner = document.getElementById('tabSortBanner');
+  if (!banner) return;
+
+  try {
+    const currentWindow = await chrome.windows.getCurrent();
+
+    // Build desired order: tabs grouped by domain in dashboard render order
+    const desiredOrder = [];
+    for (const group of orderedGroups) {
+      const windowTabs = group.tabs
+        .filter(t => t.windowId === currentWindow.id)
+        .sort((a, b) => a.index - b.index);
+      desiredOrder.push(...windowTabs.map(t => t.id));
+    }
+
+    // Actual order of real tabs in the current window
+    const actualOrder = realTabs
+      .filter(t => t.windowId === currentWindow.id)
+      .sort((a, b) => a.index - b.index)
+      .map(t => t.id);
+
+    _desiredTabOrder = desiredOrder;
+    const needsSort = desiredOrder.length > 1 &&
+      JSON.stringify(actualOrder) !== JSON.stringify(desiredOrder);
+
+    banner.style.display = needsSort ? 'flex' : 'none';
+  } catch {
+    banner.style.display = 'none';
+  }
+}
+
+
+/* ----------------------------------------------------------------
    OVERFLOW CHIPS ("+N more" expand button in domain cards)
    ---------------------------------------------------------------- */
 
@@ -1191,6 +1239,7 @@ async function renderStaticDashboard() {
   // --- Pinned sites (always visible at the top) ---
   const pinnedSites = typeof LOCAL_PINNED_SITES !== 'undefined' ? LOCAL_PINNED_SITES : DEFAULT_PINNED_SITES;
   const pinnedCardsHtml = [];
+  const orderedGroups = [];
   let pinnedActiveCount = 0;
 
   for (let i = 0; i < pinnedSites.length; i++) {
@@ -1203,6 +1252,7 @@ async function renderStaticDashboard() {
     if (groupIdx !== -1) {
       const [group] = domainGroups.splice(groupIdx, 1);
       pinnedCardsHtml.push(renderDomainCard(group));
+      orderedGroups.push(group);
       pinnedActiveCount++;
     } else {
       // No domain group — tabs might be in the landing pages group.
@@ -1212,7 +1262,9 @@ async function renderStaticDashboard() {
       });
 
       if (matchingTabs.length > 0) {
-        pinnedCardsHtml.push(renderDomainCard({ domain: hostname, tabs: matchingTabs }));
+        const syntheticGroup = { domain: hostname, tabs: matchingTabs };
+        pinnedCardsHtml.push(renderDomainCard(syntheticGroup));
+        orderedGroups.push(syntheticGroup);
         pinnedActiveCount++;
         // Remove claimed tabs from other groups (e.g. Homepages) to avoid duplicates
         const claimedIds = new Set(matchingTabs.map(t => t.id));
@@ -1225,6 +1277,9 @@ async function renderStaticDashboard() {
       }
     }
   }
+
+  // Remaining domain groups follow after pinned groups
+  orderedGroups.push(...domainGroups);
 
   // --- Render domain cards ---
   const openTabsSection      = document.getElementById('openTabsSection');
@@ -1256,6 +1311,9 @@ async function renderStaticDashboard() {
 
   // --- Check for duplicate Tab Out tabs ---
   checkTabOutDupes();
+
+  // --- Check if tabs need sorting ---
+  await checkTabSortOrder(orderedGroups, realTabs);
 
   // --- Render "Saved for Later" column ---
   await renderDeferredColumn();
@@ -1292,6 +1350,23 @@ document.addEventListener('click', async (e) => {
       setTimeout(() => { banner.style.display = 'none'; banner.style.opacity = '1'; }, 400);
     }
     showToast('Closed extra Tab Out tabs');
+    return;
+  }
+
+  // ---- Sort tabs to match dashboard order ----
+  if (action === 'sort-tabs') {
+    for (let i = 0; i < _desiredTabOrder.length; i++) {
+      await chrome.tabs.move(_desiredTabOrder[i], { index: i });
+    }
+    await fetchOpenTabs();
+
+    const banner = document.getElementById('tabSortBanner');
+    if (banner) {
+      banner.style.transition = 'opacity 0.4s';
+      banner.style.opacity = '0';
+      setTimeout(() => { banner.style.display = 'none'; banner.style.opacity = '1'; }, 400);
+    }
+    showToast('Tabs sorted to match dashboard');
     return;
   }
 
