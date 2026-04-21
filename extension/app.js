@@ -1346,6 +1346,7 @@ document.addEventListener('click', async (e) => {
 
   // ---- Close duplicate Tab Out tabs ----
   if (action === 'close-tabout-dupes') {
+    suppressAutoRender();
     await closeTabOutDupes();
     playCloseSound();
     const banner = document.getElementById('tabOutDupeBanner');
@@ -1446,6 +1447,7 @@ document.addEventListener('click', async (e) => {
   // ---- Close a single tab ----
   if (action === 'close-single-tab') {
     e.stopPropagation(); // don't trigger parent chip's focus-tab
+    suppressAutoRender();
     const tabUrl = actionEl.dataset.tabUrl;
     if (!tabUrl) return;
 
@@ -1564,6 +1566,7 @@ document.addEventListener('click', async (e) => {
 
   // ---- Close all tabs in a domain group ----
   if (action === 'close-domain-tabs') {
+    suppressAutoRender();
     const domainId = actionEl.dataset.domainId;
     const matchId = g => 'domain-' + g.domain.replace(/[^a-z0-9]/g, '-') === domainId;
     const group = domainGroups.find(matchId) || _pinnedActiveGroups.find(matchId);
@@ -1599,6 +1602,7 @@ document.addEventListener('click', async (e) => {
 
   // ---- Close duplicates, keep one copy ----
   if (action === 'dedup-keep-one') {
+    suppressAutoRender();
     const urlsEncoded = actionEl.dataset.dupeUrls || '';
     const urls = urlsEncoded.split(',').map(u => decodeURIComponent(u)).filter(Boolean);
     if (urls.length === 0) return;
@@ -1635,6 +1639,7 @@ document.addEventListener('click', async (e) => {
 
   // ---- Close ALL open tabs ----
   if (action === 'close-all-open-tabs') {
+    suppressAutoRender();
     const allUrls = openTabs
       .filter(t => t.url && !t.url.startsWith('chrome') && !t.url.startsWith('about:'))
       .map(t => t.url);
@@ -1703,9 +1708,20 @@ document.addEventListener('input', async (e) => {
 
 // Debounced re-render: coalesces rapid tab events into a single update
 let _renderTimer = null;
+// When the UI itself closes tabs, suppress the next auto-render so the
+// close animation isn't interrupted by a full re-render.
+let _suppressRenderUntil = 0;
+
 function scheduleRender() {
+  if (Date.now() < _suppressRenderUntil) return;
   if (_renderTimer) clearTimeout(_renderTimer);
   _renderTimer = setTimeout(() => renderDashboard(), 300);
+}
+
+/** Call before programmatically closing tabs to suppress event-driven re-render. */
+function suppressAutoRender(ms = 800) {
+  _suppressRenderUntil = Date.now() + ms;
+  if (_renderTimer) { clearTimeout(_renderTimer); _renderTimer = null; }
 }
 
 // Re-render when tabs are created, removed, or navigate to a new URL
