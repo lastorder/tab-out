@@ -1211,3 +1211,87 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   opacity: 0.6;
   flex-shrink: 0;
 }
+
+/* ============================================================
+   v2 additions — classes replacing former inline styles.
+
+   Manifest V3's content security policy blocks inline event
+   handlers and inline <script>, so every style that used to be
+   written into the markup by app.js now lives here.
+   ============================================================ */
+
+/* ---- Header actions (settings gear) ---- */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--warm-gray);
+  border-radius: 50%;
+  background: var(--card-bg);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.icon-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.icon-btn:hover {
+  color: var(--accent-amber);
+  border-color: var(--accent-amber);
+  transform: rotate(25deg);
+}
+
+/* ---- Badges ---- */
+.open-tabs-badge.badge-amber {
+  color: var(--accent-amber);
+  background: rgba(200, 113, 58, 0.08);
+}
+
+/* ---- "Close all N tabs" in the section header ---- */
+.action-btn.close-all-btn {
+  font-size: 11px;
+  padding: 3px 10px;
+}
+
+/* ---- Saved for later ---- */
+.deferred-favicon {
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
+.archive-empty {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 8px 0;
+}
+
+/* ---- Footer ---- */
+.footer-credit {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.footer-credit a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Favicons that fail to load are hidden by ui/favicon.ts adding this class. */
+.favicon-failed {
+  display: none !important;
+}

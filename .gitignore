@@ -4,5 +4,13 @@ node_modules/
 .DS_Store
 docs/superpowers/
 
-# Personal config (landing page patterns, etc.) — never push to GitHub
-extension/config.local.js
+# Build output — this is what you load into Chrome. Rebuild with `npm run build`.
+dist/
+
+# Test and tooling artifacts
+coverage/
+.npm-cache/
+
+# Personal settings exports — may contain internal/company URLs.
+# Import these through the extension's settings page instead of committing them.
+*.local.json

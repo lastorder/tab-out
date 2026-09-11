@@ -1,0 +1,30 @@
+{
+  "name": "tab-out",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Keep tabs on your tabs. A Chrome new tab page that groups your open tabs by domain.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:watch": "node scripts/build.mjs --watch",
+    "clean": "node scripts/clean.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "check": "npm run typecheck && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "@types/node": "^22.20.2",
+    "@vitest/coverage-v8": "^3.2.7",
+    "esbuild": "^0.25.12",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.7"
+  }
+}

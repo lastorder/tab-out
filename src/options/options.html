@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tab Out — Settings</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles/options.css">
+</head>
+<body>
+<div class="options-container">
+
+  <header class="options-header">
+    <div>
+      <h1>Tab Out settings</h1>
+      <p class="subtitle">Choose what sits at the top of your dashboard and how tabs get grouped.</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-ghost" id="exportBtn">Export</button>
+      <button class="btn btn-ghost" id="importBtn">Import</button>
+      <button class="btn btn-ghost btn-danger" id="resetBtn">Reset to defaults</button>
+    </div>
+  </header>
+
+  <!-- Hidden file input driving the Import button -->
+  <input type="file" id="importFile" accept="application/json,.json" hidden>
+
+  <!-- ================================================================
+       PINNED SITES
+       ================================================================ -->
+  <section class="panel" id="pinnedPanel">
+    <div class="panel-header">
+      <h2>Pinned sites</h2>
+      <p>
+        Always shown first on the dashboard. If a site has open tabs you get its
+        normal card; if not, you get a click-to-open placeholder.
+      </p>
+    </div>
+    <div class="rows" id="pinnedRows"></div>
+    <button class="btn btn-add" data-action="add-pinned">+ Add pinned site</button>
+  </section>
+
+  <!-- ================================================================
+       HOMEPAGE RULES
+       ================================================================ -->
+  <section class="panel" id="landingPanel">
+    <div class="panel-header">
+      <h2>Homepage rules</h2>
+      <p>
+        URLs matching these rules are collected into one <strong>Homepages</strong> card,
+        so you can clear your Gmail inbox, X feed and YouTube front page in a single click
+        without touching the content tabs on those same sites.
+      </p>
+    </div>
+    <div class="rows" id="landingRows"></div>
+    <button class="btn btn-add" data-action="add-landing">+ Add homepage rule</button>
+  </section>
+
+  <!-- ================================================================
+       CUSTOM GROUPS
+       ================================================================ -->
+  <section class="panel" id="customPanel">
+    <div class="panel-header">
+      <h2>Custom groups</h2>
+      <p>
+        Merge several hostnames into one card, or split one site into separate cards
+        by path. Rules are checked top to bottom &mdash; the first match wins.
+      </p>
+    </div>
+    <div class="rows" id="customRows"></div>
+    <button class="btn btn-add" data-action="add-custom">+ Add custom group</button>
+  </section>
+
+  <!-- ================================================================
+       SAVE BAR — sticky at the bottom
+       ================================================================ -->
+  <div class="save-bar" id="saveBar">
+    <div class="save-status" id="saveStatus"></div>
+    <div class="save-actions">
+      <button class="btn btn-ghost" id="revertBtn">Revert</button>
+      <button class="btn btn-primary" id="saveBtn">Save settings</button>
+    </div>
+  </div>
+
+  <div class="issues" id="issues" hidden></div>
+
+</div>
+
+<script src="options.js"></script>
+</body>
+</html>

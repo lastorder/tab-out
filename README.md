@@ -16,7 +16,7 @@ Send your coding agent (Claude Code, Codex, etc.) this repo and say **"install t
 https://github.com/zarazhangrui/tab-out
 ```
 
-The agent will walk you through it. Takes about 1 minute.
+The agent will walk you through it. Takes about 2 minutes.
 
 ---
 
@@ -24,50 +24,134 @@ The agent will walk you through it. Takes about 1 minute.
 
 - **See all your tabs at a glance** on a clean grid, grouped by domain
 - **Homepages group** pulls Gmail inbox, X home, YouTube, LinkedIn, GitHub homepages into one card
+- **Configurable settings page** edit pinned sites, homepage rules, and custom groups without touching code
 - **Close tabs with style** with swoosh sound + confetti burst
 - **Duplicate detection** flags when you have the same page open twice, with one-click cleanup
 - **Click any tab to jump to it** across windows, no new tab opened
 - **Save for later** bookmark tabs to a checklist before closing them
-- **Localhost grouping** shows port numbers next to each tab so you can tell your vibe coding projects apart
-- **Expandable groups** show the first 8 tabs with a clickable "+N more"
+- **Localhost grouping** shows port numbers next to each tab so you can tell your projects apart
+- **One dashboard, always** opening a new Tab Out page automatically closes the other ones
 - **100% local** your data never leaves your machine
-- **Pure Chrome extension** no server, no Node.js, no npm, no setup beyond loading the extension
 
 ---
 
-## Manual Setup
+## Setup
 
-**1. Clone the repo**
+Tab Out is written in TypeScript and compiles to a `dist/` folder. That folder is what you load into Chrome.
+
+**1. Clone and build**
 
 ```bash
 git clone https://github.com/zarazhangrui/tab-out.git
+cd tab-out
+npm install
+npm run build
 ```
 
-**2. Load the Chrome extension**
+**2. Load the extension**
 
 1. Open Chrome and go to `chrome://extensions`
 2. Enable **Developer mode** (top-right toggle)
 3. Click **Load unpacked**
-4. Navigate to the `extension/` folder inside the cloned repo and select it
+4. Select the **`dist/`** folder (not the repo root)
 
 **3. Open a new tab**
 
 You'll see Tab Out.
 
+> **Updating:** after `git pull`, run `npm run build` again and hit the reload icon on the Tab Out card in `chrome://extensions`.
+
 ---
 
-## How it works
+## Settings
+
+Click the gear icon in the top-right of the dashboard, or right-click the extension icon → **Options**.
+
+| Section | What it controls |
+|---------|------------------|
+| **Pinned sites** | Sites always shown first. With open tabs they get a normal card; without, a click-to-open placeholder. |
+| **Homepage rules** | Which URLs count as a "homepage" and get collected into the shared **Homepages** card. |
+| **Custom groups** | Merge several hostnames into one card, or split one site into separate cards by path. |
+
+Settings are stored in `chrome.storage.sync`, so they follow your Chrome profile across machines. Use **Export** / **Import** to move them as JSON.
+
+### Rule syntax
+
+Both rule types use the same hostname field:
+
+- `x.com` — matches that hostname exactly
+- `.atlassian.net` — a **leading dot** matches any subdomain
+
+Homepage rules then narrow by path:
+
+| Field | Meaning |
+|-------|---------|
+| **Path starts with** | Prefix match. Use `/` to match every path on the host. |
+| **Exact paths** | Comma-separated list, e.g. `/home, /feed` |
+| **Except URLs containing** | Comma-separated veto list |
+
+That last field is what keeps Gmail useful: the shipped rule matches every `mail.google.com` path *except* URLs containing `#inbox/`, so your inbox counts as a homepage while an individual email thread keeps its own card.
+
+---
+
+## Development
+
+```bash
+npm run build         # production build → dist/
+npm run build:watch   # rebuild on change
+npm run typecheck     # tsc --noEmit
+npm test              # run the unit tests
+npm run test:watch    # watch mode
+npm run test:coverage # coverage report
+npm run check         # typecheck + test + build (run before committing)
+```
+
+### Project layout
 
 ```
-You open a new tab
-  -> Tab Out shows your open tabs grouped by domain
-  -> Homepages (Gmail, X, etc.) get their own group at the top
-  -> Click any tab title to jump to it
-  -> Close groups you're done with (swoosh + confetti)
-  -> Save tabs for later before closing them
+src/
+├── types/        Shared domain types
+├── core/         Pure logic — no chrome.*, no DOM, fully unit tested
+│   ├── grouping.ts    Tabs + settings → the ordered list of cards
+│   ├── matching.ts    Evaluates homepage / custom-group rules
+│   ├── selection.ts   Decides which tabs an action applies to
+│   ├── title.ts       Cleans up noisy tab titles
+│   ├── domain.ts      Hostname → friendly brand name
+│   ├── duplicates.ts  Duplicate detection
+│   ├── url.ts         Total URL helpers
+│   └── time.ts        Relative-time formatting
+├── platform/     The seam over Chrome APIs (swapped for fakes in tests)
+│   ├── browser.ts     BrowserTabs interface + Chrome implementation
+│   └── storage.ts     KeyValueStore interface + Chrome/memory implementations
+├── config/       Settings: defaults, validation schema, storage-backed store
+├── services/     Orchestration: TabActions, SavedTabsService
+├── ui/           Presentation: pure HTML renderers + DOM effects
+├── newtab/       Dashboard entry point, render loop, event controller
+├── options/      Settings page: draft model, renderers, controller
+├── background/   MV3 service worker (toolbar badge)
+├── styles/       Stylesheets
+└── manifest.json
 ```
 
-Everything runs inside the Chrome extension. No external server, no API calls, no data sent anywhere. Saved tabs are stored in `chrome.storage.local`.
+The architecture follows one organising rule: **decisions are pure, effects are injected.** Anything that decides *what* should happen lives in `core/` and is tested with plain objects. Anything that touches the browser goes through the `BrowserTabs` / `KeyValueStore` interfaces in `platform/`, so tests inject `createFakeBrowser()` and `createMemoryStore()` instead of mocking globals.
+
+### Tests
+
+297 unit tests across 20 files, run with [Vitest](https://vitest.dev):
+
+```bash
+npm test
+```
+
+Coverage is concentrated where the risk is: `core/` sits near 100%, and `services/`, `config/` and the renderers are all above 95%. Thin DOM wiring is deliberately left to manual verification.
+
+### Adding a feature
+
+1. Put the decision logic in `core/` as a pure function, with tests.
+2. If it touches the browser, add a method to the `BrowserTabs` interface and implement it in both the Chrome adapter and the test fake.
+3. Render markup with a pure function in `ui/render/`, emitting a `data-action` attribute.
+4. Handle that action in `newtab/controller.ts`.
+5. Run `npm run check`.
 
 ---
 
@@ -75,10 +159,16 @@ Everything runs inside the Chrome extension. No external server, no API calls, n
 
 | What | How |
 |------|-----|
+| Language | TypeScript (strict) |
+| Build | esbuild → `dist/` |
+| Tests | Vitest |
 | Extension | Chrome Manifest V3 |
-| Storage | chrome.storage.local |
+| Settings storage | `chrome.storage.sync` |
+| Saved tabs storage | `chrome.storage.local` |
 | Sound | Web Audio API (synthesized, no files) |
 | Animations | CSS transitions + JS confetti particles |
+
+Zero runtime dependencies — everything in `dist/` is first-party code.
 
 ---
 

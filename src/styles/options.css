@@ -1,0 +1,281 @@
+/* ============================================================
+   Tab Out — Settings page
+   Shares the dashboard's warm-paper palette so the two pages
+   feel like one product.
+   ============================================================ */
+
+:root {
+  --ink: #1a1613;
+  --paper: #f8f5f0;
+  --warm-gray: #e8e2da;
+  --muted: #9a918a;
+  --accent-amber: #c8713a;
+  --accent-sage: #5a7a62;
+  --accent-rose: #b35a5a;
+  --card-bg: #fffdf9;
+  --shadow: rgba(26, 22, 19, 0.06);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+.options-container {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 48px 32px 140px;
+}
+
+/* ---- Header ---- */
+.options-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 36px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--warm-gray);
+}
+
+.options-header h1 {
+  font-family: 'Newsreader', serif;
+  font-size: 34px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 46ch;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ---- Panels ---- */
+.panel {
+  background: var(--card-bg);
+  border: 1px solid var(--warm-gray);
+  border-radius: 10px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px var(--shadow);
+}
+
+.panel-header h2 {
+  font-family: 'Newsreader', serif;
+  font-size: 20px;
+  font-weight: 400;
+  margin-bottom: 6px;
+}
+
+.panel-header p {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 68ch;
+  margin-bottom: 18px;
+}
+
+.panel-header strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* ---- Rows ---- */
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.row {
+  display: grid;
+  gap: 8px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--warm-gray);
+  border-radius: 8px;
+  background: var(--paper);
+  transition: border-color 0.15s;
+}
+
+.row:hover { border-color: #d8d0c6; }
+
+.row-pinned  { grid-template-columns: 1.4fr 1fr auto; }
+.row-landing { grid-template-columns: 1fr 0.8fr 1fr 1.1fr auto; }
+.row-custom  { grid-template-columns: 0.8fr 1fr 1fr 0.7fr auto; }
+
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+.field label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+
+.field input {
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  padding: 7px 9px;
+  border: 1px solid var(--warm-gray);
+  border-radius: 6px;
+  background: var(--card-bg);
+  min-width: 0;
+  transition: border-color 0.15s;
+}
+
+.field input:focus {
+  outline: none;
+  border-color: var(--accent-amber);
+}
+
+.field input.invalid {
+  border-color: var(--accent-rose);
+  background: rgba(179, 90, 90, 0.04);
+}
+
+.row-empty {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 14px 12px;
+  border: 1px dashed var(--warm-gray);
+  border-radius: 8px;
+  text-align: center;
+}
+
+/* ---- Row controls ---- */
+.row-controls {
+  display: flex;
+  gap: 2px;
+  align-self: end;
+  padding-bottom: 2px;
+}
+
+.icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.icon-action:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--warm-gray);
+}
+
+.icon-action:disabled { opacity: 0.28; cursor: default; }
+
+.icon-action.danger:hover { color: #fff; background: var(--accent-rose); }
+
+/* ---- Buttons ---- */
+.btn {
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 8px 15px;
+  border-radius: 6px;
+  border: 1px solid var(--warm-gray);
+  background: var(--card-bg);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.btn:hover { border-color: var(--muted); }
+
+.btn-primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.btn-primary:hover { background: #000; border-color: #000; }
+.btn-primary:disabled { opacity: 0.4; cursor: default; background: var(--ink); }
+
+.btn-ghost { background: transparent; }
+.btn-danger:hover { color: var(--accent-rose); border-color: var(--accent-rose); }
+
+.btn-add {
+  width: 100%;
+  border-style: dashed;
+  color: var(--muted);
+  background: transparent;
+}
+
+.btn-add:hover { color: var(--accent-amber); border-color: var(--accent-amber); }
+
+/* ---- Sticky save bar ---- */
+.save-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 14px 32px;
+  background: rgba(248, 245, 240, 0.94);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid var(--warm-gray);
+}
+
+.save-actions { display: flex; gap: 8px; }
+
+.save-status { font-size: 12.5px; color: var(--muted); }
+.save-status.dirty { color: var(--accent-amber); }
+.save-status.saved { color: var(--accent-sage); }
+
+/* ---- Validation issues ---- */
+.issues {
+  position: fixed;
+  right: 24px;
+  bottom: 76px;
+  max-width: 360px;
+  padding: 12px 14px;
+  border: 1px solid var(--accent-rose);
+  border-radius: 8px;
+  background: var(--card-bg);
+  box-shadow: 0 4px 16px var(--shadow);
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.issues ul { margin: 6px 0 0; padding-left: 18px; }
+.issues li { margin-bottom: 3px; color: var(--muted); }
+.issues strong { font-weight: 500; }
+
+/* ---- Responsive ---- */
+@media (max-width: 780px) {
+  .row-pinned,
+  .row-landing,
+  .row-custom { grid-template-columns: 1fr; }
+
+  .row-controls { justify-content: flex-end; }
+  .options-header { flex-direction: column; }
+}
