@@ -144,6 +144,24 @@ body {
   color: var(--ink) !important;
 }
 
+/* A single labelled checkbox, e.g. "Automatically sort tabs...". */
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--ink);
+  cursor: pointer;
+}
+
 .field label {
   font-size: 10px;
   text-transform: uppercase;

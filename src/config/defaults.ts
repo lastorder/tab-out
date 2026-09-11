@@ -51,6 +51,14 @@ export const DEFAULT_CUSTOM_GROUPS: readonly CustomGroupRule[] = Object.freeze([
 /** How many recently-closed tabs to remember by default. */
 export const DEFAULT_MAX_HISTORY_ITEMS = 100;
 
+/**
+ * Whether the dashboard auto-sorts your tabs by default.
+ *
+ * On by default: most people would rather their tabs just match the
+ * dashboard than have to notice a banner and click a button.
+ */
+export const DEFAULT_AUTO_SORT_TABS = true;
+
 /** Returns a fresh, deeply-copied default settings object. */
 export function createDefaultSettings(): TabOutSettings {
   return {
@@ -59,5 +67,6 @@ export function createDefaultSettings(): TabOutSettings {
     landingPatterns: DEFAULT_LANDING_PATTERNS.map((pattern) => ({ ...pattern })),
     customGroups: DEFAULT_CUSTOM_GROUPS.map((rule) => ({ ...rule })),
     maxHistoryItems: DEFAULT_MAX_HISTORY_ITEMS,
+    autoSortTabs: DEFAULT_AUTO_SORT_TABS,
   };
 }

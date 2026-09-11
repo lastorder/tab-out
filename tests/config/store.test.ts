@@ -17,6 +17,7 @@ describe('SettingsStore', () => {
       landingPatterns: [],
       customGroups: [],
       maxHistoryItems: 100,
+      autoSortTabs: true,
     });
 
     expect(saved.pinnedSites).toEqual([{ url: 'https://a.com/' }]);
@@ -42,6 +43,7 @@ describe('SettingsStore', () => {
       landingPatterns: [],
       customGroups: [],
       maxHistoryItems: 100,
+      autoSortTabs: true,
     });
 
     expect(await backing.get(SETTINGS_KEY)).toMatchObject({
@@ -57,6 +59,7 @@ describe('SettingsStore', () => {
       landingPatterns: [{ hostname: 'x.com' }],
       customGroups: [],
       maxHistoryItems: 100,
+      autoSortTabs: true,
     });
 
     const patched = await store.patch({ pinnedSites: [{ url: 'https://b.com/' }] });
@@ -66,7 +69,7 @@ describe('SettingsStore', () => {
 
   it('restores defaults on reset', async () => {
     const store = new SettingsStore(createMemoryStore());
-    await store.save({ version: 1, pinnedSites: [], landingPatterns: [], customGroups: [], maxHistoryItems: 100 });
+    await store.save({ version: 1, pinnedSites: [], landingPatterns: [], customGroups: [], maxHistoryItems: 100, autoSortTabs: true });
     expect(await store.reset()).toEqual(createDefaultSettings());
   });
 
@@ -92,6 +95,7 @@ describe('SettingsStore', () => {
       landingPatterns: [],
       customGroups: [],
       maxHistoryItems: 100,
+      autoSortTabs: true,
     });
     await vi.waitFor(() => expect(listener).toHaveBeenCalled());
 

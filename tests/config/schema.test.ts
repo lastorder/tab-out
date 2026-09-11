@@ -30,6 +30,7 @@ describe('normalizeSettings', () => {
       landingPatterns: [{ hostname: 'x.com', pathExact: ['/home'] }],
       customGroups: [{ groupKey: 'k', groupLabel: 'K', hostname: 'a.com' }],
       maxHistoryItems: 250,
+      autoSortTabs: false,
     };
     expect(normalizeSettings(input).settings).toEqual(input);
   });
@@ -70,6 +71,26 @@ describe('normalizeSettings', () => {
       const { settings, issues } = normalizeSettings({ maxHistoryItems: 5000 });
       expect(settings.maxHistoryItems).toBe(1000);
       expect(issues).toHaveLength(1);
+    });
+  });
+
+  describe('autoSortTabs', () => {
+    it('accepts true and false as-is', () => {
+      expect(normalizeSettings({ autoSortTabs: true }).settings.autoSortTabs).toBe(true);
+      expect(normalizeSettings({ autoSortTabs: false }).settings.autoSortTabs).toBe(false);
+    });
+
+    it('defaults to on, without an issue, when the field is missing', () => {
+      const { settings, issues } = normalizeSettings({});
+      expect(settings.autoSortTabs).toBe(true);
+      expect(issues).toEqual([]);
+    });
+
+    it('falls back to the default and reports an issue for a non-boolean value', () => {
+      const { settings, issues } = normalizeSettings({ autoSortTabs: 'yes' });
+      expect(settings.autoSortTabs).toBe(true);
+      expect(issues).toHaveLength(1);
+      expect(issues[0]!.path).toBe('autoSortTabs');
     });
   });
 

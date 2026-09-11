@@ -75,6 +75,12 @@ export interface TabOutSettings {
   customGroups: CustomGroupRule[];
   /** How many recently-closed tabs to remember before the oldest are dropped. */
   maxHistoryItems: number;
+  /**
+   * When true, the dashboard silently reorders your tabs to match its card
+   * order whenever they drift out of sync. When false, it shows a banner
+   * with a manual "Sort tabs" button instead.
+   */
+  autoSortTabs: boolean;
 }
 
 /** An item on the "Saved for later" checklist. */

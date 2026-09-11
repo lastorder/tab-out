@@ -107,6 +107,7 @@ Once the extension is loaded:
 > 7. **Save a tab for later** by clicking the bookmark icon before closing it. Saved tabs appear in the sidebar.
 > 8. **Only one Tab Out page stays open** — opening a new one automatically closes the others, and it always sits on the rightmost tab, so anything you open next appears to its left.
 > 9. **History** — click the clock icon to see every tab you've recently closed, however you closed it, and reopen one with a click. It updates live — close a tab and it shows up immediately, no refresh needed — and a reopened tab drops off the list immediately too.
+> 10. **Your tab bar quietly reorders itself** to match the dashboard — this is on by default; turn it off in Settings for a manual "Sort tabs" banner instead.
 
 ## Step 4 — Point them at the settings page
 
@@ -117,6 +118,7 @@ Most people miss this, so mention it explicitly:
 > - **Pinned sites** — the sites that always sit at the top. Sites with no open tabs show as click-to-open placeholders.
 > - **Homepage rules** — which URLs count as a "homepage" and get collected into the Homepages card.
 > - **Custom groups** — merge several hostnames into one card, or split one site into separate cards by path.
+> - **Tab sorting** — turn auto-sort off if you'd rather sort manually via a banner.
 > - **History** — how many recently closed tabs to remember (default 100).
 >
 > Settings sync across your Chrome profile, and there are Export/Import buttons for backups.
@@ -206,6 +208,7 @@ Consequences you must respect:
 - **History is recorded in the background worker, not the dashboard.** `chrome.tabs.onRemoved` doesn't include the tab's URL, so `background/main.ts` keeps a `TabSnapshotCache` (`chrome.storage.session`) updated on every create/update, and consumes it on removal. If you add a way to close tabs that bypasses `chrome.tabs.remove`, history recording still works — it listens at the browser level, not through `TabActions`.
 - **The dashboard stays pinned to the rightmost tab.** `background/main.ts` calls `TabActions.moveDashboardToEnd` on every `chrome.tabs.onCreated`, and `newtab/main.ts` calls it once at boot. Both share `dashboardUrls()` from `core/dashboard.ts` — don't redefine "what counts as a dashboard tab" a third time.
 - **Storage-backed panels should react to `onChanged`, not just to tab events.** `TabHistoryService.onChanged` (mirroring `SettingsStore.onChanged`) is what makes the History panel update the instant the background worker records a closure, instead of waiting for the next unrelated repaint or a manual refresh. If you add another background-written, dashboard-displayed list, wire it the same way rather than relying on `RenderScheduler`.
+- **A settings field that isn't a row table (a number, a checkbox) lives directly on `DraftState`, not inside `pinned`/`landing`/`custom`.** See `maxHistoryItems` (string, parsed on save) and `autoSortTabs` (boolean, no parsing needed) for the pattern: add the field to `DraftState`, copy it in `settingsToDraft`/`draftToSettings`, validate it in `config/schema.ts` with a `normalize*` function that never throws, and give it its own `if (input.id === '…')` branch in `options/main.ts`'s input listener — it does not go through `mutateSection`.
 
 ## Storage layout
 

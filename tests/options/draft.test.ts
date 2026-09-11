@@ -96,6 +96,7 @@ describe('draftToSettings', () => {
       landing: [],
       custom: [],
       maxHistoryItems: '100',
+      autoSortTabs: true,
     });
     expect(settings.pinnedSites).toEqual([]);
     expect(issues).toHaveLength(1);
@@ -107,6 +108,7 @@ describe('draftToSettings', () => {
       landing: [],
       custom: [],
       maxHistoryItems: '100',
+      autoSortTabs: true,
     });
     expect(settings.pinnedSites).toEqual([{ url: 'https://example.com/' }]);
   });
@@ -119,6 +121,7 @@ describe('draftToSettings', () => {
         { groupKey: 'work', groupLabel: 'Work', hostname: '.acme.net', pathPrefix: '/jira' },
       ],
       maxHistoryItems: '100',
+      autoSortTabs: true,
     });
     expect(settings.customGroups[0]).toEqual({
       groupKey: 'work',
@@ -134,6 +137,7 @@ describe('draftToSettings', () => {
       landing: [{ hostname: 'x.com', pathPrefix: '', pathExact: '/home', urlNotContains: '' }],
       custom: [],
       maxHistoryItems: '100',
+      autoSortTabs: true,
     });
     expect(settings.landingPatterns[0]).toEqual({ hostname: 'x.com', pathExact: ['/home'] });
   });

@@ -32,6 +32,7 @@ The agent will walk you through it. Takes about 2 minutes.
 - **History** every tab you close — however you closed it — is remembered and one click away from reopening; a reopened (or already-open) tab is never shown twice
 - **Localhost grouping** shows port numbers next to each tab so you can tell your projects apart
 - **One dashboard, always** opening a new Tab Out page automatically closes the other ones, and keeps it pinned to the rightmost tab so new pages always open to its left
+- **Auto-sorted tabs** your tab bar quietly reorders itself to match the dashboard — turn it off in Settings for a manual "Sort tabs" banner instead
 - **100% local** your data never leaves your machine
 
 ---
@@ -73,6 +74,7 @@ Click the gear icon in the top-right of the dashboard, or right-click the extens
 | **Pinned sites** | Sites always shown first. With open tabs they get a normal card; without, a click-to-open placeholder. |
 | **Homepage rules** | Which URLs count as a "homepage" and get collected into the shared **Homepages** card. |
 | **Custom groups** | Merge several hostnames into one card, or split one site into separate cards by path. |
+| **Tab sorting** | Whether tabs are reordered to match the dashboard automatically (on by default) or only via a manual "Sort tabs" banner. |
 | **History** | How many recently closed tabs to remember (default 100). |
 
 Settings are stored in `chrome.storage.sync`, so they follow your Chrome profile across machines. Use **Export** / **Import** to move them as JSON.

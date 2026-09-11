@@ -58,6 +58,11 @@ function render(): void {
     historyInput.value = draft.maxHistoryItems;
   }
 
+  const autoSortInput = byId<HTMLInputElement>('autoSortTabs');
+  if (autoSortInput && autoSortInput.checked !== draft.autoSortTabs) {
+    autoSortInput.checked = draft.autoSortTabs;
+  }
+
   updateStatus();
 }
 
@@ -115,6 +120,13 @@ document.addEventListener('input', (event) => {
   // The single "keep last N closed tabs" field isn't part of a row table.
   if (input.id === 'maxHistoryItems') {
     draft = { ...draft, maxHistoryItems: input.value };
+    updateStatus();
+    return;
+  }
+
+  // Likewise the auto-sort checkbox — a plain boolean, not a row table.
+  if (input.id === 'autoSortTabs') {
+    draft = { ...draft, autoSortTabs: input.checked };
     updateStatus();
     return;
   }

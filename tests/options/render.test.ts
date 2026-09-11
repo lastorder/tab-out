@@ -4,7 +4,7 @@ import { settingsToDraft } from '@/options/draft';
 import { createDefaultSettings } from '@/config/defaults';
 
 const draft = settingsToDraft(createDefaultSettings());
-const emptyDraft = { pinned: [], landing: [], custom: [], maxHistoryItems: '100' };
+const emptyDraft = { pinned: [], landing: [], custom: [], maxHistoryItems: '100', autoSortTabs: true };
 
 describe('renderSection', () => {
   it('renders one row per pinned site, tagged for the event delegate', () => {

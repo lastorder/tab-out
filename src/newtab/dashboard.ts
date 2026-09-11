@@ -125,12 +125,14 @@ export class Dashboard {
   }
 
   /**
-   * Shows the "sort tabs" banner when the real tab-bar order in this window
-   * differs from the order the dashboard is showing.
+   * Keeps the tab bar in sync with the dashboard's order.
+   *
+   * When auto-sort is on (the default), a mismatch is corrected silently and
+   * the banner stays hidden. When it's off, the banner appears instead and
+   * the user sorts manually via the "Sort tabs" button.
    */
   async #renderSortBanner(model: DashboardModel): Promise<void> {
     const banner = byId('tabSortBanner');
-    if (!banner) return;
 
     try {
       const windowId = await this.deps.browser.currentWindowId();
@@ -141,10 +143,18 @@ export class Dashboard {
         .map((tab) => tab.id);
 
       this.#desiredOrder = desired;
-      banner.style.display = needsSorting(actual, desired) ? 'flex' : 'none';
+      const mismatched = needsSorting(actual, desired);
+
+      if (mismatched && this.#settings.autoSortTabs) {
+        await this.deps.tabActions.sortTabs(desired);
+        if (banner) banner.style.display = 'none';
+        return;
+      }
+
+      if (banner) banner.style.display = mismatched ? 'flex' : 'none';
     } catch {
       this.#desiredOrder = [];
-      banner.style.display = 'none';
+      if (banner) banner.style.display = 'none';
     }
   }
 

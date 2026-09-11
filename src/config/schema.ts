@@ -14,7 +14,7 @@ import type {
   PinnedSite,
   TabOutSettings,
 } from '../types';
-import { createDefaultSettings, SETTINGS_VERSION, DEFAULT_MAX_HISTORY_ITEMS } from './defaults';
+import { createDefaultSettings, SETTINGS_VERSION, DEFAULT_MAX_HISTORY_ITEMS, DEFAULT_AUTO_SORT_TABS } from './defaults';
 import { normalizeUrlInput } from '../core/url';
 
 /** Bounds enforced on the "keep last N closed tabs" setting. */
@@ -171,6 +171,17 @@ export function normalizeMaxHistoryItems(raw: unknown, issues: ValidationIssue[]
   return rounded;
 }
 
+/**
+ * Coerces the "auto-sort tabs" field to a boolean, falling back to the
+ * default and reporting why whenever the raw value isn't actually a boolean.
+ */
+export function normalizeAutoSortTabs(raw: unknown, issues: ValidationIssue[]): boolean {
+  if (raw === undefined) return DEFAULT_AUTO_SORT_TABS;
+  if (typeof raw === 'boolean') return raw;
+  issues.push({ path: 'autoSortTabs', message: 'Not a boolean; using the default.' });
+  return DEFAULT_AUTO_SORT_TABS;
+}
+
 /** Drops later entries that reuse an earlier entry's identity. */
 function dedupeBy<T>(items: T[], keyOf: (item: T) => string, path: string, issues: ValidationIssue[]): T[] {
   const seen = new Set<string>();
@@ -236,9 +247,10 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
       : SETTINGS_VERSION;
 
   const maxHistoryItems = normalizeMaxHistoryItems(raw['maxHistoryItems'], issues);
+  const autoSortTabs = normalizeAutoSortTabs(raw['autoSortTabs'], issues);
 
   return {
-    settings: { version, pinnedSites, landingPatterns, customGroups, maxHistoryItems },
+    settings: { version, pinnedSites, landingPatterns, customGroups, maxHistoryItems, autoSortTabs },
     issues,
   };
 }

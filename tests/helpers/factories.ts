@@ -52,6 +52,7 @@ export function emptySettings(overrides: Partial<TabOutSettings> = {}): TabOutSe
     landingPatterns: [],
     customGroups: [],
     maxHistoryItems: 100,
+    autoSortTabs: true,
     ...overrides,
   };
 }

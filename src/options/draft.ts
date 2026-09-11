@@ -47,6 +47,8 @@ export interface DraftState {
   custom: CustomRow[];
   /** "Keep last N closed tabs" — a plain field, not a row table. */
   maxHistoryItems: string;
+  /** "Automatically sort tabs to match the dashboard" — a checkbox, not a row table. */
+  autoSortTabs: boolean;
 }
 
 /** Which row-table a row belongs to. `maxHistoryItems` is not a table. */
@@ -116,6 +118,7 @@ export function settingsToDraft(settings: TabOutSettings): DraftState {
       pathPrefix: rule.pathPrefix ?? '',
     })),
     maxHistoryItems: String(settings.maxHistoryItems),
+    autoSortTabs: settings.autoSortTabs,
   };
 }
 
@@ -158,6 +161,7 @@ export function draftToSettings(draft: DraftState): NormalizeResult {
     landingPatterns,
     customGroups,
     maxHistoryItems: draft.maxHistoryItems,
+    autoSortTabs: draft.autoSortTabs,
   });
 }
 
