@@ -105,8 +105,8 @@ Once the extension is loaded:
 > 5. **Click "Close all N tabs"** on a group to close the whole thing.
 > 6. **Duplicate tabs** are flagged with an amber "(2x)" badge. Click "Close duplicates" to keep one copy.
 > 7. **Save a tab for later** by clicking the bookmark icon before closing it. Saved tabs appear in the sidebar.
-> 8. **Only one Tab Out page stays open** — opening a new one automatically closes the others.
-> 9. **History** — click the clock icon to see every tab you've recently closed, however you closed it, and reopen one with a click. A reopened tab drops off the list immediately.
+> 8. **Only one Tab Out page stays open** — opening a new one automatically closes the others, and it always sits on the rightmost tab, so anything you open next appears to its left.
+> 9. **History** — click the clock icon to see every tab you've recently closed, however you closed it, and reopen one with a click. It updates live — close a tab and it shows up immediately, no refresh needed — and a reopened tab drops off the list immediately too.
 
 ## Step 4 — Point them at the settings page
 
@@ -204,6 +204,8 @@ Consequences you must respect:
 - **Group cards are addressed by index** via `data-group-index`, not by a slugified name. Don't reintroduce string-derived DOM ids; they collide.
 - **Closing by hostname vs exact URL is a real distinction.** Domain cards close by hostname; Homepages and custom groups close by exact URL so they don't take unrelated tabs with them. See `TabActions.closeGroup`.
 - **History is recorded in the background worker, not the dashboard.** `chrome.tabs.onRemoved` doesn't include the tab's URL, so `background/main.ts` keeps a `TabSnapshotCache` (`chrome.storage.session`) updated on every create/update, and consumes it on removal. If you add a way to close tabs that bypasses `chrome.tabs.remove`, history recording still works — it listens at the browser level, not through `TabActions`.
+- **The dashboard stays pinned to the rightmost tab.** `background/main.ts` calls `TabActions.moveDashboardToEnd` on every `chrome.tabs.onCreated`, and `newtab/main.ts` calls it once at boot. Both share `dashboardUrls()` from `core/dashboard.ts` — don't redefine "what counts as a dashboard tab" a third time.
+- **Storage-backed panels should react to `onChanged`, not just to tab events.** `TabHistoryService.onChanged` (mirroring `SettingsStore.onChanged`) is what makes the History panel update the instant the background worker records a closure, instead of waiting for the next unrelated repaint or a manual refresh. If you add another background-written, dashboard-displayed list, wire it the same way rather than relying on `RenderScheduler`.
 
 ## Storage layout
 

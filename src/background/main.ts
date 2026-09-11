@@ -1,13 +1,16 @@
 /**
  * background/main.ts — the Manifest V3 service worker.
  *
- * Two jobs:
+ * Three jobs:
  * 1. Keep the toolbar badge showing how many real web tabs are open,
  *    colour-coded as a quick at-a-glance health signal. Decision logic lives
  *    in `background/badge.ts`.
  * 2. Record every closed tab into the History list, so the dashboard can
  *    offer to reopen it later. Decision logic lives in
  *    `background/history-recorder.ts`.
+ * 3. Keep the dashboard pinned to the rightmost tab of its window, so any
+ *    newly opened page lands to its left. Decision logic lives in
+ *    `core/position.ts`, behind `TabActions.moveDashboardToEnd`.
  *
  * This file is only wiring: it constructs the concrete adapters and forwards
  * `chrome.tabs` events to the testable functions above.
@@ -15,14 +18,18 @@
 
 import { badgeStateForTabs } from './badge';
 import { recordTabRemoved, trackTabActivity } from './history-recorder';
+import { dashboardUrls } from '../core/dashboard';
+import { createChromeBrowserTabs } from '../platform/browser';
 import { createChromeStore } from '../platform/storage';
 import { SettingsStore } from '../config/store';
+import { TabActions } from '../services/tab-actions';
 import { TabHistoryService } from '../services/tab-history';
 import { TabSnapshotCache } from '../services/tab-snapshot-cache';
 
 const settingsStore = new SettingsStore(createChromeStore('sync'));
 const historyService = new TabHistoryService(createChromeStore('local'));
 const snapshotCache = new TabSnapshotCache(createChromeStore('session'));
+const tabActions = new TabActions(createChromeBrowserTabs());
 
 /* ----------------------------------------------------------------
    Badge
@@ -98,16 +105,34 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 
 /* ----------------------------------------------------------------
+   Dashboard position
+
+   "Any newly opened page should land to the left of Tab Out" — enforced by
+   keeping the dashboard tab at the highest index in its window every time a
+   tab is created anywhere in the browser. Cheap to run unconditionally:
+   `moveDashboardToEnd` is a no-op unless there is a dashboard tab and it has
+   actually been pushed out of last place.
+   ---------------------------------------------------------------- */
+
+const keepDashboardAtEnd = (): void => {
+  void tabActions.moveDashboardToEnd(dashboardUrls(chrome.runtime.id));
+};
+
+chrome.tabs.onCreated.addListener(keepDashboardAtEnd);
+
+/* ----------------------------------------------------------------
    Lifecycle
    ---------------------------------------------------------------- */
 
 chrome.runtime.onInstalled.addListener(() => {
   refreshBadge();
   void seedSnapshots();
+  keepDashboardAtEnd();
 });
 chrome.runtime.onStartup.addListener(() => {
   refreshBadge();
   void seedSnapshots();
+  keepDashboardAtEnd();
 });
 chrome.tabs.onCreated.addListener(refreshBadge);
 chrome.tabs.onRemoved.addListener(refreshBadge);
@@ -117,3 +142,4 @@ chrome.tabs.onUpdated.addListener(refreshBadge);
 // restarted for an event — this is not only an install-time thing).
 refreshBadge();
 void seedSnapshots();
+keepDashboardAtEnd();

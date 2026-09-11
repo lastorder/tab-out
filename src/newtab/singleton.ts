@@ -9,20 +9,9 @@
 
 import type { BrowserTabs } from '../platform/browser';
 import type { TabActions } from '../services/tab-actions';
+import { dashboardUrls } from '../core/dashboard';
 
-/**
- * Every URL that means "a Tab Out dashboard".
- *
- * Chrome reports an overridden new tab either as the extension page URL or,
- * depending on how it was opened, as `chrome://newtab/` — so both count.
- */
-export function dashboardUrls(extensionId: string): string[] {
-  return [
-    `chrome-extension://${extensionId}/index.html`,
-    `chrome-extension://${extensionId}/index.html#`,
-    'chrome://newtab/',
-  ];
-}
+export { dashboardUrls };
 
 /**
  * Closes every Tab Out page except the one calling this.

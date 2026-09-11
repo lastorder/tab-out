@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { HISTORY_KEY, TabHistoryService } from '@/services/tab-history';
 import { createMemoryStore } from '@/platform/storage';
 import type { KeyValueStore } from '@/platform/storage';
@@ -144,5 +144,51 @@ describe('TabHistoryService removal and clearing', () => {
     const raw = (await ctx.store.get(HISTORY_KEY)) as ClosedTabEntry[];
     expect(raw).toHaveLength(1);
     expect(raw[0]!.url).toBe('https://c.com/');
+  });
+});
+
+describe('TabHistoryService.onChanged', () => {
+  it('notifies when the history list changes — including from another context sharing the same store', async () => {
+    const ctx = makeService();
+    const listener = vi.fn();
+    ctx.service.onChanged(listener);
+
+    await ctx.service.record({ url: 'https://a.com/' }, 100);
+    await vi.waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
+  });
+
+  it('fires for removal and clearing too', async () => {
+    const ctx = makeService();
+    await ctx.service.record({ url: 'https://a.com/' }, 100);
+
+    const listener = vi.fn();
+    ctx.service.onChanged(listener);
+
+    await ctx.service.removeByUrl('https://a.com/');
+    await ctx.service.record({ url: 'https://b.com/' }, 100);
+    await ctx.service.clear();
+
+    await vi.waitFor(() => expect(listener).toHaveBeenCalledTimes(3));
+  });
+
+  it('ignores writes to unrelated keys in the same store', async () => {
+    const ctx = makeService();
+    const listener = vi.fn();
+    ctx.service.onChanged(listener);
+
+    await ctx.store.set('something-else', 1);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('stops notifying after unsubscribe', async () => {
+    const ctx = makeService();
+    const listener = vi.fn();
+    const off = ctx.service.onChanged(listener);
+    off();
+
+    await ctx.service.record({ url: 'https://a.com/' }, 100);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(listener).not.toHaveBeenCalled();
   });
 });

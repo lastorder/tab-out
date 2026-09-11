@@ -31,7 +31,7 @@ The agent will walk you through it. Takes about 2 minutes.
 - **Save for later** bookmark tabs to a checklist before closing them
 - **History** every tab you close — however you closed it — is remembered and one click away from reopening; a reopened (or already-open) tab is never shown twice
 - **Localhost grouping** shows port numbers next to each tab so you can tell your projects apart
-- **One dashboard, always** opening a new Tab Out page automatically closes the other ones
+- **One dashboard, always** opening a new Tab Out page automatically closes the other ones, and keeps it pinned to the rightmost tab so new pages always open to its left
 - **100% local** your data never leaves your machine
 
 ---
@@ -98,7 +98,7 @@ That last field is what keeps Gmail useful: the shipped rule matches every `mail
 
 ## History
 
-Click the clock icon in the top-right of the dashboard to see every tab you've closed recently — however you closed it (Tab Out's buttons, Chrome's own tab X, closing a whole window). Click a row to reopen it; it disappears from history the moment it's open again, so a URL is never shown as both "open" and "closed" at once. Rows are sorted newest-closed first, with a search box to jump straight to the one you want. The oldest entries drop off once you pass the configured limit (Settings → History).
+Click the clock icon in the top-right of the dashboard to see every tab you've closed recently — however you closed it (Tab Out's buttons, Chrome's own tab X, closing a whole window). The list updates live: close a tab from anywhere and it appears immediately, no refresh needed. Click a row to reopen it; it disappears from history the moment it's open again, so a URL is never shown as both "open" and "closed" at once. Rows are sorted newest-closed first, with a search box to jump straight to the one you want. The oldest entries drop off once you pass the configured limit (Settings → History).
 
 ---
 

@@ -112,4 +112,17 @@ export class TabHistoryService {
     const history = await this.#readAll();
     await this.#writeAll(clampHistory(history, maxItems));
   }
+
+  /**
+   * Notifies when the history list changes in another context — most
+   * importantly, when the background worker records a newly-closed tab
+   * while a dashboard page is already open. Without this, the History panel
+   * would only pick up a closed tab on its next full render.
+   */
+  onChanged(listener: () => void): () => void {
+    return this.#store.onChanged((key) => {
+      if (key !== HISTORY_KEY) return;
+      listener();
+    });
+  }
 }

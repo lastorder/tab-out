@@ -282,4 +282,19 @@ describe('Dashboard History panel', () => {
     expect(html).toContain('Rust');
     expect(html).not.toContain('TypeScript');
   });
+
+  it('keeps a search that was already typed when re-rendering without an explicit query', async () => {
+    const { dashboard, historyService } = await buildDashboard([]);
+    await historyService.record({ url: 'https://typescript.org/', title: 'TypeScript' }, 100);
+    await historyService.record({ url: 'https://rust-lang.org/', title: 'Rust' }, 100);
+    await dashboard.render();
+
+    (document.getElementById('historySearch') as HTMLInputElement).value = 'rust';
+    expect(dashboard.currentHistoryQuery()).toBe('rust');
+
+    await dashboard.renderHistoryPanel(dashboard.currentHistoryQuery());
+    const html = document.getElementById('historyList')!.innerHTML;
+    expect(html).toContain('Rust');
+    expect(html).not.toContain('TypeScript');
+  });
 });

@@ -80,7 +80,7 @@ export class Dashboard {
     this.#renderStats(tabs.length);
     await this.#renderSortBanner(model);
     await this.renderSavedColumn();
-    await this.renderHistoryPanel(this.#currentHistoryQuery());
+    await this.renderHistoryPanel(this.currentHistoryQuery());
   }
 
   #renderHeader(): void {
@@ -224,8 +224,12 @@ export class Dashboard {
     if (list) list.innerHTML = renderHistoryList(visible, query.trim().length >= 2);
   }
 
-  /** Reads whatever the user has already typed into the history search box. */
-  #currentHistoryQuery(): string {
+  /**
+   * Reads whatever the user has already typed into the history search box,
+   * so a reactive re-render (see `renderHistoryPanel` callers) doesn't clear
+   * an in-progress search.
+   */
+  currentHistoryQuery(): string {
     return byId<HTMLInputElement>('historySearch')?.value ?? '';
   }
 

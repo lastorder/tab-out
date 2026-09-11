@@ -208,3 +208,36 @@ describe('TabActions.reopenFromHistory', () => {
     expect(browser.created).toEqual([]);
   });
 });
+
+describe('TabActions.moveDashboardToEnd', () => {
+  const DASHBOARD = 'chrome-extension://abc/index.html';
+  const URLS = [DASHBOARD, 'chrome://newtab/'];
+
+  it('moves the dashboard to the end when something sits after it', async () => {
+    const browser = createFakeBrowser([
+      tab(DASHBOARD, { id: 1, windowId: 1, index: 0 }),
+      tab('https://a.com/', { id: 2, windowId: 1, index: 1 }),
+    ]);
+
+    const moved = await new TabActions(browser).moveDashboardToEnd(URLS);
+
+    expect(moved).toBe(true);
+    expect(browser.moved).toEqual([{ tabId: 1, index: -1 }]);
+  });
+
+  it('does nothing when the dashboard is already last', async () => {
+    const browser = createFakeBrowser([
+      tab('https://a.com/', { id: 1, windowId: 1, index: 0 }),
+      tab(DASHBOARD, { id: 2, windowId: 1, index: 1 }),
+    ]);
+
+    expect(await new TabActions(browser).moveDashboardToEnd(URLS)).toBe(false);
+    expect(browser.moved).toEqual([]);
+  });
+
+  it('does nothing when no dashboard tab is open', async () => {
+    const browser = createFakeBrowser([tab('https://a.com/', { id: 1 })]);
+    expect(await new TabActions(browser).moveDashboardToEnd(URLS)).toBe(false);
+    expect(browser.moved).toEqual([]);
+  });
+});

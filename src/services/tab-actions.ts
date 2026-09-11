@@ -10,6 +10,7 @@ import type { BrowserTabs } from '../platform/browser';
 import type { PinnedSite, TabGroup, TabInfo } from '../types';
 import { selectDuplicateTabIds } from '../core/duplicates';
 import { LANDING_GROUP_KEY, pinnedInsertIndex } from '../core/grouping';
+import { findDashboardTabNeedingMove } from '../core/position';
 import {
   findFocusTarget,
   selectStaleDashboardTabIds,
@@ -148,5 +149,20 @@ export class TabActions {
     const ids = selectStaleDashboardTabIds(tabs, dashboardUrls, keepTabId);
     await this.#browser.close(ids);
     return ids.length;
+  }
+
+  /**
+   * Keeps the dashboard pinned to the rightmost tab of its window, so any
+   * newly opened page lands to its left.
+   *
+   * @returns `true` when the dashboard was moved, `false` when there was
+   * nothing to do — no dashboard tab is open, or it was already last.
+   */
+  async moveDashboardToEnd(dashboardUrls: readonly string[]): Promise<boolean> {
+    const tabs = await this.#browser.queryAll();
+    const tabId = findDashboardTabNeedingMove(tabs, dashboardUrls);
+    if (tabId === null) return false;
+    await this.#browser.move(tabId, -1);
+    return true;
   }
 }

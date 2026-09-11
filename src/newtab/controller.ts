@@ -93,8 +93,7 @@ export function attachController(
   const { tabActions, savedTabs, historyService } = dashboard.deps;
 
   /** Reads the History search box, so re-renders after an action keep the filter. */
-  const historyQuery = (): string =>
-    (document.getElementById('historySearch') as HTMLInputElement | null)?.value ?? '';
+  const historyQuery = (): string => dashboard.currentHistoryQuery();
 
   const openHistoryPanel = (): void => {
     const overlay = document.getElementById('historyOverlay');

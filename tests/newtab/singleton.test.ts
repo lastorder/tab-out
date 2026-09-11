@@ -1,19 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { dashboardUrls, enforceSingleDashboard } from '@/newtab/singleton';
+import { enforceSingleDashboard } from '@/newtab/singleton';
 import { TabActions } from '@/services/tab-actions';
 import { createFakeBrowser } from '../helpers/fake-browser';
 import { tab } from '../helpers/factories';
 
 const EXT_ID = 'abcdef';
 const DASHBOARD = `chrome-extension://${EXT_ID}/index.html`;
-
-describe('dashboardUrls', () => {
-  it('covers both forms Chrome reports for an overridden new tab', () => {
-    const urls = dashboardUrls(EXT_ID);
-    expect(urls).toContain(DASHBOARD);
-    expect(urls).toContain('chrome://newtab/');
-  });
-});
 
 describe('enforceSingleDashboard', () => {
   it('closes every other Tab Out page, keeping the current one', async () => {
