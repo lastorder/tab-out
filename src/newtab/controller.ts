@@ -42,11 +42,20 @@ export type DashboardAction =
  * Without the mute, closing a tab from the dashboard would trigger
  * `chrome.tabs.onRemoved`, which would repaint mid-animation and make the
  * confetti vanish. `suppress()` gives the animation time to finish.
+ *
+ * Crucially, muting is a *delay*, not a *drop*: `suppress()` always queues a
+ * catch-up repaint for when the window expires. The close handlers edit the
+ * DOM directly for instant feedback, but only a real render can recompute
+ * derived state — most visibly, a pinned site whose last tab just closed has
+ * to come back as a click-to-open placeholder rather than vanish. Before the
+ * catch-up existed, the muted event was swallowed and that state stayed
+ * wrong until the user refreshed the page.
  */
 export class RenderScheduler {
   readonly #render: () => Promise<void>;
   readonly #debounceMs: number;
   #timer: number | null = null;
+  #catchUpTimer: number | null = null;
   #mutedUntil = 0;
 
   constructor(render: () => Promise<void>, debounceMs = 300) {
@@ -63,13 +72,23 @@ export class RenderScheduler {
     }, this.#debounceMs);
   }
 
-  /** Call before closing tabs programmatically. */
+  /**
+   * Call before closing tabs programmatically. Repaints are paused for `ms`,
+   * then one catch-up repaint reconciles whatever changed meanwhile.
+   */
   suppress(ms = 800): void {
     this.#mutedUntil = Date.now() + ms;
     if (this.#timer !== null) {
       window.clearTimeout(this.#timer);
       this.#timer = null;
     }
+
+    // Overlapping suppressions collapse into a single catch-up.
+    if (this.#catchUpTimer !== null) window.clearTimeout(this.#catchUpTimer);
+    this.#catchUpTimer = window.setTimeout(() => {
+      this.#catchUpTimer = null;
+      void this.#render();
+    }, ms + 50);
   }
 }
 

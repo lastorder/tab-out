@@ -216,13 +216,27 @@ export class Dashboard {
    * harmless, and it means the list is never stale the instant it opens.
    *
    * `query` filters the list, for the panel's search box.
+   *
+   * The open-tab list is queried live rather than read off `#model`. This is
+   * load-bearing: the panel is repainted reactively when the background
+   * worker records a closure, which is precisely when the last render's
+   * model is out of date — it still lists the tab that just closed. Using it
+   * would filter the new entry straight back out as "still open", and the
+   * entry would only surface after a manual refresh.
    */
   async renderHistoryPanel(query = ''): Promise<void> {
     const badge = byId('historyBadge');
     const countLabel = byId('historyCount');
     const list = byId('historyList');
 
-    const openUrls = new Set(this.#model?.realTabs.map((tab) => tab.url) ?? []);
+    let openUrls = new Set<string>();
+    try {
+      openUrls = new Set((await this.deps.browser.queryAll()).map((tab) => tab.url));
+    } catch {
+      // Fall back to filtering nothing: showing a stale entry the user can
+      // click is better than hiding a real one.
+    }
+
     const entries = await this.deps.historyService.list(openUrls);
     const visible = filterHistory(entries, query);
 

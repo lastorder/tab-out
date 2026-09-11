@@ -332,4 +332,53 @@ describe('Dashboard History panel', () => {
     expect(html).toContain('Rust');
     expect(html).not.toContain('TypeScript');
   });
+
+  it('shows a tab closed since the last full render, without needing one', async () => {
+    // The bug this guards: the panel used to filter against the *last
+    // render's* tab list, so a tab closed after that render still counted as
+    // "open" and its fresh history entry was filtered straight back out —
+    // the entry only appeared after a manual page refresh.
+    const { dashboard, browser, historyService } = await buildDashboard([
+      tab('https://example.com/', { id: 1 }),
+    ]);
+    await dashboard.render();
+
+    // The panel correctly hides it while it is genuinely open.
+    await historyService.record({ url: 'https://example.com/', title: 'Example' }, 100);
+    await dashboard.renderHistoryPanel();
+    expect(document.getElementById('historyList')!.innerHTML).not.toContain('Example');
+
+    // Now it closes — but no full render happens (repaints are suppressed
+    // during the close animation).
+    await browser.close([1]);
+    await dashboard.renderHistoryPanel();
+
+    expect(document.getElementById('historyList')!.innerHTML).toContain('Example');
+    expect(document.getElementById('historyBadge')!.textContent).toBe('1');
+  });
+});
+
+describe('Dashboard pinned sites', () => {
+  it('reverts a pinned site to its click-to-open placeholder once its tabs close', async () => {
+    const pinned = { pinnedSites: [{ url: 'https://example.com/', label: 'Example' }] };
+
+    const { dashboard, browser } = await buildDashboard(
+      [tab('https://example.com/', { id: 1 })],
+      pinned,
+    );
+    await dashboard.render();
+
+    // Open: renders as a real group card, not a placeholder.
+    expect(missions()).toContain('data-group-index="0"');
+    expect(missions()).not.toContain('data-action="open-pinned-site"');
+
+    // Closed: the card must come back as a click-to-open placeholder rather
+    // than disappearing from the dashboard entirely.
+    await browser.close([1]);
+    await dashboard.render();
+
+    expect(missions()).toContain('data-action="open-pinned-site"');
+    expect(missions()).toContain('Example');
+    expect(missions()).toContain('Click to open');
+  });
 });
