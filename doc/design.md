@@ -406,14 +406,22 @@ export function groupKeyOf(url): string {
 
 ```ts
 export function isInternalUrl(url): boolean {
-  if (!url) return true;      // ← 注意：URL 为空也算内部页面
-  return url.startsWith('chrome://') || url.startsWith('chrome-extension://')
-      || url.startsWith('about:')   || url.startsWith('edge://')
-      || url.startsWith('brave://') || url.startsWith('devtools://');
+  if (!url) return true;
+  if (url === 'chrome://newtab/') return true;   // 仪表盘自己的另一副面孔
+  return url.startsWith('chrome-extension://')   // 任何插件的界面页
+      || url.startsWith('about:')                // about:blank 是加载中的占位符
+      || url.startsWith('devtools://');
 }
 ```
 
 `!url → true` 这个细节很重要：正在加载、还没拿到 URL 的标签不应该被渲染成一张卡片。把"不确定"归为"内部页面"是安全的默认值。
+
+这个判定刻意做得很窄。`chrome://extensions`、`chrome://settings`、`edge://...`、
+`brave://...` 这类浏览器系统页面**不再**被当成"内部页面"排除——用户是主动打开、
+主动关闭它们的真实标签，理应像任何网页一样被分组、被"关闭全部"、被记录进历史。
+唯一的特例是 `chrome://newtab/`：Chrome 有时就是这样报告被本插件接管的新标签页
+本身，如果把它当普通标签处理，一个尚未被单例逻辑收尾的重复仪表盘就会被分进一张
+"newtab" 卡片里。
 
 ### 6.2 `domain.ts` — 域名变友好名
 

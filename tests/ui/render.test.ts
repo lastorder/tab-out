@@ -136,6 +136,15 @@ describe('saved-tab rendering', () => {
     expect(html).toContain('2 hrs ago');
   });
 
+  it('opens via the tabs API rather than a plain link, so file:// tabs can reopen', () => {
+    // A raw <a href="file://..."> is silently blocked by Chrome from an
+    // extension page; data-action + chrome.tabs.create is not.
+    const html = renderSavedItem({ ...item, url: 'file:///Users/me/notes.md' }, now);
+    expect(html).toContain('data-action="open-saved"');
+    expect(html).toContain('data-saved-url="file:///Users/me/notes.md"');
+    expect(html).not.toContain('<a ');
+  });
+
   it('escapes a hostile saved title', () => {
     expect(renderSavedItem({ ...item, title: '"><script>alert(1)</script>' }, now)).not.toContain(
       '<script>',

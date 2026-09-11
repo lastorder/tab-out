@@ -35,15 +35,28 @@ export function groupKeyOf(url: string | undefined | null): string {
   return hostnameOf(url);
 }
 
-/** True when the URL points at a browser-internal or extension page. */
+/**
+ * True when the URL should be treated as "not a real tab" — never grouped,
+ * counted, closed by "close all", or recorded into history.
+ *
+ * This is deliberately narrow. Browser system pages (`chrome://extensions`,
+ * `chrome://settings`, `edge://...`, `brave://...`) are real tabs the user
+ * opens and closes on purpose, so they group and behave like any other page.
+ * What stays excluded:
+ *   - `chrome://newtab/` — this is how Chrome sometimes reports the
+ *     extension's own overridden new tab page; treating it as a normal tab
+ *     would let a duplicate dashboard get grouped as a "newtab.com" card.
+ *   - `chrome-extension://` — any extension's UI pages, not just this one's.
+ *   - `about:` — `about:blank` is a transient placeholder while a tab is
+ *     still loading, not a page the user is looking at.
+ *   - `devtools://` — not a content tab.
+ */
 export function isInternalUrl(url: string | undefined | null): boolean {
   if (!url) return true;
+  if (url === 'chrome://newtab/') return true;
   return (
-    url.startsWith('chrome://') ||
     url.startsWith('chrome-extension://') ||
     url.startsWith('about:') ||
-    url.startsWith('edge://') ||
-    url.startsWith('brave://') ||
     url.startsWith('devtools://')
   );
 }

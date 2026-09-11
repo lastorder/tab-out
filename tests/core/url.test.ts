@@ -25,22 +25,29 @@ describe('groupKeyOf', () => {
 
 describe('isInternalUrl', () => {
   it.each([
+    // The dashboard itself, in disguise — this exact URL, not the chrome://
+    // scheme in general.
     'chrome://newtab/',
     'chrome-extension://abc/index.html',
     'about:blank',
-    'edge://settings',
-    'brave://bookmarks',
     'devtools://devtools/bundled/inspector.html',
   ])('treats %s as internal', (url) => {
     expect(isInternalUrl(url)).toBe(true);
   });
 
-  it.each(['https://example.com', 'http://localhost:3000', 'file:///tmp/a.txt'])(
-    'treats %s as a real page',
-    (url) => {
-      expect(isInternalUrl(url)).toBe(false);
-    },
-  );
+  it.each([
+    'https://example.com',
+    'http://localhost:3000',
+    'file:///tmp/a.txt',
+    // Browser system pages are real tabs the user opens on purpose — they
+    // should group, close and get recorded into history like any other.
+    'chrome://extensions/',
+    'chrome://settings/',
+    'edge://settings',
+    'brave://bookmarks',
+  ])('treats %s as a real page', (url) => {
+    expect(isInternalUrl(url)).toBe(false);
+  });
 
   it('treats a missing URL as internal, so half-loaded tabs never render', () => {
     expect(isInternalUrl('')).toBe(true);

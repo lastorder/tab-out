@@ -24,6 +24,7 @@ export type DashboardAction =
   | 'focus-tab'
   | 'close-tab'
   | 'save-tab'
+  | 'open-saved'
   | 'complete-saved'
   | 'dismiss-saved'
   | 'close-group'
@@ -102,6 +103,29 @@ function dismissBanner(id: string): void {
     banner.style.display = 'none';
     banner.style.opacity = '1';
   }, 400);
+}
+
+/**
+ * Toasts the outcome of `TabActions.openOrFocusTab`.
+ *
+ * `announceSuccess` is off for the common "just clicked a saved link" case —
+ * that should feel like a plain link, not narrate itself — but on for
+ * History's explicit "reopen", which is a restore action worth confirming.
+ */
+function toastOpenResult(
+  result: 'focused' | 'created' | 'failed',
+  url: string,
+  announceSuccess: boolean,
+): void {
+  if (result === 'focused') {
+    showToast('Already open — switched to it');
+  } else if (result === 'created') {
+    if (announceSuccess) showToast('Tab reopened');
+  } else if (url.startsWith('file://')) {
+    showToast('Couldn\u2019t open — enable "Allow access to file URLs" for Tab Out');
+  } else {
+    showToast('Couldn\u2019t open that tab');
+  }
 }
 
 /** Wires every dashboard interaction. Returns a teardown function. */
@@ -215,6 +239,15 @@ export function attachController(
         return;
       }
 
+      case 'open-saved': {
+        const url = actionEl.dataset['savedUrl'];
+        if (!url) return;
+
+        const result = await tabActions.openOrFocusTab(url);
+        toastOpenResult(result, url, false);
+        return;
+      }
+
       case 'complete-saved': {
         const id = actionEl.dataset['deferredId'];
         if (!id) return;
@@ -315,11 +348,11 @@ export function attachController(
         const id = actionEl.dataset['historyId'];
         if (!url) return;
 
-        const created = await tabActions.reopenFromHistory(url);
-        if (id) await historyService.removeById(id);
+        const result = await tabActions.openOrFocusTab(url);
+        if (id && result !== 'failed') await historyService.removeById(id);
         await dashboard.renderHistoryPanel(dashboard.currentHistoryQuery());
 
-        showToast(created ? 'Tab reopened' : 'Already open — switched to it');
+        toastOpenResult(result, url, true);
         return;
       }
 

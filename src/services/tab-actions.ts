@@ -114,25 +114,33 @@ export class TabActions {
   }
 
   /**
-   * Reopens a tab from History.
+   * Opens a tab for a URL the dashboard doesn't already know a tab id for —
+   * a saved-for-later bookmark, or a history entry. Used instead of a plain
+   * `<a href>` link because Chrome blocks top-level navigation to `file://`
+   * from an extension page; going through `chrome.tabs.create` avoids that.
    *
-   * If a tab showing that exact URL is already open somewhere — normally
-   * impossible, since an open URL is filtered out of History, but cheap to
-   * guard against — focuses it instead of creating a duplicate. Otherwise
-   * opens a new tab at the end of the tab bar.
+   * If a tab showing that exact URL is already open somewhere, focuses it
+   * instead of creating a duplicate. Otherwise opens a new tab at the end of
+   * the tab bar.
    *
-   * @returns `true` when a new tab was created, `false` when an existing one
-   * was focused instead.
+   * @returns `'focused'` when an existing tab was activated, `'created'` when
+   * a new one was opened, or `'failed'` when Chrome refused to open it — the
+   * one common case is a `file://` URL and the extension lacking "Allow
+   * access to file URLs" in `chrome://extensions`.
    */
-  async reopenFromHistory(url: string): Promise<boolean> {
+  async openOrFocusTab(url: string): Promise<'focused' | 'created' | 'failed'> {
     const tabs = await this.#browser.queryAll();
     const existing = tabs.find((tab) => tab.url === url);
     if (existing) {
       await this.#browser.activate(existing.id, existing.windowId);
-      return false;
+      return 'focused';
     }
-    await this.#browser.create(url);
-    return true;
+    try {
+      await this.#browser.create(url);
+      return 'created';
+    } catch {
+      return 'failed';
+    }
   }
 
   /**

@@ -146,6 +146,7 @@ Then click the **reload icon** on the Tab Out card in `chrome://extensions`.
 | `npm install` fails with `EPERM` on `~/.npm` | Root-owned npm cache. Use `npm install --cache ./.npm-cache`. |
 | New tab is still Chrome's default | Another extension is also overriding the new tab page. Disable it in `chrome://extensions`. |
 | Code changes don't show up | `dist/` is a build artifact. Run `npm run build`, then reload the extension. |
+| A saved local `file://` tab won't reopen ("Couldn't open" toast) | Chrome requires per-extension opt-in for file access. Go to `chrome://extensions` → Tab Out → **Details** → toggle **Allow access to file URLs**. |
 
 ---
 
@@ -211,6 +212,8 @@ Consequences you must respect:
 - **Don't derive live state from `Dashboard`'s last render model.** `#model` is a snapshot from the previous full render, and the moments you most want to repaint (a tab just closed) are exactly when it is stale. `renderHistoryPanel` queries open tabs live for this reason — reading `#model.realTabs` made a just-closed tab still look "open", which filtered its new history entry straight back out until the user refreshed.
 - **`RenderScheduler.suppress()` delays repaints; it must never drop them.** The close handlers mutate the DOM directly for instant feedback, but only a real render recomputes derived state — e.g. a pinned site whose last tab closed has to return as a click-to-open placeholder instead of vanishing. `suppress()` therefore queues a catch-up render; if you add a new suppressed action, don't bypass it.
 - **A settings field that isn't a row table (a number, a checkbox) lives directly on `DraftState`, not inside `pinned`/`landing`/`custom`.** See `maxHistoryItems` (string, parsed on save) and `autoSortTabs` (boolean, no parsing needed) for the pattern: add the field to `DraftState`, copy it in `settingsToDraft`/`draftToSettings`, validate it in `config/schema.ts` with a `normalize*` function that never throws, and give it its own `if (input.id === '…')` branch in `options/main.ts`'s input listener — it does not go through `mutateSection`.
+- **Never render a user-controlled URL as a plain `<a href>`.** Chrome silently blocks top-level navigation to `file://` from an extension page, so a saved or historical `file://` tab could never be reopened by clicking a link. Every reopen path goes through `TabActions.openOrFocusTab()` (`chrome.tabs.create`/`chrome.tabs.update` under the hood) via a `data-action="open-saved"` / `"reopen-history"` button instead. If you add another place that reopens a stored URL, use this method, not an anchor tag.
+- **`isInternalUrl()` excludes as little as it can get away with.** Browser system pages (`chrome://extensions`, `chrome://settings`, `edge://...`, `brave://...`) are real tabs the user manages on purpose, so they group, close and get recorded into history like any other page. The only things actually excluded are `chrome://newtab/` (the dashboard itself, in disguise), `chrome-extension://` (any extension's UI), `about:` (a loading placeholder), and `devtools://`. Don't broaden this back to a blanket `chrome://` prefix match.
 
 ## Testing
 

@@ -8,6 +8,11 @@ describe('friendlyDomain', () => {
     ['news.ycombinator.com', 'Hacker News'],
     ['twitter.com', 'X'],
     ['local-files', 'Local Files'],
+    // Browser system pages — chrome://, edge:// and brave:// URLs parse to
+    // just the page name as their "hostname". Naming these disambiguates
+    // chrome://history from Tab Out's own History feature.
+    ['extensions', 'Extensions'],
+    ['history', 'Browsing History'],
     // Pattern rules.
     ['zara.substack.com', "Zara's Substack"],
     ['substack.com', 'Substack'],

@@ -134,18 +134,24 @@ describe('TabActions.openPinnedSite', () => {
   });
 });
 
-describe('TabActions.reopenFromHistory', () => {
-  it('opens a new tab when the URL is not open', async () => {
+describe('TabActions.openOrFocusTab', () => {
+  it('creates a new tab when the URL is not open', async () => {
     const browser = createFakeBrowser([]);
-    expect(await new TabActions(browser).reopenFromHistory('https://a.com/')).toBe(true);
+    expect(await new TabActions(browser).openOrFocusTab('https://a.com/')).toBe('created');
     expect(browser.created).toEqual([{ url: 'https://a.com/' }]);
   });
 
   it('focuses an already-open tab instead of creating a duplicate', async () => {
     const browser = createFakeBrowser([tab('https://a.com/', { id: 9, windowId: 2 })]);
-    expect(await new TabActions(browser).reopenFromHistory('https://a.com/')).toBe(false);
+    expect(await new TabActions(browser).openOrFocusTab('https://a.com/')).toBe('focused');
     expect(browser.activated).toEqual({ tabId: 9, windowId: 2 });
     expect(browser.created).toEqual([]);
+  });
+
+  it('reports failure instead of throwing, e.g. a file:// URL without file access granted', async () => {
+    const browser = createFakeBrowser([]);
+    browser.create = () => Promise.reject(new Error('file access not allowed'));
+    expect(await new TabActions(browser).openOrFocusTab('file:///tmp/a.txt')).toBe('failed');
   });
 });
 

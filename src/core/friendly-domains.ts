@@ -73,4 +73,15 @@ export const FRIENDLY_DOMAINS: Readonly<Record<string, string>> = Object.freeze(
   'xiaohongshu.com': 'RedNote',
   'www.xiaohongshu.com': 'RedNote',
   'local-files': 'Local Files',
+
+  // Browser system pages. Their "hostname" (per core/url.ts's parsing of
+  // chrome://, edge://, brave:// URLs) is just the page name, e.g.
+  // `chrome://history/` parses to hostname `history` — these labels keep
+  // that from reading as a real website, and `history` in particular from
+  // being confused with Tab Out's own History feature.
+  'extensions': 'Extensions',
+  'settings': 'Browser Settings',
+  'history': 'Browsing History',
+  'downloads': 'Downloads',
+  'bookmarks': 'Bookmarks',
 });

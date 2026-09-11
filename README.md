@@ -22,13 +22,13 @@ The agent will walk you through it. Takes about 2 minutes.
 
 ## Features
 
-- **See all your tabs at a glance** on a clean grid, grouped by domain
+- **See all your tabs at a glance** on a clean grid, grouped by domain — including browser pages like `chrome://extensions` and local `file://` pages, not just websites
 - **Homepages group** pulls Gmail inbox, X home, YouTube, LinkedIn, GitHub homepages into one card
 - **Configurable settings page** edit pinned sites, homepage rules, and custom groups without touching code
 - **Close tabs with style** with swoosh sound + confetti burst
 - **Duplicate detection** flags when you have the same page open twice, with one-click cleanup
 - **Click any tab to jump to it** across windows, no new tab opened
-- **Save for later** bookmark tabs to a checklist before closing them
+- **Save for later** bookmark tabs — including local files — to a checklist before closing them
 - **History** every tab you close — however you closed it — is remembered and one click away from reopening; a reopened (or already-open) tab is never shown twice
 - **Localhost grouping** shows port numbers next to each tab so you can tell your projects apart
 - **One dashboard, always** opening a new Tab Out page automatically closes the other ones, and keeps it pinned to the rightmost tab so new pages always open to its left
