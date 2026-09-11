@@ -4,29 +4,73 @@
  * Pure string builders, mirroring the dashboard's `ui/render` modules. Each
  * input carries `data-section`, `data-index` and `data-field` so one delegated
  * listener can route every edit back into the draft.
+ *
+ * The three tables differ only in which fields they show, so they are
+ * described as data in {@link SECTIONS} and rendered by one generic function.
+ * Adding a field to a rule is a one-line change here plus the matching field
+ * on the draft row type.
  */
 
-import type { CustomRow, DraftState, LandingRow, PinnedRow, SectionName } from './draft';
+import type { DraftRow, DraftState, SectionName } from './draft';
 import type { ValidationIssue } from '../config/schema';
-import { attr, escapeHtml } from '../ui/html';
+import { escapeHtml } from '../ui/html';
 
 export type { SectionName };
 
 interface FieldSpec {
+  /** Key on the draft row, and the `data-field` the input listener reads. */
   field: string;
   label: string;
-  value: string;
   placeholder: string;
 }
 
-function renderField(section: SectionName, index: number, spec: FieldSpec): string {
+interface SectionSpec {
+  fields: readonly FieldSpec[];
+  /** Shown in place of rows when the table is empty. */
+  empty: string;
+}
+
+const SECTIONS: Record<SectionName, SectionSpec> = {
+  pinned: {
+    empty: 'No pinned sites yet.',
+    fields: [
+      { field: 'url', label: 'URL', placeholder: 'https://mail.google.com' },
+      { field: 'label', label: 'Label (optional)', placeholder: 'Gmail' },
+    ],
+  },
+  landing: {
+    empty: 'No homepage rules — the Homepages card will stay empty.',
+    fields: [
+      { field: 'hostname', label: 'Hostname', placeholder: 'x.com or .atlassian.net' },
+      { field: 'pathPrefix', label: 'Path starts with', placeholder: '/' },
+      { field: 'pathExact', label: 'Exact paths', placeholder: '/home, /feed' },
+      { field: 'urlNotContains', label: 'Except URLs containing', placeholder: '#inbox/, #sent/' },
+    ],
+  },
+  custom: {
+    empty: 'No custom groups — tabs group by hostname.',
+    fields: [
+      { field: 'groupKey', label: 'Group key', placeholder: 'work-jira' },
+      { field: 'groupLabel', label: 'Card title', placeholder: 'Jira' },
+      { field: 'hostname', label: 'Hostname', placeholder: '.atlassian.net' },
+      { field: 'pathPrefix', label: 'Path starts with', placeholder: '/jira' },
+    ],
+  },
+};
+
+function renderField(
+  section: SectionName,
+  index: number,
+  spec: FieldSpec,
+  value: string,
+): string {
   const id = `${section}-${index}-${spec.field}`;
   return `
     <div class="field">
-      <label for="${attr(id)}">${escapeHtml(spec.label)}</label>
-      <input id="${attr(id)}" type="text"
-             data-section="${section}" data-index="${index}" data-field="${attr(spec.field)}"
-             value="${attr(spec.value)}" placeholder="${attr(spec.placeholder)}"
+      <label for="${escapeHtml(id)}">${escapeHtml(spec.label)}</label>
+      <input id="${escapeHtml(id)}" type="text"
+             data-section="${section}" data-index="${index}" data-field="${escapeHtml(spec.field)}"
+             value="${escapeHtml(value)}" placeholder="${escapeHtml(spec.placeholder)}"
              spellcheck="false" autocomplete="off">
     </div>`;
 }
@@ -44,108 +88,26 @@ function renderControls(section: SectionName, index: number, total: number): str
     </div>`;
 }
 
-export function renderPinnedRow(row: PinnedRow, index: number, total: number): string {
-  return `
-    <div class="row row-pinned" data-section="pinned" data-index="${index}">
-      ${renderField('pinned', index, {
-        field: 'url',
-        label: 'URL',
-        value: row.url,
-        placeholder: 'https://mail.google.com',
-      })}
-      ${renderField('pinned', index, {
-        field: 'label',
-        label: 'Label (optional)',
-        value: row.label,
-        placeholder: 'Gmail',
-      })}
-      ${renderControls('pinned', index, total)}
-    </div>`;
-}
+function renderRow(section: SectionName, row: DraftRow, index: number, total: number): string {
+  const values = row as unknown as Record<string, string>;
+  const fields = SECTIONS[section].fields
+    .map((spec) => renderField(section, index, spec, values[spec.field] ?? ''))
+    .join('');
 
-export function renderLandingRow(row: LandingRow, index: number, total: number): string {
   return `
-    <div class="row row-landing" data-section="landing" data-index="${index}">
-      ${renderField('landing', index, {
-        field: 'hostname',
-        label: 'Hostname',
-        value: row.hostname,
-        placeholder: 'x.com or .atlassian.net',
-      })}
-      ${renderField('landing', index, {
-        field: 'pathPrefix',
-        label: 'Path starts with',
-        value: row.pathPrefix,
-        placeholder: '/',
-      })}
-      ${renderField('landing', index, {
-        field: 'pathExact',
-        label: 'Exact paths',
-        value: row.pathExact,
-        placeholder: '/home, /feed',
-      })}
-      ${renderField('landing', index, {
-        field: 'urlNotContains',
-        label: 'Except URLs containing',
-        value: row.urlNotContains,
-        placeholder: '#inbox/, #sent/',
-      })}
-      ${renderControls('landing', index, total)}
+    <div class="row row-${section}" data-section="${section}" data-index="${index}">
+      ${fields}
+      ${renderControls(section, index, total)}
     </div>`;
-}
-
-export function renderCustomRow(row: CustomRow, index: number, total: number): string {
-  return `
-    <div class="row row-custom" data-section="custom" data-index="${index}">
-      ${renderField('custom', index, {
-        field: 'groupKey',
-        label: 'Group key',
-        value: row.groupKey,
-        placeholder: 'work-jira',
-      })}
-      ${renderField('custom', index, {
-        field: 'groupLabel',
-        label: 'Card title',
-        value: row.groupLabel,
-        placeholder: 'Jira',
-      })}
-      ${renderField('custom', index, {
-        field: 'hostname',
-        label: 'Hostname',
-        value: row.hostname,
-        placeholder: '.atlassian.net',
-      })}
-      ${renderField('custom', index, {
-        field: 'pathPrefix',
-        label: 'Path starts with',
-        value: row.pathPrefix,
-        placeholder: '/jira',
-      })}
-      ${renderControls('custom', index, total)}
-    </div>`;
-}
-
-/** Shown in place of rows when a table is empty. */
-function renderEmpty(message: string): string {
-  return `<div class="row-empty">${escapeHtml(message)}</div>`;
 }
 
 /** Renders one whole table. */
 export function renderSection(section: SectionName, draft: DraftState): string {
-  switch (section) {
-    case 'pinned':
-      return draft.pinned.length === 0
-        ? renderEmpty('No pinned sites yet.')
-        : draft.pinned.map((row, i) => renderPinnedRow(row, i, draft.pinned.length)).join('');
-    case 'landing':
-      return draft.landing.length === 0
-        ? renderEmpty('No homepage rules — the Homepages card will stay empty.')
-        : draft.landing.map((row, i) => renderLandingRow(row, i, draft.landing.length)).join('');
-    case 'custom':
-      return draft.custom.length === 0
-        ? renderEmpty('No custom groups — tabs group by hostname.')
-        : draft.custom.map((row, i) => renderCustomRow(row, i, draft.custom.length)).join('');
+  const rows: readonly DraftRow[] = draft[section];
+  if (rows.length === 0) {
+    return `<div class="row-empty">${escapeHtml(SECTIONS[section].empty)}</div>`;
   }
+  return rows.map((row, i) => renderRow(section, row, i, rows.length)).join('');
 }
 
 /** Renders the validation panel, or `''` when everything is valid. */

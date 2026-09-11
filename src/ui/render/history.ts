@@ -9,7 +9,7 @@
 import type { ClosedTabEntry } from '../../types';
 import { timeAgo } from '../../core/time';
 import { hostnameOf, stripWww } from '../../core/url';
-import { attr, escapeHtml, faviconUrl } from '../html';
+import { escapeHtml, faviconUrl } from '../html';
 import { ICONS } from '../icons';
 
 /**
@@ -23,11 +23,11 @@ export function renderHistoryItem(entry: ClosedTabEntry, now: Date = new Date())
   const title = entry.title || entry.url;
 
   return `
-    <div class="history-item" data-history-id="${attr(entry.id)}">
+    <div class="history-item" data-history-id="${escapeHtml(entry.id)}">
       <button class="history-item-open" data-action="reopen-history"
-              data-history-id="${attr(entry.id)}" data-history-url="${attr(entry.url)}"
-              title="Reopen ${attr(title)}">
-        ${favicon ? `<img class="history-favicon" src="${attr(favicon)}" alt="" loading="lazy">` : ''}
+              data-history-id="${escapeHtml(entry.id)}" data-history-url="${escapeHtml(entry.url)}"
+              title="Reopen ${escapeHtml(title)}">
+        ${favicon ? `<img class="history-favicon" src="${escapeHtml(favicon)}" alt="" loading="lazy">` : ''}
         <span class="history-item-text">
           <span class="history-item-title">${escapeHtml(title)}</span>
           <span class="history-item-meta">
@@ -39,14 +39,14 @@ export function renderHistoryItem(entry: ClosedTabEntry, now: Date = new Date())
         <span class="history-item-reopen-hint">${ICONS.reopen}</span>
       </button>
       <button class="history-item-remove" data-action="remove-history"
-              data-history-id="${attr(entry.id)}" title="Remove from history">
+              data-history-id="${escapeHtml(entry.id)}" title="Remove from history">
         ${ICONS.close}
       </button>
     </div>`;
 }
 
 /** The empty state shown when there is nothing to reopen (or no search match). */
-export function renderHistoryEmpty(hasQuery: boolean): string {
+function renderHistoryEmpty(hasQuery: boolean): string {
   return hasQuery
     ? `<div class="history-empty">No matching closed tabs.</div>`
     : `<div class="history-empty">No closed tabs yet. Close one and it'll show up here.</div>`;

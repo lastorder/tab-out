@@ -9,14 +9,7 @@
 
 import type { ClosedTabEntry } from '../types';
 import type { KeyValueStore } from '../platform/storage';
-import {
-  clampHistory,
-  dedupeAgainstOpenUrls,
-  removeHistoryById,
-  removeHistoryByUrl,
-  sortHistoryByRecency,
-  upsertHistoryEntry,
-} from '../core/history';
+import { clampHistory, sortHistoryByRecency, upsertHistoryEntry } from '../core/history';
 
 /** Storage key holding the closed-tab array. */
 export const HISTORY_KEY = 'closedTabHistory';
@@ -84,21 +77,21 @@ export class TabHistoryService {
    * filtered out — the panel must never show a "closed" tab that is open.
    */
   async list(openUrls: ReadonlySet<string> = new Set()): Promise<ClosedTabEntry[]> {
-    const history = await this.#readAll();
-    return dedupeAgainstOpenUrls(sortHistoryByRecency(history), openUrls);
+    const history = sortHistoryByRecency(await this.#readAll());
+    return openUrls.size === 0 ? history : history.filter((h) => !openUrls.has(h.url));
   }
 
   /** Removes every entry for a URL — called when that page is opened again. */
   async removeByUrl(url: string): Promise<void> {
     const history = await this.#readAll();
-    await this.#writeAll(removeHistoryByUrl(history, url));
+    await this.#writeAll(history.filter((h) => h.url !== url));
   }
 
   /** Removes one entry by id — the panel's per-row remove button. */
   async removeById(id: string): Promise<boolean> {
     const history = await this.#readAll();
     if (!history.some((h) => h.id === id)) return false;
-    await this.#writeAll(removeHistoryById(history, id));
+    await this.#writeAll(history.filter((h) => h.id !== id));
     return true;
   }
 

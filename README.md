@@ -131,7 +131,7 @@ src/
 │   ├── url.ts         Total URL helpers
 │   ├── time.ts        Relative-time formatting
 │   ├── history.ts     Closed-tab list: dedup, ordering, trimming
-│   └── tab-snapshot.ts Tab-id → last-known-info cache (pure half)
+│   └── dashboard.ts   Identifying and positioning Tab Out's own tab
 ├── platform/     The seam over Chrome APIs (swapped for fakes in tests)
 │   ├── browser.ts     BrowserTabs interface + Chrome implementation
 │   └── storage.ts     KeyValueStore interface + Chrome/memory implementations
@@ -149,13 +149,18 @@ The architecture follows one organising rule: **decisions are pure, effects are 
 
 ### Tests
 
-369 unit tests across 26 files, run with [Vitest](https://vitest.dev):
+271 unit tests across 26 files, run with [Vitest](https://vitest.dev):
 
 ```bash
 npm test
 ```
 
-Coverage is concentrated where the risk is: `core/` sits near 100%, and `services/`, `config/` and the renderers are all above 95%. Thin DOM wiring is deliberately left to manual verification.
+The suite is deliberately kept small enough to stay readable. Tests target
+behaviour that could plausibly break — grouping precedence, which tabs an
+action closes, settings validation, HTML escaping, and the dashboard's render
+loop — rather than restating the implementation. Pure helpers are usually
+covered through the service that uses them, since `createFakeBrowser()` and
+`createMemoryStore()` make that the more realistic level to assert at.
 
 ### Adding a feature
 

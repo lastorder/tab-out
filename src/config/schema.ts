@@ -71,6 +71,26 @@ export function normalizePinnedSite(raw: unknown, path: string, issues: Validati
 }
 
 /**
+ * Parses the hostname constraint shared by landing patterns and custom
+ * groups. Returns `null` when neither form is present — a rule that
+ * constrains no hostname would match every tab on the internet, which is
+ * never what a half-filled form meant.
+ */
+function normalizeHostnameConstraint(
+  raw: Record<string, unknown>,
+  path: string,
+  issues: ValidationIssue[],
+): { hostname?: string; hostnameEndsWith?: string } | null {
+  const hostname = asTrimmedString(raw['hostname']).replace(/^https?:\/\//, '');
+  const hostnameEndsWith = asTrimmedString(raw['hostnameEndsWith']);
+  if (!hostname && !hostnameEndsWith) {
+    issues.push({ path, message: 'Needs either "hostname" or "hostnameEndsWith".' });
+    return null;
+  }
+  return hostname ? { hostname } : { hostnameEndsWith };
+}
+
+/**
  * A landing pattern must constrain the hostname somehow. Without that it would
  * match every tab on the internet, which is never what the user meant.
  */
@@ -84,16 +104,10 @@ export function normalizeLandingPattern(
     return null;
   }
 
-  const hostname = asTrimmedString(raw['hostname']).replace(/^https?:\/\//, '');
-  const hostnameEndsWith = asTrimmedString(raw['hostnameEndsWith']);
-  if (!hostname && !hostnameEndsWith) {
-    issues.push({ path, message: 'Needs either "hostname" or "hostnameEndsWith".' });
-    return null;
-  }
+  const host = normalizeHostnameConstraint(raw, path, issues);
+  if (!host) return null;
 
-  const pattern: LandingPattern = {};
-  if (hostname) pattern.hostname = hostname;
-  else pattern.hostnameEndsWith = hostnameEndsWith;
+  const pattern: LandingPattern = { ...host };
 
   const pathPrefix = asPath(raw['pathPrefix']);
   if (pathPrefix) pattern.pathPrefix = pathPrefix;
@@ -127,19 +141,14 @@ export function normalizeCustomGroup(
     return null;
   }
 
-  const hostname = asTrimmedString(raw['hostname']).replace(/^https?:\/\//, '');
-  const hostnameEndsWith = asTrimmedString(raw['hostnameEndsWith']);
-  if (!hostname && !hostnameEndsWith) {
-    issues.push({ path, message: 'Needs either "hostname" or "hostnameEndsWith".' });
-    return null;
-  }
+  const host = normalizeHostnameConstraint(raw, path, issues);
+  if (!host) return null;
 
   const rule: CustomGroupRule = {
     groupKey,
     groupLabel: asTrimmedString(raw['groupLabel']) || groupKey,
+    ...host,
   };
-  if (hostname) rule.hostname = hostname;
-  else rule.hostnameEndsWith = hostnameEndsWith;
 
   const pathPrefix = asPath(raw['pathPrefix']);
   if (pathPrefix) rule.pathPrefix = pathPrefix;

@@ -95,6 +95,8 @@ tab-out/
 │   │   ├── domain.ts         ← 域名 → 友好品牌名
 │   │   ├── duplicates.ts     ← 重复检测
 │   │   ├── url.ts            ← URL 工具（永不抛异常）
+│   │   ├── dashboard.ts      ← 识别与定位 Tab Out 自己的标签页
+│   │   ├── history.ts        ← 关闭历史的排序与裁剪
 │   │   ├── time.ts           ← 相对时间格式化
 │   │   └── friendly-domains.ts ← 域名映射表（纯数据）
 │   ├── platform/             ← 【接缝层】把 chrome.* 封在这里
@@ -115,14 +117,12 @@ tab-out/
 │   │   ├── favicon.ts        ← 图标加载失败兜底
 │   │   └── render/           ← 纯函数渲染器（数据 → HTML 字符串）
 │   │       ├── cards.ts
-│   │       ├── chips.ts
 │   │       └── saved.ts
 │   ├── newtab/               ← 【入口】新标签页
 │   │   ├── index.html
 │   │   ├── main.ts           ← 组装根（唯一构造具体实现的地方）
 │   │   ├── dashboard.ts      ← 渲染循环与状态
-│   │   ├── controller.ts     ← 事件委托
-│   │   └── singleton.ts      ← "只保留一个 Tab Out 页"
+│   │   └── controller.ts     ← 事件委托
 │   ├── options/              ← 【入口】设置页
 │   │   ├── options.html
 │   │   ├── draft.ts          ← 表单草稿模型（纯函数）
@@ -135,7 +135,7 @@ tab-out/
 │   │   ├── dashboard.css
 │   │   └── options.css
 │   └── icons/
-├── tests/                    ← 单元测试（20 个文件，297 个用例）
+├── tests/                    ← 单元测试（26 个文件，271 个用例）
 │   ├── helpers/              ← 测试替身：假浏览器、数据工厂
 │   ├── core/ config/ services/ ui/ options/ newtab/ background/
 │   └── setup.ts
@@ -157,7 +157,7 @@ v1 的卖点之一是"**没有 package.json，没有构建步骤，写完直接�
 
 | v1 的痛点 | v2 的解法 |
 |-----------|-----------|
-| 改一个函数不知道会不会影响别处 | TypeScript 静态类型 + 297 个单元测试 |
+| 改一个函数不知道会不会影响别处 | TypeScript 静态类型 + 271 个单元测试 |
 | 想加功能得在 1700 行里找位置 | 按职责分成 34 个模块 |
 | 逻辑和 `chrome.*` 调用混在一起，没法测试 | `platform/` 接缝层，测试注入假对象 |
 | 首页规则是硬编码的 JS 函数，用户改不了 | 改成可序列化的声明式数据 + 设置页 |
@@ -326,7 +326,7 @@ export const BADGE_THRESHOLDS = [
   { max: Infinity, color: '#b35a5a' },  // 红：该清理了
 ] as const;
 
-export function badgeStateForCount(count: number): BadgeState {
+export function badgeStateForTabs(tabs: readonly { url?: string }[]): BadgeState {
   if (count <= 0) return { text: '' };          // 0 个不显示"0"，留白更干净
   const t = BADGE_THRESHOLDS.find(t => count <= t.max) ?? BADGE_THRESHOLDS[2];
   return { text: String(count), color: t.color };
@@ -360,7 +360,7 @@ refresh();   // Worker 首次启动时立刻跑一次
 ```ts
 it.each([[10, '#3d7a4a'], [11, '#b8892e'], [20, '#b8892e'], [21, '#b35a5a']])(
   'colours %i tabs %s', (count, color) => {
-    expect(badgeStateForCount(count)).toEqual({ text: String(count), color });
+    expect(badgeStateForTabs(realTabs(count))).toEqual({ text: String(count), color });
   });
 ```
 
@@ -841,11 +841,8 @@ it('uses no inline event handlers, which MV3 would block', () => {
 **任何网站都能把自己的 `<title>` 设成任意字符串**，包括 `<img src=x onerror=...>`。而渲染器用模板字符串拼 HTML。所以：
 
 ```ts
-export function escapeHtml(value: unknown): string {   // 用于元素内容
+export function escapeHtml(value: unknown): string {   // 元素内容与属性值通用
   return String(value).replace(/[&<>"']/g, c => HTML_ESCAPES[c] ?? c);
-}
-export function attr(value: unknown): string {          // 用于属性值
-  return escapeHtml(value);
 }
 ```
 
@@ -955,13 +952,16 @@ async function bootstrap(): Promise<void> {
   const tabActions    = new TabActions(browser);
   const savedTabs     = new SavedTabsService(createChromeStore('local'));
   const settingsStore = new SettingsStore(createChromeStore('sync'));
+  const historyService = new TabHistoryService(createChromeStore('local'));
 
   installFaviconFallback();
 
   // 先执行"单例"规则，再首次渲染 —— 这样渲染出来的数字已经排除了即将关闭的页面
-  await enforceSingleDashboard(browser, tabActions, chrome.runtime.id);
+  await tabActions.keepOnlyThisDashboard(dashboardUrls(chrome.runtime.id));
+  // 然后把自己挪到标签栏最右 —— 之后新开的页面都在它左边
+  await tabActions.moveDashboardToEnd(dashboardUrls(chrome.runtime.id));
 
-  const dashboard = new Dashboard({ browser, tabActions, savedTabs, settingsStore });
+  const dashboard = new Dashboard({ browser, tabActions, savedTabs, settingsStore, historyService });
   const scheduler = new RenderScheduler(() => dashboard.render());
 
   attachController(dashboard, scheduler);
@@ -981,14 +981,15 @@ async function bootstrap(): Promise<void> {
 **v2 的行为**：直接关掉，不问。
 
 ```ts
-/**
- * Tab Out 是一个"路过的地方"，不是一个"要收藏的标签"。
- */
-export async function enforceSingleDashboard(browser, tabActions, extensionId): Promise<number> {
+// Tab Out 是一个"路过的地方"，不是一个"要收藏的标签"。
+async keepOnlyThisDashboard(dashboardUrls: readonly string[]): Promise<number> {
   try {
-    const currentTabId = await browser.currentTabId();
-    if (currentTabId === -1) return 0;     // 拿不到自己的 id 就什么都不做
-    return await tabActions.closeOtherDashboards(dashboardUrls(extensionId), currentTabId);
+    const keepTabId = await this.#browser.currentTabId();
+    if (keepTabId === -1) return 0;          // 拿不到自己的 id 就什么都不做
+    const tabs = await this.#browser.queryAll();
+    const ids = selectStaleDashboardTabIds(tabs, dashboardUrls, keepTabId);
+    await this.#browser.close(ids);
+    return ids.length;
   } catch {
     return 0;   // 出错也不能影响仪表盘渲染
   }
@@ -1102,7 +1103,7 @@ document.addEventListener('input', (event) => {
 
 ### 12.1 规模
 
-**20 个测试文件，297 个用例**，用 [Vitest](https://vitest.dev) 运行，全套跑完约 0.5 秒。
+**26 个测试文件，271 个用例**，用 [Vitest](https://vitest.dev) 运行，全套跑完约 0.8 秒。
 
 ```bash
 npm test              # 跑一次
@@ -1115,11 +1116,11 @@ npm run test:coverage # 覆盖率报告
 | 层 | 语句覆盖率 | 说明 |
 |----|-----------|------|
 | `core/` | **99.8%** | 核心算法，风险最高，覆盖最全 |
-| `options/` | 98.2% | 草稿模型 + 表单渲染 |
-| `services/` | 97.5% | 用假浏览器端到端验证 |
-| `config/` | 95.5% | 校验器的各种坏输入 |
+| `services/` | 97.9% | 用假浏览器端到端验证 |
+| `options/` | 97.9% | 草稿模型 + 表单渲染 |
+| `config/` | 97.7% | 校验器的各种坏输入 |
 | `ui/render/` | **100%** | 纯函数，含 XSS 断言 |
-| `background/` | 100% | 角标阈值 |
+| `background/` | 100% | 角标阈值 + 历史记录 |
 | `platform/` | 低 | **刻意的**——它就是 `chrome.*` 的转发层，没有逻辑可测 |
 | `newtab/` | 中 | 渲染循环有集成测试，事件接线靠手测 |
 
@@ -1163,6 +1164,31 @@ it('renders a card per domain and counts open tabs', async () => {
 - **时间和随机 id 靠注入。** 不用 fake timers。
 - **恶意输入要有专门用例。** 标题和 URL 是攻击面。
 - **不变量要写成断言。** 比如"默认值已是规范形式"、"函数不修改入参"。
+
+### 12.6 什么**不**该测
+
+测试也是要维护的代码。一个只是复述实现的用例，不会帮你发现 bug，却会在每次
+重构时逼你改它——这种测试是负资产。
+
+写之前先问一句：**这个用例能抓住什么 bug？** 答不上来就别写。
+
+不值得测的：
+
+- **一行透传。** `attr(v) { return escapeHtml(v) }` 这种函数，测了等于测 `return`。
+- **同一件事测三层。** 服务层已经用 `createFakeBrowser()` / `createMemoryStore()`
+  端到端验证过了，它内部调用的纯函数通常不必再单独测一遍。
+- **语言本身的语义。** `Array.filter` 会不会工作，不是你的职责。
+
+值得测的：
+
+- **有分支的决策逻辑**——分组优先级、关哪些标签、规则匹配、校验。
+- **值得写下来的不变量**——"默认值已是规范形式"、"函数不修改入参"。
+- **修过的 bug**，防止回归。这类用例在注释里会写明它守的是什么。
+- **HTML 转义**，因为页面标题是攻击面。
+- **`Dashboard` 渲染循环**，jsdom 集成测试能抓到类型系统抓不到的接线错误。
+
+> v2.4 的一次整理把用例从 395 个减到 271 个，代码却没有少覆盖任何真实风险——
+> 减掉的几乎都是上面"不值得测"的三类。**测试的价值在于密度，不在于数量。**
 
 ---
 
@@ -1256,7 +1282,7 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 
 **3. 渲染用 `ui/render/` 里的纯函数，输出带 `data-action`。**
 
-记得用 `escapeHtml()` / `attr()`，不要写内联事件属性。
+记得用 `escapeHtml()`，不要写内联事件属性。
 
 **4. 在 `newtab/controller.ts` 里处理这个 action。**
 
@@ -1292,7 +1318,7 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 
 | 模块 | 行数 | 职责 |
 |------|-----:|------|
-| `types/index.ts` | 95 | 全项目共享类型 |
+| `types/index.ts` | 119 | 全项目共享类型 |
 | **core/** | | **纯逻辑，无依赖** |
 | `core/grouping.ts` | 212 | 分组 + 排序 + 置顶站点，仪表盘核心算法 |
 | `core/title.ts` | 178 | 标题清洗流水线 |
@@ -1301,43 +1327,47 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 | `core/duplicates.ts` | 85 | 重复检测与去重选择 |
 | `core/friendly-domains.ts` | 76 | 域名 → 品牌名映射表（纯数据） |
 | `core/url.ts` | 71 | 永不抛异常的 URL 工具 |
+| `core/history.ts` | 53 | 关闭历史的去重、排序、裁剪 |
 | `core/time.ts` | 50 | 相对时间、问候语 |
+| `core/dashboard.ts` | 48 | 识别与定位 Tab Out 自己的标签页 |
 | `core/domain.ts` | 39 | 域名友好化 |
 | **platform/** | | **浏览器接缝** |
 | `platform/browser.ts` | 107 | `BrowserTabs` 接口 + Chrome 实现 |
-| `platform/storage.ts` | 84 | `KeyValueStore` 接口 + Chrome/内存实现 |
+| `platform/storage.ts` | 74 | `KeyValueStore` 接口 + Chrome/内存实现 |
 | **config/** | | **设置系统** |
-| `config/schema.ts` | 245 | 校验与规范化（永不抛异常） |
+| `config/schema.ts` | 296 | 校验与规范化（永不抛异常） |
+| `config/defaults.ts` | 72 | 默认设置 |
 | `config/store.ts` | 69 | 读写 `chrome.storage.sync` |
-| `config/defaults.ts` | 59 | 默认设置 |
 | **services/** | | **业务编排** |
-| `services/tab-actions.ts` | 130 | 所有对浏览器的写操作 |
+| `services/tab-actions.ts` | 174 | 所有对浏览器的写操作 |
 | `services/saved-tabs.ts` | 122 | 稍后阅读清单（软删除） |
+| `services/tab-history.ts` | 121 | 关闭历史的读写 |
+| `services/tab-snapshot-cache.ts` | 67 | tab id → 最后已知信息（session 存储） |
 | **ui/** | | **表现层** |
+| `ui/render/cards.ts` | 189 | 分组卡片、占位卡片与页面小标签 |
 | `ui/effects.ts` | 154 | 音效、纸屑、淡出动画 |
-| `ui/render/cards.ts` | 126 | 分组卡片 / 占位卡片 |
-| `ui/render/chips.ts` | 71 | 页面小标签 |
+| `ui/render/history.ts` | 63 | 历史面板列表 |
 | `ui/render/saved.ts` | 56 | 稍后阅读侧栏 |
-| `ui/html.ts` | 43 | HTML 转义（安全关键） |
-| `ui/toast.ts` | 23 | 浮动提示 |
+| `ui/html.ts` | 33 | HTML 转义（安全关键） |
 | `ui/favicon.ts` | 23 | 图标加载失败兜底 |
-| `ui/icons.ts` | 21 | 内联 SVG |
+| `ui/toast.ts` | 23 | 浮动提示 |
+| `ui/icons.ts` | 20 | 内联 SVG |
 | **入口** | | |
-| `newtab/controller.ts` | 308 | 事件委托，所有交互 |
-| `newtab/dashboard.ts` | 223 | 渲染循环与状态 |
-| `newtab/singleton.ts` | 47 | 单例仪表盘规则 |
-| `newtab/main.ts` | 45 | 组装根 |
-| `options/main.ts` | 250 | 设置页事件、保存、导入导出 |
-| `options/draft.ts` | 207 | 表单草稿模型（纯函数） |
-| `options/render.ts` | 161 | 表单渲染 |
-| `background/badge.ts` | 40 | 角标计算（纯函数） |
-| `background/main.ts` | 37 | Service Worker 事件接线 |
+| `newtab/controller.ts` | 405 | 事件委托，所有交互 |
+| `newtab/dashboard.ts` | 286 | 渲染循环与状态 |
+| `newtab/main.ts` | 58 | 组装根 |
+| `options/main.ts` | 280 | 设置页事件、保存、导入导出 |
+| `options/draft.ts` | 215 | 表单草稿模型（纯函数） |
+| `options/render.ts` | 123 | 表单渲染（数据驱动） |
+| `background/main.ts` | 145 | Service Worker 事件接线 |
+| `background/history-recorder.ts` | 55 | 关闭标签的记录逻辑 |
+| `background/badge.ts` | 35 | 角标计算（纯函数） |
 
 ### 其他
 
 | 文件 | 行数 | 职责 |
 |------|-----:|------|
-| `tests/**` | ~2690 | 20 个测试文件，297 个用例 |
+| `tests/**` | ~2840 | 26 个测试文件，271 个用例 |
 | `styles/dashboard.css` | 1297 | 仪表盘视觉体系 |
 | `styles/options.css` | 281 | 设置页样式 |
 | `newtab/index.html` | 131 | 仪表盘骨架 |
@@ -1347,16 +1377,16 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 
 ### 规模小结
 
-- **源代码**：约 3670 行 TypeScript + 1580 行 CSS + 225 行 HTML
-- **测试代码**：约 2690 行，297 个用例
+- **源代码**：约 4410 行 TypeScript + 1580 行 CSS + 225 行 HTML
+- **测试代码**：约 2840 行，271 个用例
 - **构建产物**：约 120 KB，零运行时依赖
-- **测试/源码比**：约 0.73 —— 对一个要长期演进的项目来说是健康的比例
+- **测试/源码比**：约 0.64 —— 测试只覆盖真正会出错的地方，不追求行数
 
 ---
 
 ## 结语
 
-v1 用 1738 行的单文件证明了"**想法是对的**"；v2 用分层架构和 297 个测试让它"**可以继续长大**"。
+v1 用 1738 行的单文件证明了"**想法是对的**"；v2 用分层架构和 271 个测试让它"**可以继续长大**"。
 
 如果你只想从这份文档带走一句话，那就是：
 

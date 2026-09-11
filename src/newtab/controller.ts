@@ -111,9 +111,6 @@ export function attachController(
 ): () => void {
   const { tabActions, savedTabs, historyService } = dashboard.deps;
 
-  /** Reads the History search box, so re-renders after an action keep the filter. */
-  const historyQuery = (): string => dashboard.currentHistoryQuery();
-
   const openHistoryPanel = (): void => {
     const overlay = document.getElementById('historyOverlay');
     if (overlay) overlay.style.display = 'flex';
@@ -304,7 +301,7 @@ export function attachController(
 
       case 'open-history': {
         openHistoryPanel();
-        await dashboard.renderHistoryPanel(historyQuery());
+        await dashboard.renderHistoryPanel(dashboard.currentHistoryQuery());
         return;
       }
 
@@ -320,7 +317,7 @@ export function attachController(
 
         const created = await tabActions.reopenFromHistory(url);
         if (id) await historyService.removeById(id);
-        await dashboard.renderHistoryPanel(historyQuery());
+        await dashboard.renderHistoryPanel(dashboard.currentHistoryQuery());
 
         showToast(created ? 'Tab reopened' : 'Already open — switched to it');
         return;
@@ -333,14 +330,14 @@ export function attachController(
         const row = actionEl.closest<HTMLElement>('.history-item');
         await historyService.removeById(id);
         if (row) await fadeOut(row);
-        await dashboard.renderHistoryPanel(historyQuery());
+        await dashboard.renderHistoryPanel(dashboard.currentHistoryQuery());
         return;
       }
 
       case 'clear-history': {
         if (!window.confirm('Clear all closed-tab history? This cannot be undone.')) return;
         await historyService.clear();
-        await dashboard.renderHistoryPanel(historyQuery());
+        await dashboard.renderHistoryPanel(dashboard.currentHistoryQuery());
         showToast('History cleared');
         return;
       }

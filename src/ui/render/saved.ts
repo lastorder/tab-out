@@ -5,7 +5,7 @@
 import type { SavedTab } from '../../types';
 import { timeAgo } from '../../core/time';
 import { hostnameOf, stripWww } from '../../core/url';
-import { attr, escapeHtml, faviconUrl } from '../html';
+import { escapeHtml, faviconUrl } from '../html';
 import { ICONS } from '../icons';
 
 /** One active checklist row: checkbox, link, metadata, dismiss button. */
@@ -15,13 +15,13 @@ export function renderSavedItem(item: SavedTab, now: Date = new Date()): string 
   const title = item.title || item.url;
 
   return `
-    <div class="deferred-item" data-deferred-id="${attr(item.id)}">
+    <div class="deferred-item" data-deferred-id="${escapeHtml(item.id)}">
       <input type="checkbox" class="deferred-checkbox"
-             data-action="complete-saved" data-deferred-id="${attr(item.id)}">
+             data-action="complete-saved" data-deferred-id="${escapeHtml(item.id)}">
       <div class="deferred-info">
-        <a href="${attr(item.url)}" target="_blank" rel="noopener"
-           class="deferred-title" title="${attr(title)}">
-          ${favicon ? `<img class="deferred-favicon" src="${attr(favicon)}" alt="" loading="lazy">` : ''}${escapeHtml(title)}
+        <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener"
+           class="deferred-title" title="${escapeHtml(title)}">
+          ${favicon ? `<img class="deferred-favicon" src="${escapeHtml(favicon)}" alt="" loading="lazy">` : ''}${escapeHtml(title)}
         </a>
         <div class="deferred-meta">
           <span>${escapeHtml(domain)}</span>
@@ -29,7 +29,7 @@ export function renderSavedItem(item: SavedTab, now: Date = new Date()): string 
         </div>
       </div>
       <button class="deferred-dismiss" data-action="dismiss-saved"
-              data-deferred-id="${attr(item.id)}" title="Dismiss">
+              data-deferred-id="${escapeHtml(item.id)}" title="Dismiss">
         ${ICONS.close}
       </button>
     </div>`;
@@ -41,8 +41,8 @@ export function renderArchiveItem(item: SavedTab, now: Date = new Date()): strin
   const title = item.title || item.url;
   return `
     <div class="archive-item">
-      <a href="${attr(item.url)}" target="_blank" rel="noopener"
-         class="archive-item-title" title="${attr(title)}">${escapeHtml(title)}</a>
+      <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener"
+         class="archive-item-title" title="${escapeHtml(title)}">${escapeHtml(title)}</a>
       <span class="archive-item-date">${escapeHtml(when)}</span>
     </div>`;
 }

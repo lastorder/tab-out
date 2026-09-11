@@ -1,16 +1,79 @@
 /**
- * ui/render/cards.ts — the dashboard's group and placeholder cards.
+ * ui/render/cards.ts — the dashboard's cards and the page chips inside them.
+ *
+ * Pure string builders: data in, HTML out, so they are testable without a DOM.
+ * Chips live here rather than in their own module because they are an
+ * implementation detail of a card — nothing else renders them.
  */
 
 import type { DashboardEntry } from '../../core/grouping';
-import type { PinnedSite, TabGroup } from '../../types';
+import type { PinnedSite, TabGroup, TabInfo } from '../../types';
 import { analyzeDuplicates, uniqueByUrl } from '../../core/duplicates';
 import { friendlyDomain } from '../../core/domain';
 import { LANDING_GROUP_KEY, LANDING_GROUP_LABEL } from '../../core/grouping';
+import { displayTitle, withLocalhostPort } from '../../core/title';
 import { hostnameOf } from '../../core/url';
-import { attr, escapeHtml, faviconUrl, plural } from '../html';
+import { escapeHtml, faviconUrl, plural } from '../html';
 import { ICONS } from '../icons';
-import { renderChip, renderOverflowChips, VISIBLE_CHIP_LIMIT } from './chips';
+
+/** How many chips a card shows before collapsing the rest behind "+N more". */
+export const VISIBLE_CHIP_LIMIT = 8;
+
+/** Builds the label shown on a chip. */
+function chipLabel(tab: TabInfo, groupHostname: string): string {
+  const label = displayTitle(tab.title, tab.url, groupHostname);
+  return withLocalhostPort(label, tab.url);
+}
+
+/**
+ * Renders one page chip: favicon, title, duplicate badge, and the hover
+ * actions (save for later / close).
+ */
+function renderChip(tab: TabInfo, duplicateCount: number, groupHostname: string): string {
+  const label = chipLabel(tab, groupHostname);
+  const hostname = hostnameOf(tab.url);
+  const favicon = faviconUrl(hostname, 16);
+  const isDupe = duplicateCount > 1;
+
+  return `<div class="page-chip clickable${isDupe ? ' chip-has-dupes' : ''}"
+      data-action="focus-tab" data-tab-url="${escapeHtml(tab.url)}" title="${escapeHtml(label)}">
+      ${favicon ? `<img class="chip-favicon" src="${escapeHtml(favicon)}" alt="" loading="lazy">` : ''}
+      <span class="chip-text">${escapeHtml(label)}</span>${
+        isDupe ? ` <span class="chip-dupe-badge">(${duplicateCount}x)</span>` : ''
+      }
+      <div class="chip-actions">
+        <button class="chip-action chip-save" data-action="save-tab"
+          data-tab-url="${escapeHtml(tab.url)}" data-tab-title="${escapeHtml(label)}" title="Save for later">
+          ${ICONS.bookmark}
+        </button>
+        <button class="chip-action chip-close" data-action="close-tab"
+          data-tab-url="${escapeHtml(tab.url)}" title="Close this tab">
+          ${ICONS.closeBold}
+        </button>
+      </div>
+    </div>`;
+}
+
+/**
+ * Renders the hidden chips plus the "+N more" button that reveals them.
+ * The overflow container is display:none until the button is clicked.
+ */
+function renderOverflowChips(
+  hiddenTabs: readonly TabInfo[],
+  counts: Record<string, number>,
+  groupHostname: string,
+): string {
+  if (hiddenTabs.length === 0) return '';
+  const hidden = hiddenTabs
+    .map((tab) => renderChip(tab, counts[tab.url] ?? 1, groupHostname))
+    .join('');
+
+  return `
+    <div class="page-chips-overflow" style="display:none">${hidden}</div>
+    <div class="page-chip page-chip-overflow clickable" data-action="expand-chips">
+      <span class="chip-text">+${hiddenTabs.length} more</span>
+    </div>`;
+}
 
 /** The display name for a group: explicit label, else a friendly hostname. */
 export function groupTitle(group: TabGroup): string {
@@ -90,12 +153,12 @@ export function renderPinnedPlaceholder(site: PinnedSite, pinnedIndex: number): 
   return `
     <div class="mission-card domain-card pinned-placeholder"
          data-action="open-pinned-site"
-         data-pinned-url="${attr(site.url)}"
+         data-pinned-url="${escapeHtml(site.url)}"
          data-pinned-index="${pinnedIndex}">
       <div class="status-bar"></div>
       <div class="mission-content">
         <div class="mission-top">
-          ${favicon ? `<img class="pinned-favicon" src="${attr(favicon)}" alt="" loading="lazy">` : ''}
+          ${favicon ? `<img class="pinned-favicon" src="${escapeHtml(favicon)}" alt="" loading="lazy">` : ''}
           <span class="mission-name">${escapeHtml(label)}</span>
         </div>
         <div class="pinned-hint">Click to open</div>

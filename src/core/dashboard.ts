@@ -1,11 +1,14 @@
 /**
- * core/dashboard.ts — identifying which open tab (if any) is Tab Out itself.
+ * core/dashboard.ts — identifying and positioning Tab Out's own tab.
  *
- * Shared by two independent rules that both need the same definition of
- * "this URL is a Tab Out page": the "only one dashboard" rule
- * (`newtab/singleton.ts`) and the "always keep the dashboard at the end of
- * the tab bar" rule (`core/position.ts`, driven from the background worker).
+ * Two rules share the question "which open tab is the dashboard?":
+ *   - only one dashboard may exist at a time
+ *   - the dashboard stays rightmost, so new pages open to its left
+ *
+ * Both are decided here, purely, and executed by `TabActions`.
  */
+
+import type { TabInfo } from '../types';
 
 /**
  * Every URL that means "a Tab Out dashboard".
@@ -19,4 +22,27 @@ export function dashboardUrls(extensionId: string): string[] {
     `chrome-extension://${extensionId}/index.html#`,
     'chrome://newtab/',
   ];
+}
+
+/**
+ * Returns the dashboard tab's id if it is open but no longer the last tab in
+ * its window, or `null` when there is nothing to do.
+ *
+ * Chrome keeps the dashboard last on its own in the common case — inserting a
+ * tab before the last one pushes that one's index up. The exception is a tab
+ * appended *past* it, which is what duplicating the last tab does.
+ */
+export function findDashboardTabNeedingMove(
+  tabs: readonly TabInfo[],
+  dashboardUrls: readonly string[],
+): number | null {
+  const dashboard = tabs.find((tab) => dashboardUrls.includes(tab.url));
+  if (!dashboard) return null;
+
+  const sameWindow = tabs
+    .filter((tab) => tab.windowId === dashboard.windowId)
+    .sort((a, b) => a.index - b.index);
+  const last = sameWindow[sameWindow.length - 1];
+
+  return !last || last.id === dashboard.id ? null : dashboard.id;
 }

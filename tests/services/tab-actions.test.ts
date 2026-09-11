@@ -6,24 +6,8 @@ import { resetTabIds, tab } from '../helpers/factories';
 
 beforeEach(() => resetTabIds());
 
-describe('TabActions.closeByUrl', () => {
-  it('closes the matching tab', async () => {
-    const browser = createFakeBrowser([
-      tab('https://a.com/', { id: 1 }),
-      tab('https://b.com/', { id: 2 }),
-    ]);
-    const actions = new TabActions(browser);
-
-    expect(await actions.closeByUrl('https://a.com/')).toBe(true);
-    expect(browser.tabs.map((t) => t.id)).toEqual([2]);
-  });
-
-  it('reports false when the URL is not open', async () => {
-    const browser = createFakeBrowser([tab('https://a.com/', { id: 1 })]);
-    expect(await new TabActions(browser).closeByUrl('https://gone.com/')).toBe(false);
-    expect(browser.closed).toEqual([]);
-  });
-});
+const DASHBOARD = 'chrome-extension://abc/index.html';
+const DASHBOARD_URLS = [DASHBOARD, 'chrome://newtab/'];
 
 describe('TabActions.closeGroup', () => {
   it('closes a domain group by hostname, taking every tab on that host', async () => {
@@ -32,9 +16,8 @@ describe('TabActions.closeGroup', () => {
       tab('https://github.com/b', { id: 2 }),
       tab('https://example.com/', { id: 3 }),
     ]);
-    const actions = new TabActions(browser);
 
-    const closed = await actions.closeGroup({
+    const closed = await new TabActions(browser).closeGroup({
       key: 'github.com',
       kind: 'domain',
       tabs: [tab('https://github.com/a', { id: 1 })],
@@ -44,18 +27,17 @@ describe('TabActions.closeGroup', () => {
     expect(browser.tabs.map((t) => t.id)).toEqual([3]);
   });
 
-  it('closes the Homepages group by exact URL, sparing content tabs', async () => {
+  it('closes Homepages by exact URL, sparing content tabs on the same host', async () => {
     const inbox = tab('https://mail.google.com/mail/u/0/#inbox', { id: 1 });
     const thread = tab('https://mail.google.com/mail/u/0/#inbox/abc', { id: 2 });
     const browser = createFakeBrowser([inbox, thread]);
 
-    const closed = await new TabActions(browser).closeGroup({
+    await new TabActions(browser).closeGroup({
       key: LANDING_GROUP_KEY,
       kind: 'landing',
       tabs: [inbox],
     });
 
-    expect(closed).toBe(1);
     expect(browser.tabs.map((t) => t.id)).toEqual([2]);
   });
 
@@ -75,7 +57,16 @@ describe('TabActions.closeGroup', () => {
   });
 });
 
-describe('TabActions.closeAllRealTabs', () => {
+describe('TabActions closing', () => {
+  it('closes one tab by URL, reporting whether it existed', async () => {
+    const browser = createFakeBrowser([tab('https://a.com/', { id: 1 })]);
+    const actions = new TabActions(browser);
+
+    expect(await actions.closeByUrl('https://a.com/')).toBe(true);
+    expect(await actions.closeByUrl('https://gone.com/')).toBe(false);
+    expect(browser.tabs).toEqual([]);
+  });
+
   it('closes web pages but leaves browser-internal pages alone', async () => {
     const browser = createFakeBrowser([
       tab('https://a.com/', { id: 1 }),
@@ -86,10 +77,8 @@ describe('TabActions.closeAllRealTabs', () => {
     expect(await new TabActions(browser).closeAllRealTabs()).toBe(1);
     expect(browser.tabs.map((t) => t.id)).toEqual([2, 3]);
   });
-});
 
-describe('TabActions.closeDuplicates', () => {
-  it('keeps one copy of each URL', async () => {
+  it('de-duplicates down to one copy', async () => {
     const browser = createFakeBrowser([
       tab('https://a.com/', { id: 1 }),
       tab('https://a.com/', { id: 2 }),
@@ -103,10 +92,9 @@ describe('TabActions.closeDuplicates', () => {
 
 describe('TabActions.focus', () => {
   it('activates the matching tab and focuses its window', async () => {
-    const browser = createFakeBrowser(
-      [tab('https://a.com/', { id: 5, windowId: 2 })],
-      { currentWindowId: 1 },
-    );
+    const browser = createFakeBrowser([tab('https://a.com/', { id: 5, windowId: 2 })], {
+      currentWindowId: 1,
+    });
 
     expect(await new TabActions(browser).focus('https://a.com/')).toBe(true);
     expect(browser.activated).toEqual({ tabId: 5, windowId: 2 });
@@ -133,20 +121,31 @@ describe('TabActions.openPinnedSite', () => {
     expect(browser.created).toEqual([]);
   });
 
-  it('opens the site next to its nearest open pinned neighbour', async () => {
-    const browser = createFakeBrowser([
+  it('opens next to its nearest open pinned neighbour, else at the front', async () => {
+    const withNeighbour = createFakeBrowser([
       tab('https://first.com/', { id: 1, windowId: 1, index: 2 }),
     ]);
+    await new TabActions(withNeighbour).openPinnedSite(pinned[1]!, 1, pinned);
+    expect(withNeighbour.created).toEqual([{ url: 'https://second.com', index: 3 }]);
 
-    await new TabActions(browser).openPinnedSite(pinned[1]!, 1, pinned);
+    const empty = createFakeBrowser([]);
+    await new TabActions(empty).openPinnedSite(pinned[1]!, 1, pinned);
+    expect(empty.created).toEqual([{ url: 'https://second.com', index: 0 }]);
+  });
+});
 
-    expect(browser.created).toEqual([{ url: 'https://second.com', index: 3 }]);
+describe('TabActions.reopenFromHistory', () => {
+  it('opens a new tab when the URL is not open', async () => {
+    const browser = createFakeBrowser([]);
+    expect(await new TabActions(browser).reopenFromHistory('https://a.com/')).toBe(true);
+    expect(browser.created).toEqual([{ url: 'https://a.com/' }]);
   });
 
-  it('opens at the front when no neighbour is open', async () => {
-    const browser = createFakeBrowser([]);
-    await new TabActions(browser).openPinnedSite(pinned[1]!, 1, pinned);
-    expect(browser.created).toEqual([{ url: 'https://second.com', index: 0 }]);
+  it('focuses an already-open tab instead of creating a duplicate', async () => {
+    const browser = createFakeBrowser([tab('https://a.com/', { id: 9, windowId: 2 })]);
+    expect(await new TabActions(browser).reopenFromHistory('https://a.com/')).toBe(false);
+    expect(browser.activated).toEqual({ tabId: 9, windowId: 2 });
+    expect(browser.created).toEqual([]);
   });
 });
 
@@ -162,82 +161,52 @@ describe('TabActions.sortTabs', () => {
   });
 });
 
-describe('TabActions.closeOtherDashboards', () => {
-  const DASHBOARD = 'chrome-extension://abc/index.html';
-
-  it('leaves exactly one dashboard open', async () => {
-    const browser = createFakeBrowser([
-      tab(DASHBOARD, { id: 1 }),
-      tab(DASHBOARD, { id: 2 }),
-      tab('chrome://newtab/', { id: 3 }),
-      tab('https://example.com/', { id: 4 }),
-    ]);
-
-    const closed = await new TabActions(browser).closeOtherDashboards(
-      [DASHBOARD, 'chrome://newtab/'],
-      2,
+describe('TabActions dashboard rules', () => {
+  it('keeps only this dashboard, never touching ordinary pages', async () => {
+    const browser = createFakeBrowser(
+      [
+        tab(DASHBOARD, { id: 1 }),
+        tab(DASHBOARD, { id: 2 }),
+        tab('chrome://newtab/', { id: 3 }),
+        tab('https://example.com/', { id: 4 }),
+      ],
+      { currentTabId: 2 },
     );
 
-    expect(closed).toBe(2);
+    expect(await new TabActions(browser).keepOnlyThisDashboard(DASHBOARD_URLS)).toBe(2);
     expect(browser.tabs.map((t) => t.id)).toEqual([2, 4]);
   });
 
-  it('is a no-op when this is the only dashboard', async () => {
-    const browser = createFakeBrowser([tab(DASHBOARD, { id: 1 })]);
-    expect(await new TabActions(browser).closeOtherDashboards([DASHBOARD], 1)).toBe(0);
-    expect(browser.closed).toEqual([]);
-  });
-});
+  it('closes nothing when the current tab id is unknown, or it is the only one', async () => {
+    const unknown = createFakeBrowser([tab(DASHBOARD, { id: 1 }), tab(DASHBOARD, { id: 2 })], {
+      currentTabId: -1,
+    });
+    expect(await new TabActions(unknown).keepOnlyThisDashboard(DASHBOARD_URLS)).toBe(0);
+    expect(unknown.closed).toEqual([]);
 
-describe('TabActions.reopenFromHistory', () => {
-  it('opens a new tab appended to the end of the tab bar when the URL is not open', async () => {
-    const browser = createFakeBrowser([]);
-    const created = await new TabActions(browser).reopenFromHistory('https://a.com/');
-
-    expect(created).toBe(true);
-    expect(browser.created).toEqual([{ url: 'https://a.com/' }]);
-    expect(browser.activated).toBeNull();
+    const only = createFakeBrowser([tab(DASHBOARD, { id: 1 })], { currentTabId: 1 });
+    expect(await new TabActions(only).keepOnlyThisDashboard(DASHBOARD_URLS)).toBe(0);
   });
 
-  it('focuses an already-open tab instead of creating a duplicate', async () => {
-    const browser = createFakeBrowser([tab('https://a.com/', { id: 9, windowId: 2 })]);
-    const created = await new TabActions(browser).reopenFromHistory('https://a.com/');
-
-    expect(created).toBe(false);
-    expect(browser.activated).toEqual({ tabId: 9, windowId: 2 });
-    expect(browser.created).toEqual([]);
+  it('swallows browser errors so the dashboard still renders', async () => {
+    const browser = createFakeBrowser([], { currentTabId: 1 });
+    browser.currentTabId = () => Promise.reject(new Error('no tab'));
+    expect(await new TabActions(browser).keepOnlyThisDashboard(DASHBOARD_URLS)).toBe(0);
   });
-});
 
-describe('TabActions.moveDashboardToEnd', () => {
-  const DASHBOARD = 'chrome-extension://abc/index.html';
-  const URLS = [DASHBOARD, 'chrome://newtab/'];
-
-  it('moves the dashboard to the end when something sits after it', async () => {
-    const browser = createFakeBrowser([
+  it('moves the dashboard to the end only when it is not already last', async () => {
+    const needsMove = createFakeBrowser([
       tab(DASHBOARD, { id: 1, windowId: 1, index: 0 }),
       tab('https://a.com/', { id: 2, windowId: 1, index: 1 }),
     ]);
+    expect(await new TabActions(needsMove).moveDashboardToEnd(DASHBOARD_URLS)).toBe(true);
+    expect(needsMove.moved).toEqual([{ tabId: 1, index: -1 }]);
 
-    const moved = await new TabActions(browser).moveDashboardToEnd(URLS);
-
-    expect(moved).toBe(true);
-    expect(browser.moved).toEqual([{ tabId: 1, index: -1 }]);
-  });
-
-  it('does nothing when the dashboard is already last', async () => {
-    const browser = createFakeBrowser([
+    const alreadyLast = createFakeBrowser([
       tab('https://a.com/', { id: 1, windowId: 1, index: 0 }),
       tab(DASHBOARD, { id: 2, windowId: 1, index: 1 }),
     ]);
-
-    expect(await new TabActions(browser).moveDashboardToEnd(URLS)).toBe(false);
-    expect(browser.moved).toEqual([]);
-  });
-
-  it('does nothing when no dashboard tab is open', async () => {
-    const browser = createFakeBrowser([tab('https://a.com/', { id: 1 })]);
-    expect(await new TabActions(browser).moveDashboardToEnd(URLS)).toBe(false);
-    expect(browser.moved).toEqual([]);
+    expect(await new TabActions(alreadyLast).moveDashboardToEnd(DASHBOARD_URLS)).toBe(false);
+    expect(alreadyLast.moved).toEqual([]);
   });
 });

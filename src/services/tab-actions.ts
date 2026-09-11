@@ -7,10 +7,10 @@
  */
 
 import type { BrowserTabs } from '../platform/browser';
-import type { PinnedSite, TabGroup, TabInfo } from '../types';
+import type { PinnedSite, TabGroup } from '../types';
 import { selectDuplicateTabIds } from '../core/duplicates';
 import { LANDING_GROUP_KEY, pinnedInsertIndex } from '../core/grouping';
-import { findDashboardTabNeedingMove } from '../core/position';
+import { findDashboardTabNeedingMove } from '../core/dashboard';
 import {
   findFocusTarget,
   selectStaleDashboardTabIds,
@@ -24,11 +24,6 @@ export class TabActions {
 
   constructor(browser: BrowserTabs) {
     this.#browser = browser;
-  }
-
-  /** All open tabs, normalised. */
-  async getTabs(): Promise<TabInfo[]> {
-    return this.#browser.queryAll();
   }
 
   /** Closes one tab by exact URL. Returns true when something was closed. */
@@ -142,13 +137,24 @@ export class TabActions {
 
   /**
    * Enforces the "one dashboard" rule: closes every other Tab Out page so the
-   * one you just opened is the only one left.
+   * page calling this is the only one left.
+   *
+   * Never throws — if the browser can't say which tab we are, the dashboard
+   * should still render.
+   *
+   * @returns how many stale dashboards were closed.
    */
-  async closeOtherDashboards(dashboardUrls: readonly string[], keepTabId: number): Promise<number> {
-    const tabs = await this.#browser.queryAll();
-    const ids = selectStaleDashboardTabIds(tabs, dashboardUrls, keepTabId);
-    await this.#browser.close(ids);
-    return ids.length;
+  async keepOnlyThisDashboard(dashboardUrls: readonly string[]): Promise<number> {
+    try {
+      const keepTabId = await this.#browser.currentTabId();
+      if (keepTabId === -1) return 0;
+      const tabs = await this.#browser.queryAll();
+      const ids = selectStaleDashboardTabIds(tabs, dashboardUrls, keepTabId);
+      await this.#browser.close(ids);
+      return ids.length;
+    } catch {
+      return 0;
+    }
   }
 
   /**

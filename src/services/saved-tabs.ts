@@ -111,7 +111,7 @@ export class SavedTabsService {
  * Pure filter used by the archive search box. Queries shorter than two
  * characters return everything, so the list does not flicker while typing.
  */
-export function filterSavedTabs(items: readonly SavedTab[], query: string): SavedTab[] {
+function filterSavedTabs(items: readonly SavedTab[], query: string): SavedTab[] {
   const q = query.trim().toLowerCase();
   if (q.length < 2) return [...items];
   return items.filter(

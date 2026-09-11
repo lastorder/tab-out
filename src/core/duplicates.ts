@@ -19,7 +19,7 @@ export interface DuplicateReport {
 }
 
 /** Counts how many times each URL appears. */
-export function countUrls(tabs: readonly TabInfo[]): Record<string, number> {
+function countUrls(tabs: readonly TabInfo[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const tab of tabs) {
     counts[tab.url] = (counts[tab.url] ?? 0) + 1;

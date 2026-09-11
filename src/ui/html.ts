@@ -1,10 +1,10 @@
 /**
  * ui/html.ts — safe HTML construction helpers.
  *
- * Tab titles and URLs are attacker-influenced strings (any page can set its own
- * title), and the renderers build markup with template literals. Everything
- * interpolated into that markup must pass through {@link escapeHtml} or
- * {@link attr} first.
+ * Tab titles and URLs are attacker-influenced strings (any page can set its
+ * own title), and the renderers build markup with template literals, so
+ * everything interpolated into that markup must pass through
+ * {@link escapeHtml} first — in element content and attribute values alike.
  */
 
 const HTML_ESCAPES: Record<string, string> = {
@@ -15,20 +15,10 @@ const HTML_ESCAPES: Record<string, string> = {
   "'": '&#39;',
 };
 
-/** Escapes text for interpolation into element content. */
+/** Escapes a value for interpolation into markup. */
 export function escapeHtml(value: unknown): string {
   if (value === null || value === undefined) return '';
   return String(value).replace(/[&<>"']/g, (char) => HTML_ESCAPES[char] ?? char);
-}
-
-/** Escapes a value for interpolation into a double-quoted attribute. */
-export function attr(value: unknown): string {
-  return escapeHtml(value);
-}
-
-/** Joins rendered fragments, dropping empty ones. */
-export function join(parts: readonly (string | false | null | undefined)[]): string {
-  return parts.filter(Boolean).join('');
 }
 
 /** Renders `count` with the right plural suffix: `1 tab` / `2 tabs`. */

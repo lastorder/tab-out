@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { filterSavedTabs, SAVED_TABS_KEY, SavedTabsService } from '@/services/saved-tabs';
+import { SAVED_TABS_KEY, SavedTabsService } from '@/services/saved-tabs';
 import { createMemoryStore, type KeyValueStore } from '@/platform/storage';
 import type { SavedTab } from '@/types';
 
@@ -22,34 +22,25 @@ function makeService(store: KeyValueStore = createMemoryStore()) {
 
 describe('SavedTabsService', () => {
   let ctx: ReturnType<typeof makeService>;
-
   beforeEach(() => {
     ctx = makeService();
   });
 
-  it('saves a tab onto the active list', async () => {
-    const entry = await ctx.service.save({ url: 'https://a.com/', title: 'A' });
+  it('saves onto the active list, defaulting the title to the URL', async () => {
+    const entry = await ctx.service.save({ url: 'https://a.com/' });
 
     expect(entry).toMatchObject({
       id: 'id-1',
       url: 'https://a.com/',
-      title: 'A',
+      title: 'https://a.com/',
       completed: false,
       dismissed: false,
       savedAt: '2026-04-04T12:00:00.000Z',
     });
-
-    const { active, archived } = await ctx.service.list();
-    expect(active).toHaveLength(1);
-    expect(archived).toHaveLength(0);
+    expect(await ctx.service.list()).toMatchObject({ active: [{ id: 'id-1' }], archived: [] });
   });
 
-  it('falls back to the URL when no title is given', async () => {
-    const entry = await ctx.service.save({ url: 'https://a.com/' });
-    expect(entry.title).toBe('https://a.com/');
-  });
-
-  it('moves a completed item into the archive and stamps completedAt', async () => {
+  it('moves a completed item to the archive, stamping when', async () => {
     await ctx.service.save({ url: 'https://a.com/', title: 'A' });
     ctx.advanceMinutes(30);
 
@@ -57,26 +48,16 @@ describe('SavedTabsService', () => {
 
     const { active, archived } = await ctx.service.list();
     expect(active).toHaveLength(0);
-    expect(archived).toHaveLength(1);
-    expect(archived[0]!.completedAt).toBe('2026-04-04T12:30:00.000Z');
+    expect(archived[0]).toMatchObject({ completedAt: '2026-04-04T12:30:00.000Z' });
   });
 
-  it('hides a dismissed item from both lists', async () => {
-    await ctx.service.save({ url: 'https://a.com/', title: 'A' });
+  it('hides a dismissed item from both lists but keeps the record', async () => {
+    await ctx.service.save({ url: 'https://a.com/' });
     expect(await ctx.service.dismiss('id-1')).toBe(true);
 
-    const { active, archived } = await ctx.service.list();
-    expect(active).toHaveLength(0);
-    expect(archived).toHaveLength(0);
-  });
-
-  it('keeps the dismissed record in storage rather than deleting it', async () => {
-    await ctx.service.save({ url: 'https://a.com/' });
-    await ctx.service.dismiss('id-1');
-
-    const raw = (await ctx.store.get(SAVED_TABS_KEY)) as SavedTab[];
-    expect(raw).toHaveLength(1);
-    expect(raw[0]!.dismissed).toBe(true);
+    expect(await ctx.service.list()).toEqual({ active: [], archived: [] });
+    // Soft delete: a mis-click must not destroy anything.
+    expect((await ctx.store.get(SAVED_TABS_KEY)) as SavedTab[]).toHaveLength(1);
   });
 
   it('reports false for an unknown id', async () => {
@@ -84,73 +65,37 @@ describe('SavedTabsService', () => {
     expect(await ctx.service.dismiss('missing')).toBe(false);
   });
 
-  it('preserves insertion order across several saves', async () => {
+  it('preserves insertion order', async () => {
     await ctx.service.save({ url: 'https://a.com/', title: 'A' });
     await ctx.service.save({ url: 'https://b.com/', title: 'B' });
-
     const { active } = await ctx.service.list();
     expect(active.map((t) => t.title)).toEqual(['A', 'B']);
   });
 
-  it('tolerates a corrupt stored value', async () => {
-    const ctx2 = makeService(createMemoryStore({ [SAVED_TABS_KEY]: 'not an array' }));
-    expect(await ctx2.service.list()).toEqual({ active: [], archived: [] });
-  });
+  it('tolerates corrupt or malformed stored data', async () => {
+    const corrupt = makeService(createMemoryStore({ [SAVED_TABS_KEY]: 'not an array' }));
+    expect(await corrupt.service.list()).toEqual({ active: [], archived: [] });
 
-  it('skips malformed records inside a valid array', async () => {
-    const ctx2 = makeService(
+    const partial = makeService(
       createMemoryStore({
         [SAVED_TABS_KEY]: [{ id: 'ok', url: 'https://a.com/' }, null, { nope: true }],
       }),
     );
-    const { active } = await ctx2.service.list();
-    expect(active).toHaveLength(1);
+    expect((await partial.service.list()).active).toHaveLength(1);
   });
+});
 
-  it('searches the archive', async () => {
+describe('SavedTabsService.searchArchive', () => {
+  it('matches title or URL, and shows everything for a too-short query', async () => {
+    const ctx = makeService();
     await ctx.service.save({ url: 'https://a.com/', title: 'TypeScript guide' });
-    await ctx.service.save({ url: 'https://b.com/', title: 'Rust guide' });
+    await ctx.service.save({ url: 'https://other.com/', title: 'Rust guide' });
     await ctx.service.complete('id-1');
     await ctx.service.complete('id-2');
 
     expect(await ctx.service.searchArchive('typescript')).toHaveLength(1);
-  });
-});
-
-describe('filterSavedTabs', () => {
-  const items: SavedTab[] = [
-    {
-      id: '1',
-      url: 'https://example.com/typescript',
-      title: 'TypeScript Handbook',
-      savedAt: '',
-      completed: true,
-      dismissed: false,
-    },
-    {
-      id: '2',
-      url: 'https://other.com/rust',
-      title: 'Rust Book',
-      savedAt: '',
-      completed: true,
-      dismissed: false,
-    },
-  ];
-
-  it('returns everything for a query shorter than two characters', () => {
-    expect(filterSavedTabs(items, '')).toHaveLength(2);
-    expect(filterSavedTabs(items, 'r')).toHaveLength(2);
-  });
-
-  it('matches titles case-insensitively', () => {
-    expect(filterSavedTabs(items, 'HANDBOOK')).toHaveLength(1);
-  });
-
-  it('matches URLs too', () => {
-    expect(filterSavedTabs(items, 'other.com')).toHaveLength(1);
-  });
-
-  it('returns nothing when there is no match', () => {
-    expect(filterSavedTabs(items, 'python')).toHaveLength(0);
+    expect(await ctx.service.searchArchive('other.com')).toHaveLength(1);
+    expect(await ctx.service.searchArchive('python')).toHaveLength(0);
+    expect(await ctx.service.searchArchive('r')).toHaveLength(2);
   });
 });

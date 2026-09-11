@@ -198,7 +198,7 @@ Consequences you must respect:
 
 ## Conventions that are easy to get wrong
 
-- **Escape everything interpolated into HTML.** Page titles are attacker-controlled — any site can set its own `<title>`. Use `escapeHtml()` for content and `attr()` for attributes, both from `ui/html.ts`. Tests assert this; don't delete them.
+- **Escape everything interpolated into HTML.** Page titles are attacker-controlled — any site can set its own `<title>`. Use `escapeHtml()` from `ui/html.ts`, in element content and attribute values alike. Tests assert this; don't delete them.
 - **No inline event handlers, ever.** Manifest V3's CSP blocks `onclick="…"` and `onerror="…"`. Use `data-action` + delegation. The favicon fallback lives in `ui/favicon.ts` for exactly this reason.
 - **Settings must stay serialisable.** No functions in settings objects — they have to survive `chrome.storage`. That's why homepage rules are declarative data (`urlNotContains`) rather than predicates.
 - **`normalizeSettings()` must never throw.** It repairs bad input and reports issues. Corrupt storage must never break the new tab page.
@@ -206,11 +206,38 @@ Consequences you must respect:
 - **Group cards are addressed by index** via `data-group-index`, not by a slugified name. Don't reintroduce string-derived DOM ids; they collide.
 - **Closing by hostname vs exact URL is a real distinction.** Domain cards close by hostname; Homepages and custom groups close by exact URL so they don't take unrelated tabs with them. See `TabActions.closeGroup`.
 - **History is recorded in the background worker, not the dashboard.** `chrome.tabs.onRemoved` doesn't include the tab's URL, so `background/main.ts` keeps a `TabSnapshotCache` (`chrome.storage.session`) updated on every create/update, and consumes it on removal. If you add a way to close tabs that bypasses `chrome.tabs.remove`, history recording still works — it listens at the browser level, not through `TabActions`.
-- **The dashboard stays pinned to the rightmost tab.** `background/main.ts` calls `TabActions.moveDashboardToEnd` on every `chrome.tabs.onCreated`, and `newtab/main.ts` calls it once at boot. Both share `dashboardUrls()` from `core/dashboard.ts` — don't redefine "what counts as a dashboard tab" a third time.
+- **The dashboard stays pinned to the rightmost tab.** `background/main.ts` calls `TabActions.moveDashboardToEnd` on every `chrome.tabs.onCreated`, and `newtab/main.ts` calls it once at boot. Both share `dashboardUrls()` from `core/dashboard.ts` — don't redefine "what counts as a dashboard tab" anywhere else.
 - **Storage-backed panels should react to `onChanged`, not just to tab events.** `TabHistoryService.onChanged` (mirroring `SettingsStore.onChanged`) is what makes the History panel update the instant the background worker records a closure, instead of waiting for the next unrelated repaint or a manual refresh. If you add another background-written, dashboard-displayed list, wire it the same way rather than relying on `RenderScheduler`.
 - **Don't derive live state from `Dashboard`'s last render model.** `#model` is a snapshot from the previous full render, and the moments you most want to repaint (a tab just closed) are exactly when it is stale. `renderHistoryPanel` queries open tabs live for this reason — reading `#model.realTabs` made a just-closed tab still look "open", which filtered its new history entry straight back out until the user refreshed.
 - **`RenderScheduler.suppress()` delays repaints; it must never drop them.** The close handlers mutate the DOM directly for instant feedback, but only a real render recomputes derived state — e.g. a pinned site whose last tab closed has to return as a click-to-open placeholder instead of vanishing. `suppress()` therefore queues a catch-up render; if you add a new suppressed action, don't bypass it.
 - **A settings field that isn't a row table (a number, a checkbox) lives directly on `DraftState`, not inside `pinned`/`landing`/`custom`.** See `maxHistoryItems` (string, parsed on save) and `autoSortTabs` (boolean, no parsing needed) for the pattern: add the field to `DraftState`, copy it in `settingsToDraft`/`draftToSettings`, validate it in `config/schema.ts` with a `normalize*` function that never throws, and give it its own `if (input.id === '…')` branch in `options/main.ts`'s input listener — it does not go through `mutateSection`.
+
+## Testing
+
+Tests exist to catch real mistakes, not to restate the implementation. Before
+adding one, ask what bug it would catch.
+
+**Worth testing:**
+- Decision logic with branches — grouping precedence, which tabs an action
+  closes, rule matching, validation.
+- Invariants worth stating out loud (`normalizeSettings(defaults) === defaults`;
+  `applyPinnedSites` doesn't mutate its input).
+- Past bugs, so they stay fixed. Several tests exist only for this and say so
+  in a comment — leave those alone.
+- HTML escaping, since page titles are attacker-controlled.
+- `Dashboard`'s render loop, via the jsdom integration suite — it catches
+  wiring mistakes (wrong element id, missed `await`) that types can't.
+
+**Not worth testing:**
+- Pass-throughs and one-line wrappers.
+- The same behaviour at three layers. Prefer the outermost meaningful one:
+  services are covered through `createFakeBrowser` / `createMemoryStore`, so
+  their pure helpers rarely need separate tests.
+- Language semantics (`Array.filter` works).
+
+Prefer a few `it.each` tables over many near-identical cases, and assert on
+behaviour ("closing Homepages spares the email you're reading") rather than on
+internals.
 
 ## Storage layout
 
@@ -227,7 +254,7 @@ Saved tabs are never hard-deleted: `completed` moves an item to the archive, `di
 
 Don't "restore" these — their absence is the design:
 
-- **The "Close extras" banner.** Tab Out is now a singleton: opening a dashboard auto-closes every other one (`newtab/singleton.ts`). No banner, no user action needed.
+- **The "Close extras" banner.** Tab Out is now a singleton: opening a dashboard auto-closes every other one (`TabActions.keepOnlyThisDashboard`). No banner, no user action needed.
 - **`config.local.js`.** Personal configuration now lives in the settings page and `chrome.storage`, not in a gitignored source file.
 - **The `extension/` directory and `app.js`.** Replaced by `src/` plus a build step. `dist/` is generated and gitignored — never edit it by hand.
 - **The `activeTab` permission.** It was unused; `tabs` already covers what's needed.

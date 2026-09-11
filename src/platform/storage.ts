@@ -10,7 +10,6 @@
 export interface KeyValueStore {
   get<T>(key: string): Promise<T | undefined>;
   set<T>(key: string, value: T): Promise<void>;
-  remove(key: string): Promise<void>;
   /** Subscribes to external writes. Returns an unsubscribe function. */
   onChanged(listener: (key: string) => void): () => void;
 }
@@ -27,10 +26,6 @@ export function createChromeStore(areaName: 'sync' | 'local' | 'session'): KeyVa
 
     async set<T>(key: string, value: T): Promise<void> {
       await area.set({ [key]: value });
-    },
-
-    async remove(key: string): Promise<void> {
-      await area.remove(key);
     },
 
     onChanged(listener: (key: string) => void): () => void {
@@ -68,11 +63,6 @@ export function createMemoryStore(seed: Record<string, unknown> = {}): KeyValueS
 
     async set<T>(key: string, value: T): Promise<void> {
       data.set(key, structuredClone(value));
-      emit(key);
-    },
-
-    async remove(key: string): Promise<void> {
-      data.delete(key);
       emit(key);
     },
 

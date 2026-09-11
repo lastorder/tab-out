@@ -15,7 +15,6 @@ import { TabActions } from '../services/tab-actions';
 import { TabHistoryService } from '../services/tab-history';
 import { Dashboard } from './dashboard';
 import { attachController, RenderScheduler } from './controller';
-import { enforceSingleDashboard } from './singleton';
 import { installFaviconFallback } from '../ui/favicon';
 
 async function bootstrap(): Promise<void> {
@@ -29,7 +28,7 @@ async function bootstrap(): Promise<void> {
 
   // Enforce the single-dashboard rule before the first paint, so the tab
   // counts we render already exclude the pages we are about to close.
-  await enforceSingleDashboard(browser, tabActions, chrome.runtime.id);
+  await tabActions.keepOnlyThisDashboard(dashboardUrls(chrome.runtime.id));
 
   // Then take up position at the end of the tab bar — any page opened after
   // this one should land to its left, never to its right.
