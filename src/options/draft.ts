@@ -45,10 +45,12 @@ export interface DraftState {
   pinned: PinnedRow[];
   landing: LandingRow[];
   custom: CustomRow[];
+  /** "Keep last N closed tabs" — a plain field, not a row table. */
+  maxHistoryItems: string;
 }
 
-/** Which table a row belongs to. */
-export type SectionName = keyof DraftState;
+/** Which row-table a row belongs to. `maxHistoryItems` is not a table. */
+export type SectionName = 'pinned' | 'landing' | 'custom';
 
 /** Any one of the three row shapes. */
 export type DraftRow = PinnedRow | LandingRow | CustomRow;
@@ -113,6 +115,7 @@ export function settingsToDraft(settings: TabOutSettings): DraftState {
       hostname: hostnameToField(rule),
       pathPrefix: rule.pathPrefix ?? '',
     })),
+    maxHistoryItems: String(settings.maxHistoryItems),
   };
 }
 
@@ -154,6 +157,7 @@ export function draftToSettings(draft: DraftState): NormalizeResult {
     pinnedSites,
     landingPatterns,
     customGroups,
+    maxHistoryItems: draft.maxHistoryItems,
   });
 }
 

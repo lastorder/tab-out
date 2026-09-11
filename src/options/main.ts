@@ -11,6 +11,7 @@ import { SettingsStore } from '../config/store';
 import { createChromeStore } from '../platform/storage';
 import { createDefaultSettings } from '../config/defaults';
 import { parseSettingsJson, stringifySettings } from '../config/schema';
+import { TabHistoryService } from '../services/tab-history';
 import {
   addRow,
   draftToSettings,
@@ -24,6 +25,7 @@ import {
 import { renderIssues, renderSection } from './render';
 
 const store = new SettingsStore(createChromeStore('sync'));
+const historyService = new TabHistoryService(createChromeStore('local'));
 
 /** Container element for each table. */
 const CONTAINERS: Record<SectionName, string> = {
@@ -50,6 +52,12 @@ function render(): void {
     const container = byId(containerId);
     if (container) container.innerHTML = renderSection(section as SectionName, draft);
   }
+
+  const historyInput = byId<HTMLInputElement>('maxHistoryItems');
+  if (historyInput && historyInput.value !== draft.maxHistoryItems) {
+    historyInput.value = draft.maxHistoryItems;
+  }
+
   updateStatus();
 }
 
@@ -103,6 +111,13 @@ function mutateSection(
 document.addEventListener('input', (event) => {
   const input = event.target as HTMLInputElement | null;
   if (!input || input.tagName !== 'INPUT') return;
+
+  // The single "keep last N closed tabs" field isn't part of a row table.
+  if (input.id === 'maxHistoryItems') {
+    draft = { ...draft, maxHistoryItems: input.value };
+    updateStatus();
+    return;
+  }
 
   const section = input.dataset['section'] as SectionName | undefined;
   const field = input.dataset['field'];
@@ -162,6 +177,9 @@ byId('saveBtn')?.addEventListener('click', () => {
   void (async () => {
     const { settings, issues } = draftToSettings(draft);
     const stored = await store.save(settings);
+    // Apply a lowered history limit immediately, rather than waiting for the
+    // next tab close to trim the stored list down to size.
+    await historyService.trimTo(stored.maxHistoryItems);
     draft = settingsToDraft(stored);
     savedSnapshot = JSON.stringify(draft);
     render();

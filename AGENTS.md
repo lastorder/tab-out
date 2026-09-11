@@ -106,6 +106,7 @@ Once the extension is loaded:
 > 6. **Duplicate tabs** are flagged with an amber "(2x)" badge. Click "Close duplicates" to keep one copy.
 > 7. **Save a tab for later** by clicking the bookmark icon before closing it. Saved tabs appear in the sidebar.
 > 8. **Only one Tab Out page stays open** — opening a new one automatically closes the others.
+> 9. **History** — click the clock icon to see every tab you've recently closed, however you closed it, and reopen one with a click. A reopened tab drops off the list immediately.
 
 ## Step 4 — Point them at the settings page
 
@@ -116,6 +117,7 @@ Most people miss this, so mention it explicitly:
 > - **Pinned sites** — the sites that always sit at the top. Sites with no open tabs show as click-to-open placeholders.
 > - **Homepage rules** — which URLs count as a "homepage" and get collected into the Homepages card.
 > - **Custom groups** — merge several hostnames into one card, or split one site into separate cards by path.
+> - **History** — how many recently closed tabs to remember (default 100).
 >
 > Settings sync across your Chrome profile, and there are Export/Import buttons for backups.
 
@@ -171,7 +173,7 @@ core/       Pure logic. No chrome.*, no DOM. This is where decisions live.
 platform/   The seam over browser APIs: BrowserTabs, KeyValueStore
   ↓
 config/     Settings: defaults, validation schema, storage-backed store
-services/   Orchestration: TabActions, SavedTabsService
+services/   Orchestration: TabActions, SavedTabsService, TabHistoryService
   ↓
 ui/         Pure HTML string renderers + DOM effects
   ↓
@@ -201,6 +203,7 @@ Consequences you must respect:
 - **Keep defaults in normalised form.** `normalizeSettings(defaults)` must equal `defaults` — a test guards this.
 - **Group cards are addressed by index** via `data-group-index`, not by a slugified name. Don't reintroduce string-derived DOM ids; they collide.
 - **Closing by hostname vs exact URL is a real distinction.** Domain cards close by hostname; Homepages and custom groups close by exact URL so they don't take unrelated tabs with them. See `TabActions.closeGroup`.
+- **History is recorded in the background worker, not the dashboard.** `chrome.tabs.onRemoved` doesn't include the tab's URL, so `background/main.ts` keeps a `TabSnapshotCache` (`chrome.storage.session`) updated on every create/update, and consumes it on removal. If you add a way to close tabs that bypasses `chrome.tabs.remove`, history recording still works — it listens at the browser level, not through `TabActions`.
 
 ## Storage layout
 
@@ -208,8 +211,10 @@ Consequences you must respect:
 |-----|------|----------|
 | `settings` | `chrome.storage.sync` | `TabOutSettings` — small, follows the user across machines |
 | `deferred` | `chrome.storage.local` | Saved-tab records — can grow large, stays on the device |
+| `closedTabHistory` | `chrome.storage.local` | Closed-tab history, capped at `settings.maxHistoryItems` |
+| `tabSnapshots` | `chrome.storage.session` | tab id → last-known `{url,title}`; cleared when the browser closes |
 
-Saved tabs are never hard-deleted: `completed` moves an item to the archive, `dismissed` hides it from both lists.
+Saved tabs are never hard-deleted: `completed` moves an item to the archive, `dismissed` hides it from both lists. History entries *are* hard-deleted (by url, by id, or via "Clear all") — there is no archive for them.
 
 ## Things that were deliberately removed
 

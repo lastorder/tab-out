@@ -73,6 +73,8 @@ export interface TabOutSettings {
   pinnedSites: PinnedSite[];
   landingPatterns: LandingPattern[];
   customGroups: CustomGroupRule[];
+  /** How many recently-closed tabs to remember before the oldest are dropped. */
+  maxHistoryItems: number;
 }
 
 /** An item on the "Saved for later" checklist. */
@@ -92,4 +94,20 @@ export interface SavedTab {
 export interface SavedTabBuckets {
   active: SavedTab[];
   archived: SavedTab[];
+}
+
+/**
+ * A tab that was closed and can be reopened from the History panel.
+ *
+ * Recorded for every real tab closure, regardless of how it was closed
+ * (Tab Out's own buttons, Chrome's own tab X, closing a whole window, …).
+ * Deduplicated by URL: closing the same page twice updates one entry's
+ * timestamp rather than creating a second one.
+ */
+export interface ClosedTabEntry {
+  id: string;
+  url: string;
+  title: string;
+  /** ISO-8601 timestamp of the most recent closure. */
+  closedAt: string;
 }

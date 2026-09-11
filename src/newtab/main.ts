@@ -11,6 +11,7 @@ import { createChromeBrowserTabs } from '../platform/browser';
 import { createChromeStore } from '../platform/storage';
 import { SavedTabsService } from '../services/saved-tabs';
 import { TabActions } from '../services/tab-actions';
+import { TabHistoryService } from '../services/tab-history';
 import { Dashboard } from './dashboard';
 import { attachController, RenderScheduler } from './controller';
 import { enforceSingleDashboard } from './singleton';
@@ -21,6 +22,7 @@ async function bootstrap(): Promise<void> {
   const tabActions = new TabActions(browser);
   const savedTabs = new SavedTabsService(createChromeStore('local'));
   const settingsStore = new SettingsStore(createChromeStore('sync'));
+  const historyService = new TabHistoryService(createChromeStore('local'));
 
   installFaviconFallback();
 
@@ -28,12 +30,14 @@ async function bootstrap(): Promise<void> {
   // counts we render already exclude the pages we are about to close.
   await enforceSingleDashboard(browser, tabActions, chrome.runtime.id);
 
-  const dashboard = new Dashboard({ browser, tabActions, savedTabs, settingsStore });
+  const dashboard = new Dashboard({ browser, tabActions, savedTabs, settingsStore, historyService });
   const scheduler = new RenderScheduler(() => dashboard.render());
 
   attachController(dashboard, scheduler);
 
   // Repaint when tabs change, or when settings are saved in the options page.
+  // A tab-change repaint also keeps the History panel's list and badge count
+  // in sync with what the background worker is recording as tabs close.
   browser.onChanged(() => scheduler.schedule());
   settingsStore.onChanged(() => void dashboard.render());
 

@@ -28,7 +28,12 @@ export type DashboardAction =
   | 'dismiss-saved'
   | 'close-group'
   | 'close-duplicates'
-  | 'close-all-tabs';
+  | 'close-all-tabs'
+  | 'open-history'
+  | 'close-history'
+  | 'reopen-history'
+  | 'remove-history'
+  | 'clear-history';
 
 /**
  * Coalesces browser tab events into one repaint, and lets the UI temporarily
@@ -85,7 +90,21 @@ export function attachController(
   dashboard: Dashboard,
   scheduler: RenderScheduler,
 ): () => void {
-  const { tabActions, savedTabs } = dashboard.deps;
+  const { tabActions, savedTabs, historyService } = dashboard.deps;
+
+  /** Reads the History search box, so re-renders after an action keep the filter. */
+  const historyQuery = (): string =>
+    (document.getElementById('historySearch') as HTMLInputElement | null)?.value ?? '';
+
+  const openHistoryPanel = (): void => {
+    const overlay = document.getElementById('historyOverlay');
+    if (overlay) overlay.style.display = 'flex';
+  };
+
+  const closeHistoryPanel = (): void => {
+    const overlay = document.getElementById('historyOverlay');
+    if (overlay) overlay.style.display = 'none';
+  };
 
   const onClick = async (event: MouseEvent): Promise<void> => {
     const target = event.target as HTMLElement | null;
@@ -264,6 +283,49 @@ export function attachController(
         showToast('All tabs closed. Fresh start.');
         return;
       }
+
+      case 'open-history': {
+        openHistoryPanel();
+        await dashboard.renderHistoryPanel(historyQuery());
+        return;
+      }
+
+      case 'close-history': {
+        closeHistoryPanel();
+        return;
+      }
+
+      case 'reopen-history': {
+        const url = actionEl.dataset['historyUrl'];
+        const id = actionEl.dataset['historyId'];
+        if (!url) return;
+
+        const created = await tabActions.reopenFromHistory(url);
+        if (id) await historyService.removeById(id);
+        await dashboard.renderHistoryPanel(historyQuery());
+
+        showToast(created ? 'Tab reopened' : 'Already open — switched to it');
+        return;
+      }
+
+      case 'remove-history': {
+        const id = actionEl.dataset['historyId'];
+        if (!id) return;
+
+        const row = actionEl.closest<HTMLElement>('.history-item');
+        await historyService.removeById(id);
+        if (row) await fadeOut(row);
+        await dashboard.renderHistoryPanel(historyQuery());
+        return;
+      }
+
+      case 'clear-history': {
+        if (!window.confirm('Clear all closed-tab history? This cannot be undone.')) return;
+        await historyService.clear();
+        await dashboard.renderHistoryPanel(historyQuery());
+        showToast('History cleared');
+        return;
+      }
     }
   };
 
@@ -289,20 +351,40 @@ export function attachController(
     }
   };
 
+  const onHistorySearch = async (event: Event): Promise<void> => {
+    const input = event.target as HTMLInputElement | null;
+    if (!input || input.id !== 'historySearch') return;
+    await dashboard.renderHistoryPanel(input.value);
+  };
+
+  /** Clicking the dark backdrop (not the modal card itself) closes the panel. */
+  const onHistoryBackdropClick = (event: MouseEvent): void => {
+    if (event.target === document.getElementById('historyOverlay')) closeHistoryPanel();
+  };
+
+  /** Escape closes the History panel, matching standard modal behaviour. */
+  const onKeydown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') closeHistoryPanel();
+  };
+
   const clickHandler = (event: MouseEvent): void => {
     void onClick(event);
+    onHistoryBackdropClick(event);
   };
   const inputHandler = (event: Event): void => {
     void onArchiveSearch(event);
+    void onHistorySearch(event);
   };
 
   document.addEventListener('click', clickHandler);
   document.addEventListener('click', onArchiveToggle);
   document.addEventListener('input', inputHandler);
+  document.addEventListener('keydown', onKeydown);
 
   return () => {
     document.removeEventListener('click', clickHandler);
     document.removeEventListener('click', onArchiveToggle);
     document.removeEventListener('input', inputHandler);
+    document.removeEventListener('keydown', onKeydown);
   };
 }

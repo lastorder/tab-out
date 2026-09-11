@@ -2,7 +2,7 @@
  * tests/helpers/factories.ts — concise builders for test data.
  */
 
-import type { TabInfo, TabOutSettings } from '@/types';
+import type { ClosedTabEntry, TabInfo, TabOutSettings } from '@/types';
 import { createDefaultSettings } from '@/config/defaults';
 
 let nextId = 1;
@@ -30,6 +30,20 @@ export function tabs(...urls: string[]): TabInfo[] {
   return urls.map((url, i) => tab(url, { index: i }));
 }
 
+/** Builds a closed-tab history entry; only `url` is required. */
+export function historyEntry(
+  url: string,
+  overrides: Partial<ClosedTabEntry> = {},
+): ClosedTabEntry {
+  return {
+    id: `hist-${nextId++}`,
+    url,
+    title: url,
+    closedAt: new Date(2026, 3, 4, 12, 0, 0).toISOString(),
+    ...overrides,
+  };
+}
+
 /** Settings with everything empty — the neutral baseline for grouping tests. */
 export function emptySettings(overrides: Partial<TabOutSettings> = {}): TabOutSettings {
   return {
@@ -37,6 +51,7 @@ export function emptySettings(overrides: Partial<TabOutSettings> = {}): TabOutSe
     pinnedSites: [],
     landingPatterns: [],
     customGroups: [],
+    maxHistoryItems: 100,
     ...overrides,
   };
 }

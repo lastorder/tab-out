@@ -24,6 +24,13 @@
       <div class="date" id="dateDisplay"></div>
     </div>
     <div class="header-right">
+      <button class="icon-btn" id="historyBtn" data-action="open-history"
+              title="History" aria-label="History">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+        </svg>
+        <span class="icon-btn-badge" id="historyBadge" style="display:none"></span>
+      </button>
       <button class="icon-btn" id="settingsBtn" data-action="open-settings"
               title="Tab Out settings" aria-label="Tab Out settings">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor">
@@ -33,6 +40,30 @@
       </button>
     </div>
   </header>
+
+  <!-- ================================================================
+       HISTORY PANEL — recently closed tabs, opened via the header button.
+       Hidden by default; closed by the X, the backdrop, or Escape.
+       See newtab/controller.ts and newtab/dashboard.ts#renderHistoryPanel.
+       ================================================================ -->
+  <div class="history-overlay" id="historyOverlay" style="display:none">
+    <div class="history-modal">
+      <div class="history-modal-header">
+        <h2>History</h2>
+        <div class="history-modal-count" id="historyCount"></div>
+        <div class="history-modal-actions">
+          <button class="btn-ghost-sm" data-action="clear-history">Clear all</button>
+          <button class="icon-btn icon-btn-sm" data-action="close-history" aria-label="Close history" title="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <input type="text" class="history-search" id="historySearch" placeholder="Search closed tabs...">
+      <div class="history-list" id="historyList"></div>
+    </div>
+  </div>
 
   <!-- ================================================================
        TAB SORT BANNER — shown when the tab bar order differs from this view.

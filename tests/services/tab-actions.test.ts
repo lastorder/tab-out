@@ -188,3 +188,23 @@ describe('TabActions.closeOtherDashboards', () => {
     expect(browser.closed).toEqual([]);
   });
 });
+
+describe('TabActions.reopenFromHistory', () => {
+  it('opens a new tab appended to the end of the tab bar when the URL is not open', async () => {
+    const browser = createFakeBrowser([]);
+    const created = await new TabActions(browser).reopenFromHistory('https://a.com/');
+
+    expect(created).toBe(true);
+    expect(browser.created).toEqual([{ url: 'https://a.com/' }]);
+    expect(browser.activated).toBeNull();
+  });
+
+  it('focuses an already-open tab instead of creating a duplicate', async () => {
+    const browser = createFakeBrowser([tab('https://a.com/', { id: 9, windowId: 2 })]);
+    const created = await new TabActions(browser).reopenFromHistory('https://a.com/');
+
+    expect(created).toBe(false);
+    expect(browser.activated).toEqual({ tabId: 9, windowId: 2 });
+    expect(browser.created).toEqual([]);
+  });
+});

@@ -10,15 +10,18 @@ import type { DashboardModel } from '../core/grouping';
 import type { SettingsStore } from '../config/store';
 import type { SavedTabsService } from '../services/saved-tabs';
 import type { TabActions } from '../services/tab-actions';
+import type { TabHistoryService } from '../services/tab-history';
 import type { BrowserTabs } from '../platform/browser';
 import type { TabGroup, TabOutSettings } from '../types';
 import { buildDashboardModel } from '../core/grouping';
+import { filterHistory } from '../core/history';
 import { desiredTabOrder, needsSorting } from '../core/selection';
 import { createDefaultSettings } from '../config/defaults';
 import { getDateDisplay, getGreeting } from '../core/time';
 import { escapeHtml, plural } from '../ui/html';
 import { ICONS } from '../ui/icons';
 import { renderEmptyState, renderEntries } from '../ui/render/cards';
+import { renderHistoryList } from '../ui/render/history';
 import { renderArchiveList, renderSavedItem } from '../ui/render/saved';
 
 export interface DashboardDeps {
@@ -26,6 +29,7 @@ export interface DashboardDeps {
   tabActions: TabActions;
   savedTabs: SavedTabsService;
   settingsStore: SettingsStore;
+  historyService: TabHistoryService;
 }
 
 /** Looks up an element by id, typed. */
@@ -76,6 +80,7 @@ export class Dashboard {
     this.#renderStats(tabs.length);
     await this.#renderSortBanner(model);
     await this.renderSavedColumn();
+    await this.renderHistoryPanel(this.#currentHistoryQuery());
   }
 
   #renderHeader(): void {
@@ -192,6 +197,36 @@ export class Dashboard {
       console.warn('[tab-out] Could not load saved tabs:', err);
       column.style.display = 'none';
     }
+  }
+
+  /**
+   * Repaints the History panel: the reopen-count badge on the header button
+   * always updates (so it stays accurate even while the panel is closed),
+   * and the list itself is refreshed too — writing into a hidden panel is
+   * harmless, and it means the list is never stale the instant it opens.
+   *
+   * `query` filters the list, for the panel's search box.
+   */
+  async renderHistoryPanel(query = ''): Promise<void> {
+    const badge = byId('historyBadge');
+    const countLabel = byId('historyCount');
+    const list = byId('historyList');
+
+    const openUrls = new Set(this.#model?.realTabs.map((tab) => tab.url) ?? []);
+    const entries = await this.deps.historyService.list(openUrls);
+    const visible = filterHistory(entries, query);
+
+    if (badge) {
+      badge.textContent = entries.length > 0 ? String(entries.length) : '';
+      badge.style.display = entries.length > 0 ? 'inline-flex' : 'none';
+    }
+    if (countLabel) countLabel.textContent = plural(entries.length, 'closed tab');
+    if (list) list.innerHTML = renderHistoryList(visible, query.trim().length >= 2);
+  }
+
+  /** Reads whatever the user has already typed into the history search box. */
+  #currentHistoryQuery(): string {
+    return byId<HTMLInputElement>('historySearch')?.value ?? '';
   }
 
   /**

@@ -29,6 +29,7 @@ The agent will walk you through it. Takes about 2 minutes.
 - **Duplicate detection** flags when you have the same page open twice, with one-click cleanup
 - **Click any tab to jump to it** across windows, no new tab opened
 - **Save for later** bookmark tabs to a checklist before closing them
+- **History** every tab you close — however you closed it — is remembered and one click away from reopening; a reopened (or already-open) tab is never shown twice
 - **Localhost grouping** shows port numbers next to each tab so you can tell your projects apart
 - **One dashboard, always** opening a new Tab Out page automatically closes the other ones
 - **100% local** your data never leaves your machine
@@ -72,6 +73,7 @@ Click the gear icon in the top-right of the dashboard, or right-click the extens
 | **Pinned sites** | Sites always shown first. With open tabs they get a normal card; without, a click-to-open placeholder. |
 | **Homepage rules** | Which URLs count as a "homepage" and get collected into the shared **Homepages** card. |
 | **Custom groups** | Merge several hostnames into one card, or split one site into separate cards by path. |
+| **History** | How many recently closed tabs to remember (default 100). |
 
 Settings are stored in `chrome.storage.sync`, so they follow your Chrome profile across machines. Use **Export** / **Import** to move them as JSON.
 
@@ -91,6 +93,12 @@ Homepage rules then narrow by path:
 | **Except URLs containing** | Comma-separated veto list |
 
 That last field is what keeps Gmail useful: the shipped rule matches every `mail.google.com` path *except* URLs containing `#inbox/`, so your inbox counts as a homepage while an individual email thread keeps its own card.
+
+---
+
+## History
+
+Click the clock icon in the top-right of the dashboard to see every tab you've closed recently — however you closed it (Tab Out's buttons, Chrome's own tab X, closing a whole window). Click a row to reopen it; it disappears from history the moment it's open again, so a URL is never shown as both "open" and "closed" at once. Rows are sorted newest-closed first, with a search box to jump straight to the one you want. The oldest entries drop off once you pass the configured limit (Settings → History).
 
 ---
 
@@ -119,16 +127,18 @@ src/
 │   ├── domain.ts      Hostname → friendly brand name
 │   ├── duplicates.ts  Duplicate detection
 │   ├── url.ts         Total URL helpers
-│   └── time.ts        Relative-time formatting
+│   ├── time.ts        Relative-time formatting
+│   ├── history.ts     Closed-tab list: dedup, ordering, trimming
+│   └── tab-snapshot.ts Tab-id → last-known-info cache (pure half)
 ├── platform/     The seam over Chrome APIs (swapped for fakes in tests)
 │   ├── browser.ts     BrowserTabs interface + Chrome implementation
 │   └── storage.ts     KeyValueStore interface + Chrome/memory implementations
 ├── config/       Settings: defaults, validation schema, storage-backed store
-├── services/     Orchestration: TabActions, SavedTabsService
+├── services/     Orchestration: TabActions, SavedTabsService, TabHistoryService
 ├── ui/           Presentation: pure HTML renderers + DOM effects
 ├── newtab/       Dashboard entry point, render loop, event controller
 ├── options/      Settings page: draft model, renderers, controller
-├── background/   MV3 service worker (toolbar badge)
+├── background/   MV3 service worker (toolbar badge + closed-tab recording)
 ├── styles/       Stylesheets
 └── manifest.json
 ```
@@ -137,7 +147,7 @@ The architecture follows one organising rule: **decisions are pure, effects are 
 
 ### Tests
 
-297 unit tests across 20 files, run with [Vitest](https://vitest.dev):
+369 unit tests across 26 files, run with [Vitest](https://vitest.dev):
 
 ```bash
 npm test
@@ -165,6 +175,8 @@ Coverage is concentrated where the risk is: `core/` sits near 100%, and `service
 | Extension | Chrome Manifest V3 |
 | Settings storage | `chrome.storage.sync` |
 | Saved tabs storage | `chrome.storage.local` |
+| Closed-tab history storage | `chrome.storage.local` |
+| Tab snapshot cache | `chrome.storage.session` |
 | Sound | Web Audio API (synthesized, no files) |
 | Animations | CSS transitions + JS confetti particles |
 

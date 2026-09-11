@@ -14,8 +14,12 @@ import type {
   PinnedSite,
   TabOutSettings,
 } from '../types';
-import { createDefaultSettings, SETTINGS_VERSION } from './defaults';
+import { createDefaultSettings, SETTINGS_VERSION, DEFAULT_MAX_HISTORY_ITEMS } from './defaults';
 import { normalizeUrlInput } from '../core/url';
+
+/** Bounds enforced on the "keep last N closed tabs" setting. */
+export const MIN_HISTORY_ITEMS = 1;
+export const MAX_HISTORY_ITEMS = 1000;
 
 /** A human-readable problem found while validating. */
 export interface ValidationIssue {
@@ -143,6 +147,30 @@ export function normalizeCustomGroup(
   return rule;
 }
 
+/**
+ * Coerces the "keep last N closed tabs" field to a whole number within
+ * [MIN_HISTORY_ITEMS, MAX_HISTORY_ITEMS], falling back to the default and
+ * reporting why whenever the raw value cannot be trusted.
+ */
+export function normalizeMaxHistoryItems(raw: unknown, issues: ValidationIssue[]): number {
+  const num = typeof raw === 'number' ? raw : Number(raw);
+  if (raw === undefined) return DEFAULT_MAX_HISTORY_ITEMS;
+  if (!Number.isFinite(num)) {
+    issues.push({ path: 'maxHistoryItems', message: 'Not a number; using the default.' });
+    return DEFAULT_MAX_HISTORY_ITEMS;
+  }
+  const rounded = Math.round(num);
+  if (rounded < MIN_HISTORY_ITEMS) {
+    issues.push({ path: 'maxHistoryItems', message: `Below the minimum of ${MIN_HISTORY_ITEMS}; clamped.` });
+    return MIN_HISTORY_ITEMS;
+  }
+  if (rounded > MAX_HISTORY_ITEMS) {
+    issues.push({ path: 'maxHistoryItems', message: `Above the maximum of ${MAX_HISTORY_ITEMS}; clamped.` });
+    return MAX_HISTORY_ITEMS;
+  }
+  return rounded;
+}
+
 /** Drops later entries that reuse an earlier entry's identity. */
 function dedupeBy<T>(items: T[], keyOf: (item: T) => string, path: string, issues: ValidationIssue[]): T[] {
   const seen = new Set<string>();
@@ -207,8 +235,10 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
       ? raw['version']
       : SETTINGS_VERSION;
 
+  const maxHistoryItems = normalizeMaxHistoryItems(raw['maxHistoryItems'], issues);
+
   return {
-    settings: { version, pinnedSites, landingPatterns, customGroups },
+    settings: { version, pinnedSites, landingPatterns, customGroups, maxHistoryItems },
     issues,
   };
 }

@@ -75,6 +75,25 @@
   </section>
 
   <!-- ================================================================
+       HISTORY
+       ================================================================ -->
+  <section class="panel" id="historyPanel">
+    <div class="panel-header">
+      <h2>History</h2>
+      <p>
+        How many recently closed tabs to remember. The oldest entries drop off
+        automatically once you go over this limit. Reopening a tab, or a page you
+        already have open, is never counted as history.
+      </p>
+    </div>
+    <div class="field field-inline">
+      <label for="maxHistoryItems">Keep last</label>
+      <input type="number" id="maxHistoryItems" data-field="maxHistoryItems" min="1" max="1000" step="1">
+      <label for="maxHistoryItems" class="field-inline-suffix">closed tabs</label>
+    </div>
+  </section>
+
+  <!-- ================================================================
        SAVE BAR — sticky at the bottom
        ================================================================ -->
   <div class="save-bar" id="saveBar">

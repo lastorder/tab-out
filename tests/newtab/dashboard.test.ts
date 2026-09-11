@@ -14,6 +14,7 @@ import { Dashboard } from '@/newtab/dashboard';
 import { SettingsStore } from '@/config/store';
 import { SavedTabsService } from '@/services/saved-tabs';
 import { TabActions } from '@/services/tab-actions';
+import { TabHistoryService } from '@/services/tab-history';
 import { createMemoryStore } from '@/platform/storage';
 import { SETTINGS_KEY } from '@/config/store';
 import type { TabInfo, TabOutSettings } from '@/types';
@@ -39,6 +40,12 @@ function mountDom(): void {
         <div id="archiveList"></div>
       </div>
     </div>
+    <span id="historyBadge" style="display:none"></span>
+    <div id="historyOverlay" style="display:none">
+      <div id="historyCount"></div>
+      <input id="historySearch" type="text">
+      <div id="historyList"></div>
+    </div>
     <div id="statTabs">—</div>`;
 }
 
@@ -48,16 +55,19 @@ async function buildDashboard(tabsList: TabInfo[], settings?: Partial<TabOutSett
     settings ? { [SETTINGS_KEY]: emptySettings(settings) } : { [SETTINGS_KEY]: emptySettings() },
   );
   const savedBacking = createMemoryStore();
+  const historyBacking = createMemoryStore();
 
   const savedTabs = new SavedTabsService(savedBacking);
+  const historyService = new TabHistoryService(historyBacking);
   const dashboard = new Dashboard({
     browser,
     tabActions: new TabActions(browser),
     savedTabs,
     settingsStore: new SettingsStore(settingsBacking),
+    historyService,
   });
 
-  return { dashboard, browser, savedTabs };
+  return { dashboard, browser, savedTabs, historyService };
 }
 
 const missions = (): string => document.getElementById('openTabsMissions')!.innerHTML;
@@ -221,5 +231,55 @@ describe('Dashboard.checkEmptyState', () => {
 
     dashboard.checkEmptyState();
     expect(missions()).not.toContain('Inbox zero');
+  });
+});
+
+describe('Dashboard History panel', () => {
+  it('shows the badge count and lists recorded closures', async () => {
+    const { dashboard, historyService } = await buildDashboard([]);
+    await historyService.record({ url: 'https://a.com/', title: 'A' }, 100);
+    await historyService.record({ url: 'https://b.com/', title: 'B' }, 100);
+    await dashboard.render();
+
+    const badge = document.getElementById('historyBadge')!;
+    expect(badge.textContent).toBe('2');
+    expect(badge.style.display).toBe('inline-flex');
+    expect(document.getElementById('historyCount')!.textContent).toBe('2 closed tabs');
+    expect(document.getElementById('historyList')!.innerHTML).toContain('A');
+    expect(document.getElementById('historyList')!.innerHTML).toContain('B');
+  });
+
+  it('hides the badge and shows the empty state when nothing is closed', async () => {
+    const { dashboard } = await buildDashboard([]);
+    await dashboard.render();
+
+    const badge = document.getElementById('historyBadge')!;
+    expect(badge.textContent).toBe('');
+    expect(badge.style.display).toBe('none');
+    expect(document.getElementById('historyList')!.innerHTML).toContain('No closed tabs yet');
+  });
+
+  it('never shows an entry whose URL is currently open', async () => {
+    const { dashboard, historyService } = await buildDashboard([tab('https://a.com/')]);
+    await historyService.record({ url: 'https://a.com/', title: 'A' }, 100);
+    await historyService.record({ url: 'https://b.com/', title: 'B' }, 100);
+    await dashboard.render();
+
+    const badge = document.getElementById('historyBadge')!;
+    expect(badge.textContent).toBe('1');
+    expect(document.getElementById('historyList')!.innerHTML).not.toContain('>A<');
+  });
+
+  it('filters the list by the given query', async () => {
+    const { dashboard, historyService } = await buildDashboard([]);
+    await historyService.record({ url: 'https://typescript.org/', title: 'TypeScript' }, 100);
+    await historyService.record({ url: 'https://rust-lang.org/', title: 'Rust' }, 100);
+    await dashboard.render();
+
+    await dashboard.renderHistoryPanel('rust');
+
+    const html = document.getElementById('historyList')!.innerHTML;
+    expect(html).toContain('Rust');
+    expect(html).not.toContain('TypeScript');
   });
 });

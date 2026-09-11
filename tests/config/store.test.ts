@@ -16,6 +16,7 @@ describe('SettingsStore', () => {
       pinnedSites: [{ url: 'https://a.com/' }],
       landingPatterns: [],
       customGroups: [],
+      maxHistoryItems: 100,
     });
 
     expect(saved.pinnedSites).toEqual([{ url: 'https://a.com/' }]);
@@ -40,6 +41,7 @@ describe('SettingsStore', () => {
       pinnedSites: [{ url: 'not a url' }, { url: 'good.com' }],
       landingPatterns: [],
       customGroups: [],
+      maxHistoryItems: 100,
     });
 
     expect(await backing.get(SETTINGS_KEY)).toMatchObject({
@@ -54,6 +56,7 @@ describe('SettingsStore', () => {
       pinnedSites: [{ url: 'https://a.com/' }],
       landingPatterns: [{ hostname: 'x.com' }],
       customGroups: [],
+      maxHistoryItems: 100,
     });
 
     const patched = await store.patch({ pinnedSites: [{ url: 'https://b.com/' }] });
@@ -63,7 +66,7 @@ describe('SettingsStore', () => {
 
   it('restores defaults on reset', async () => {
     const store = new SettingsStore(createMemoryStore());
-    await store.save({ version: 1, pinnedSites: [], landingPatterns: [], customGroups: [] });
+    await store.save({ version: 1, pinnedSites: [], landingPatterns: [], customGroups: [], maxHistoryItems: 100 });
     expect(await store.reset()).toEqual(createDefaultSettings());
   });
 
@@ -88,6 +91,7 @@ describe('SettingsStore', () => {
       pinnedSites: [{ url: 'https://a.com/' }],
       landingPatterns: [],
       customGroups: [],
+      maxHistoryItems: 100,
     });
     await vi.waitFor(() => expect(listener).toHaveBeenCalled());
 

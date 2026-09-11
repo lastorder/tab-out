@@ -29,8 +29,48 @@ describe('normalizeSettings', () => {
       pinnedSites: [{ url: 'https://example.com/', label: 'Example' }],
       landingPatterns: [{ hostname: 'x.com', pathExact: ['/home'] }],
       customGroups: [{ groupKey: 'k', groupLabel: 'K', hostname: 'a.com' }],
+      maxHistoryItems: 250,
     };
     expect(normalizeSettings(input).settings).toEqual(input);
+  });
+
+  describe('maxHistoryItems', () => {
+    it('accepts a valid whole number as-is', () => {
+      expect(normalizeSettings({ maxHistoryItems: 250 }).settings.maxHistoryItems).toBe(250);
+    });
+
+    it('rounds a fractional number', () => {
+      expect(normalizeSettings({ maxHistoryItems: 49.6 }).settings.maxHistoryItems).toBe(50);
+    });
+
+    it('coerces a numeric string, as the options form submits it', () => {
+      expect(normalizeSettings({ maxHistoryItems: '75' }).settings.maxHistoryItems).toBe(75);
+    });
+
+    it('falls back to the default without an issue when the field is missing', () => {
+      const { settings, issues } = normalizeSettings({});
+      expect(settings.maxHistoryItems).toBe(100);
+      expect(issues).toEqual([]);
+    });
+
+    it('falls back to the default and reports an issue for non-numeric input', () => {
+      const { settings, issues } = normalizeSettings({ maxHistoryItems: 'lots' });
+      expect(settings.maxHistoryItems).toBe(100);
+      expect(issues).toHaveLength(1);
+      expect(issues[0]!.path).toBe('maxHistoryItems');
+    });
+
+    it('clamps below the minimum', () => {
+      const { settings, issues } = normalizeSettings({ maxHistoryItems: 0 });
+      expect(settings.maxHistoryItems).toBe(1);
+      expect(issues).toHaveLength(1);
+    });
+
+    it('clamps above the maximum', () => {
+      const { settings, issues } = normalizeSettings({ maxHistoryItems: 5000 });
+      expect(settings.maxHistoryItems).toBe(1000);
+      expect(issues).toHaveLength(1);
+    });
   });
 
   describe('pinned sites', () => {

@@ -15,8 +15,8 @@ export interface KeyValueStore {
   onChanged(listener: (key: string) => void): () => void;
 }
 
-/** Wraps one `chrome.storage` area (`sync` or `local`). */
-export function createChromeStore(areaName: 'sync' | 'local'): KeyValueStore {
+/** Wraps one `chrome.storage` area (`sync`, `local`, or `session`). */
+export function createChromeStore(areaName: 'sync' | 'local' | 'session'): KeyValueStore {
   const area = chrome.storage[areaName];
 
   return {

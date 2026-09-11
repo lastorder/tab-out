@@ -120,6 +120,30 @@ body {
 
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 
+/* A single number field + inline suffix label, e.g. "Keep last [100] closed tabs". */
+.field-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.field-inline label {
+  text-transform: none;
+  font-size: 13px;
+  letter-spacing: normal;
+  color: var(--ink);
+}
+
+.field-inline input {
+  width: 90px;
+  text-align: right;
+  flex: none;
+}
+
+.field-inline-suffix {
+  color: var(--ink) !important;
+}
+
 .field label {
   font-size: 10px;
   text-transform: uppercase;

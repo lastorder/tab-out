@@ -19,8 +19,8 @@ export interface BrowserTabs {
   close(tabIds: readonly number[]): Promise<void>;
   /** Activates a tab and focuses its window. */
   activate(tabId: number, windowId: number): Promise<void>;
-  /** Opens a new tab at a specific position in the tab bar. */
-  create(url: string, index: number): Promise<void>;
+  /** Opens a new tab. With no index, Chrome appends it at the end of the tab bar. */
+  create(url: string, index?: number): Promise<void>;
   /** Moves a tab to a new position in the tab bar. */
   move(tabId: number, index: number): Promise<void>;
   /** The id of the currently focused window. */
@@ -66,8 +66,8 @@ export function createChromeBrowserTabs(): BrowserTabs {
       await chrome.windows.update(windowId, { focused: true });
     },
 
-    async create(url: string, index: number): Promise<void> {
-      await chrome.tabs.create({ url, index, active: true });
+    async create(url: string, index?: number): Promise<void> {
+      await chrome.tabs.create(index === undefined ? { url, active: true } : { url, index, active: true });
     },
 
     async move(tabId: number, index: number): Promise<void> {

@@ -48,6 +48,9 @@ export const DEFAULT_LANDING_PATTERNS: readonly LandingPattern[] = Object.freeze
 /** Rules that merge or split tabs into custom cards. Empty by default. */
 export const DEFAULT_CUSTOM_GROUPS: readonly CustomGroupRule[] = Object.freeze([]);
 
+/** How many recently-closed tabs to remember by default. */
+export const DEFAULT_MAX_HISTORY_ITEMS = 100;
+
 /** Returns a fresh, deeply-copied default settings object. */
 export function createDefaultSettings(): TabOutSettings {
   return {
@@ -55,5 +58,6 @@ export function createDefaultSettings(): TabOutSettings {
     pinnedSites: DEFAULT_PINNED_SITES.map((site) => ({ ...site })),
     landingPatterns: DEFAULT_LANDING_PATTERNS.map((pattern) => ({ ...pattern })),
     customGroups: DEFAULT_CUSTOM_GROUPS.map((rule) => ({ ...rule })),
+    maxHistoryItems: DEFAULT_MAX_HISTORY_ITEMS,
   };
 }

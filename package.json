@@ -1,6 +1,6 @@
 {
   "name": "tab-out",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "description": "Keep tabs on your tabs. A Chrome new tab page that groups your open tabs by domain.",
   "license": "MIT",

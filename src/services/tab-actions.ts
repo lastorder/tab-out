@@ -118,6 +118,28 @@ export class TabActions {
   }
 
   /**
+   * Reopens a tab from History.
+   *
+   * If a tab showing that exact URL is already open somewhere — normally
+   * impossible, since an open URL is filtered out of History, but cheap to
+   * guard against — focuses it instead of creating a duplicate. Otherwise
+   * opens a new tab at the end of the tab bar.
+   *
+   * @returns `true` when a new tab was created, `false` when an existing one
+   * was focused instead.
+   */
+  async reopenFromHistory(url: string): Promise<boolean> {
+    const tabs = await this.#browser.queryAll();
+    const existing = tabs.find((tab) => tab.url === url);
+    if (existing) {
+      await this.#browser.activate(existing.id, existing.windowId);
+      return false;
+    }
+    await this.#browser.create(url);
+    return true;
+  }
+
+  /**
    * Enforces the "one dashboard" rule: closes every other Tab Out page so the
    * one you just opened is the only one left.
    */

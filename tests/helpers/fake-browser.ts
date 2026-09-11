@@ -13,8 +13,8 @@ export interface FakeBrowser extends BrowserTabs {
   readonly tabs: TabInfo[];
   /** Tab ids passed to `close()`, in call order. */
   readonly closed: number[];
-  /** `{ url, index }` pairs passed to `create()`. */
-  readonly created: { url: string; index: number }[];
+  /** `{ url, index }` pairs passed to `create()`. `index` is omitted when appending. */
+  readonly created: { url: string; index?: number }[];
   /** `{ tabId, index }` pairs passed to `move()`. */
   readonly moved: { tabId: number; index: number }[];
   /** The most recently activated tab, if any. */
@@ -36,7 +36,7 @@ export function createFakeBrowser(
   const state = {
     tabs: [...initialTabs],
     closed: [] as number[],
-    created: [] as { url: string; index: number }[],
+    created: [] as { url: string; index?: number }[],
     moved: [] as { tabId: number; index: number }[],
     activated: null as { tabId: number; windowId: number } | null,
   };

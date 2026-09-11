@@ -95,6 +95,7 @@ describe('draftToSettings', () => {
       pinned: [{ url: '', label: 'Missing URL' }],
       landing: [],
       custom: [],
+      maxHistoryItems: '100',
     });
     expect(settings.pinnedSites).toEqual([]);
     expect(issues).toHaveLength(1);
@@ -105,6 +106,7 @@ describe('draftToSettings', () => {
       pinned: [{ url: 'example.com', label: '' }],
       landing: [],
       custom: [],
+      maxHistoryItems: '100',
     });
     expect(settings.pinnedSites).toEqual([{ url: 'https://example.com/' }]);
   });
@@ -116,6 +118,7 @@ describe('draftToSettings', () => {
       custom: [
         { groupKey: 'work', groupLabel: 'Work', hostname: '.acme.net', pathPrefix: '/jira' },
       ],
+      maxHistoryItems: '100',
     });
     expect(settings.customGroups[0]).toEqual({
       groupKey: 'work',
@@ -130,6 +133,7 @@ describe('draftToSettings', () => {
       pinned: [],
       landing: [{ hostname: 'x.com', pathPrefix: '', pathExact: '/home', urlNotContains: '' }],
       custom: [],
+      maxHistoryItems: '100',
     });
     expect(settings.landingPatterns[0]).toEqual({ hostname: 'x.com', pathExact: ['/home'] });
   });
