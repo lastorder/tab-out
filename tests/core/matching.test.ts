@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findCustomGroup, isDisposable, isDisposableDomain, matchesDisposableRule } from '@/core/matching';
+import { isDisposable, isDisposableDomain, matchesDisposableRule } from '@/core/matching';
 import { DEFAULT_DISPOSABLE_RULES } from '@/config/defaults';
 
 describe('matchesDisposableRule', () => {
@@ -60,23 +60,21 @@ describe('isDisposable with the shipped defaults', () => {
   });
 });
 
-describe('findCustomGroup', () => {
-  const rules = [
-    { groupKey: 'jira', groupLabel: 'Jira', hostnameEndsWith: '.atlassian.net', pathPrefix: '/jira' },
-    { groupKey: 'atlassian', groupLabel: 'Atlassian', hostnameEndsWith: '.atlassian.net' },
-  ];
-
-  it('returns the first matching rule, so order is meaningful', () => {
-    expect(findCustomGroup('https://acme.atlassian.net/jira/x', rules)?.groupKey).toBe('jira');
-    expect(findCustomGroup('https://acme.atlassian.net/wiki', rules)?.groupKey).toBe('atlassian');
-    expect(findCustomGroup('https://example.com', rules)).toBeNull();
-  });
-});
-
 describe('isDisposableDomain', () => {
   it('recognises hostnames and suffixes mentioned by any rule', () => {
     expect(isDisposableDomain('github.com', DEFAULT_DISPOSABLE_RULES)).toBe(true);
     expect(isDisposableDomain('example.com', DEFAULT_DISPOSABLE_RULES)).toBe(false);
     expect(isDisposableDomain('acme.atlassian.net', [{ hostnameEndsWith: '.atlassian.net' }])).toBe(true);
+  });
+
+  it('matches a registrable domain against an exact-hostname rule on a subdomain', () => {
+    // `mail.google.com`'s registrable domain is `google.com` — the same key
+    // `groupKeyOf` would produce for that tab's card.
+    expect(isDisposableDomain('google.com', DEFAULT_DISPOSABLE_RULES)).toBe(true);
+  });
+
+  it('matches a bare registrable domain against a suffix rule', () => {
+    // `zoom.us` itself (no subdomain) still counts as "mentioned by" `.zoom.us`.
+    expect(isDisposableDomain('zoom.us', DEFAULT_DISPOSABLE_RULES)).toBe(true);
   });
 });

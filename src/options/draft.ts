@@ -37,15 +37,6 @@ export interface DisposableRow {
   pattern: string;
 }
 
-/** One row of the "Custom groups" table. */
-export interface CustomRow {
-  groupKey: string;
-  groupLabel: string;
-  /** Hostname. A leading dot means "match any subdomain". */
-  hostname: string;
-  pathPrefix: string;
-}
-
 /** The complete form state. */
 export interface DraftState {
   /** Whether pinned sites are applied at all — a checkbox, not a row table. */
@@ -54,7 +45,6 @@ export interface DraftState {
   /** Whether disposable rules are applied at all — a checkbox, not a row table. */
   disposableEnabled: boolean;
   disposable: DisposableRow[];
-  custom: CustomRow[];
   /** "Keep last N closed tabs" — a plain field, not a row table. */
   maxHistoryItems: string;
   /** "Automatically sort tabs to match the dashboard" — a checkbox, not a row table. */
@@ -62,10 +52,10 @@ export interface DraftState {
 }
 
 /** Which row-table a row belongs to. Scalar fields are not tables. */
-export type SectionName = 'pinned' | 'disposable' | 'custom';
+export type SectionName = 'pinned' | 'disposable';
 
-/** Any one of the three row shapes. */
-export type DraftRow = PinnedRow | DisposableRow | CustomRow;
+/** Any one of the row shapes. */
+export type DraftRow = PinnedRow | DisposableRow;
 
 /** Splits a comma-separated form field into trimmed, non-empty parts. */
 export function splitList(value: string): string[] {
@@ -180,12 +170,6 @@ export function settingsToDraft(settings: TabOutSettings): DraftState {
     })),
     disposableEnabled: settings.disposableEnabled,
     disposable: settings.disposableRules.map(disposableRuleToRow),
-    custom: settings.customGroups.map((rule) => ({
-      groupKey: rule.groupKey,
-      groupLabel: rule.groupLabel,
-      hostname: hostnameToField(rule),
-      pathPrefix: rule.pathPrefix ?? '',
-    })),
     maxHistoryItems: String(settings.maxHistoryItems),
     autoSortTabs: settings.autoSortTabs,
   };
@@ -210,22 +194,12 @@ export function draftToSettings(draft: DraftState): NormalizeResult {
       ...patternFromField(row.pattern),
     }));
 
-  const customGroups = draft.custom
-    .filter((row) => isRowFilled(row))
-    .map((row) => ({
-      groupKey: row.groupKey.trim(),
-      groupLabel: row.groupLabel.trim(),
-      ...hostnameFromField(row.hostname),
-      ...(row.pathPrefix.trim() ? { pathPrefix: row.pathPrefix.trim() } : {}),
-    }));
-
   return normalizeSettings({
     version: SETTINGS_VERSION,
     pinnedEnabled: draft.pinnedEnabled,
     pinnedSites,
     disposableEnabled: draft.disposableEnabled,
     disposableRules,
-    customGroups,
     maxHistoryItems: draft.maxHistoryItems,
     autoSortTabs: draft.autoSortTabs,
   });
@@ -251,8 +225,7 @@ export function removeRow<T>(rows: readonly T[], index: number): T[] {
 
 /**
  * Moves a row by `delta` positions, clamped to the list bounds.
- * Order is meaningful: pinned sites render in order, and custom group rules
- * are matched first-wins.
+ * Order is meaningful: pinned sites render in order.
  */
 export function moveRow<T>(rows: readonly T[], index: number, delta: number): T[] {
   const target = index + delta;
@@ -286,9 +259,3 @@ export function addSuggestedDisposableRules(
 /** A blank row for each table. */
 export const EMPTY_PINNED_ROW: PinnedRow = { url: '', label: '' };
 export const EMPTY_DISPOSABLE_ROW: DisposableRow = { hostname: '', pattern: '' };
-export const EMPTY_CUSTOM_ROW: CustomRow = {
-  groupKey: '',
-  groupLabel: '',
-  hostname: '',
-  pathPrefix: '',
-};

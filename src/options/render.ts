@@ -45,15 +45,6 @@ const SECTIONS: Record<SectionName, SectionSpec> = {
       { field: 'pattern', label: 'Path pattern', placeholder: '/j/*, !#inbox/' },
     ],
   },
-  custom: {
-    empty: 'No custom groups — tabs group by hostname.',
-    fields: [
-      { field: 'groupKey', label: 'Group key', placeholder: 'work-jira' },
-      { field: 'groupLabel', label: 'Card title', placeholder: 'Jira' },
-      { field: 'hostname', label: 'Hostname', placeholder: '.atlassian.net' },
-      { field: 'pathPrefix', label: 'Path starts with', placeholder: '/jira' },
-    ],
-  },
 };
 
 function renderField(

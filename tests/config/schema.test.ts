@@ -14,12 +14,11 @@ describe('normalizeSettings', () => {
 
   it('round-trips valid settings unchanged', () => {
     const input = {
-      version: 2,
+      version: 3,
       pinnedEnabled: false,
       pinnedSites: [{ url: 'https://example.com/', label: 'Example' }],
       disposableEnabled: false,
       disposableRules: [{ hostname: 'x.com', pathExact: ['/home'] }],
-      customGroups: [{ groupKey: 'k', groupLabel: 'K', hostname: 'a.com' }],
       maxHistoryItems: 250,
       autoSortTabs: false,
     };
@@ -36,7 +35,16 @@ describe('normalizeSettings', () => {
     const { settings } = normalizeSettings({ pinnedSites: [], disposableRules: [] });
     expect(settings.pinnedSites).toEqual([]);
     expect(settings.disposableRules).toEqual([]);
-    expect(settings.customGroups).toEqual(createDefaultSettings().customGroups);
+  });
+
+  it('ignores a legacy customGroups/customGroupsEnabled blob rather than erroring', () => {
+    const { settings, issues } = normalizeSettings({
+      customGroups: [{ groupKey: 'k', groupLabel: 'K', hostname: 'a.com' }],
+      customGroupsEnabled: true,
+    });
+    expect(settings).not.toHaveProperty('customGroups');
+    expect(settings).not.toHaveProperty('customGroupsEnabled');
+    expect(issues).toEqual([]);
   });
 
   describe('pinned sites', () => {
@@ -76,37 +84,6 @@ describe('normalizeSettings', () => {
         pathExact: ['/feed'],
         urlNotContains: ['#inbox/'],
       });
-    });
-
-    it('requires a group key, defaults the label to it, and drops a true duplicate', () => {
-      const { settings, issues } = normalizeSettings({
-        customGroups: [
-          { groupLabel: 'X', hostname: 'a.com' }, // missing groupKey -> dropped
-          { groupKey: 'work', hostname: 'a.com' },
-          { groupKey: 'work', hostname: 'a.com' }, // exact repeat -> dropped
-        ],
-      });
-      expect(settings.customGroups).toEqual([
-        { groupKey: 'work', groupLabel: 'work', hostname: 'a.com' },
-      ]);
-      expect(issues).toHaveLength(2);
-    });
-
-    it('keeps multiple rules that intentionally share one groupKey to merge several hostnames into one card', () => {
-      // This is the whole point of custom groups: a single card can only
-      // come from one CustomGroupRule per hostname, so merging N hostnames
-      // into one card means N rules with the same groupKey. De-duping on
-      // groupKey alone would silently keep only the first and defeat the
-      // feature — see DEFAULT_CUSTOM_GROUPS for the shipped example.
-      const { settings, issues } = normalizeSettings({
-        customGroups: [
-          { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'calendar.google.com' },
-          { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'mail.google.com' },
-          { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'chat.google.com' },
-        ],
-      });
-      expect(settings.customGroups).toHaveLength(3);
-      expect(issues).toEqual([]);
     });
   });
 

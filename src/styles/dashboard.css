@@ -289,41 +289,85 @@ header {
   display: none !important;
 }
 
-/* ---- Pinned placeholder — grayed-out card for sites not currently open ---- */
-.pinned-placeholder {
-  opacity: 0.5;
-  border-style: dashed;
-  border-color: var(--warm-gray);
+/* ---- Pinned strip — quick access to pinned tabs, above the grid ----
+   Pinning is tab-level: this is a row of small chips, never a whole card.
+   An open pinned tab still renders (and is highlighted) in its own domain
+   card too — see .chip-pinned below. */
+.pinned-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.pinned-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 6px 8px;
+  border-radius: 999px;
+  background: var(--card-bg);
+  border: 1px solid var(--warm-gray);
+  font-size: 13px;
+  color: var(--ink);
   cursor: pointer;
-  transition: opacity 0.2s ease, box-shadow 0.25s ease, transform 0.25s ease;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
 }
 
-.pinned-placeholder:hover {
-  opacity: 0.85;
+.pinned-chip:hover {
+  box-shadow: 0 2px 10px var(--shadow);
+  border-color: var(--accent-amber);
 }
 
-.pinned-placeholder::before {
-  display: none;
+.pinned-chip svg {
+  width: 13px;
+  height: 13px;
+  color: var(--accent-amber);
+  flex-shrink: 0;
 }
 
-.pinned-favicon {
-  width: 20px;
-  height: 20px;
+.pinned-chip-favicon {
+  width: 16px;
+  height: 16px;
   border-radius: 3px;
   flex-shrink: 0;
-  filter: grayscale(0.6);
-  transition: filter 0.2s;
 }
 
-.pinned-placeholder:hover .pinned-favicon {
-  filter: grayscale(0);
+.pinned-chip-text {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.pinned-hint {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 2px;
-  font-style: italic;
+/* Not currently open — a click-to-open placeholder, dimmed and dashed. */
+.pinned-chip-closed {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.pinned-chip-closed:hover {
+  opacity: 0.9;
+}
+
+/* ---- Pinned tab highlight — inside its own domain card ----
+   A pinned tab is sorted first among its card's chips (see
+   ui/render/cards.ts#renderGroupCard) and marked with a small pin badge and
+   a warm left edge, instead of being pulled into a card of its own. */
+.chip-pinned {
+  background: rgba(200, 113, 58, 0.06);
+  border-radius: 6px;
+}
+
+.chip-pin-badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--accent-amber);
+}
+
+.chip-pin-badge svg {
+  width: 12px;
+  height: 12px;
 }
 
 /* Old side status bar — hidden, replaced by top border via ::before */

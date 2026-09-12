@@ -18,5 +18,7 @@ export const ICONS = {
 
 
   reopen: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg>`,
+
+  pin: `<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24"><path d="M16.5 3a1 1 0 0 1 .8 1.6l-.8 1.06V10l2.32 3.87a1 1 0 0 1-.86 1.51H13v5.12a1 1 0 0 1-2 0V15.38H6.04a1 1 0 0 1-.86-1.51L7.5 10V5.66l-.8-1.06A1 1 0 0 1 7.5 3h9Z" /></svg>`,
 } as const;
 

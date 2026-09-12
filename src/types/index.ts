@@ -16,11 +16,11 @@ export interface TabInfo {
 }
 
 /** How a group of tabs came to exist. */
-export type GroupKind = 'domain' | 'disposable' | 'custom';
+export type GroupKind = 'domain' | 'disposable';
 
 /** A rendered card's worth of tabs. */
 export interface TabGroup {
-  /** Hostname, custom-group key, or `DISPOSABLE_GROUP_KEY` (from `core/grouping.ts`). */
+  /** Registrable domain (see `core/url.ts`'s `registrableDomainOf`), or `DISPOSABLE_GROUP_KEY` (from `core/grouping.ts`). */
   key: string;
   /** Human-facing name. Falls back to a friendly form of `key` when absent. */
   label?: string;
@@ -28,7 +28,15 @@ export interface TabGroup {
   tabs: TabInfo[];
 }
 
-/** A site pinned to the front of the dashboard. */
+/**
+ * A site pinned for quick access.
+ *
+ * Pinning is tab-level, not group-level: a pinned site's matching open tab
+ * (if any) is highlighted and sorted first *inside its own domain card*, and
+ * also surfaced in a compact "Pinned" strip above the grid. It never
+ * promotes, merges, or otherwise hijacks the whole card the way an earlier
+ * version of this feature did.
+ */
 export interface PinnedSite {
   url: string;
   label?: string;
@@ -59,25 +67,13 @@ export interface DisposableRule {
   urlNotContains?: string[];
 }
 
-/** A rule that merges or splits tabs into a named group. */
-export interface CustomGroupRule {
-  /** Stable identifier used as the group key. */
-  groupKey: string;
-  /** Display name for the card. */
-  groupLabel: string;
-  hostname?: string;
-  hostnameEndsWith?: string;
-  pathPrefix?: string;
-}
-
 /** The complete, user-editable configuration. */
 export interface TabOutSettings {
   version: number;
   /**
-   * Whether pinned sites are promoted to the front of the dashboard at all.
-   * Off doesn't delete the list — it just stops applying it, so a site with
-   * open tabs groups by hostname like any other, and one with none shows no
-   * placeholder.
+   * Whether pinned sites are applied at all. Off doesn't delete the list —
+   * it just stops highlighting/surfacing them, so every tab renders exactly
+   * like any other, unpinned one.
    */
   pinnedEnabled: boolean;
   pinnedSites: PinnedSite[];
@@ -87,7 +83,6 @@ export interface TabOutSettings {
    */
   disposableEnabled: boolean;
   disposableRules: DisposableRule[];
-  customGroups: CustomGroupRule[];
   /** How many recently-closed tabs to remember before the oldest are dropped. */
   maxHistoryItems: number;
   /**

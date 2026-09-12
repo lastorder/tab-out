@@ -9,7 +9,6 @@ const emptyDraft = {
   pinned: [],
   disposableEnabled: true,
   disposable: [],
-  custom: [],
   maxHistoryItems: '100',
   autoSortTabs: true,
 };
@@ -40,15 +39,6 @@ describe('renderSection', () => {
     expect(html).toContain('value="mail.google.com"');
   });
 
-  it('renders custom group fields, including the shipped multi-hostname example', () => {
-    // The default merges three Google hostnames under one groupKey, so this
-    // is also a smoke test that shipping multiple same-groupKey rows works.
-    const html = renderSection('custom', draft);
-    expect(html).toContain('data-field="groupKey"');
-    expect(html.match(/value="google-suite"/g)).toHaveLength(3);
-    expect(html.match(/class="row row-custom"/g)).toHaveLength(3);
-  });
-
   it('disables move-up on the first row and move-down on the last', () => {
     const html = renderSection('pinned', threePinnedRows);
     const rows = html.split('class="row row-pinned"').slice(1);
@@ -66,7 +56,6 @@ describe('renderSection', () => {
   it('shows a helpful message when a table is empty', () => {
     expect(renderSection('pinned', emptyDraft)).toContain('No pinned sites yet');
     expect(renderSection('disposable', emptyDraft)).toContain('Disposable card will stay empty');
-    expect(renderSection('custom', emptyDraft)).toContain('tabs group by hostname');
   });
 
   it('escapes hostile values instead of injecting them', () => {

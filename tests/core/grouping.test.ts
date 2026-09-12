@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  applyPinnedSites,
   buildDashboardModel,
+  buildPinnedStrip,
   DISPOSABLE_GROUP_KEY,
   getRealTabs,
   groupTabs,
+  pinnedHostnameSet,
   pinnedInsertIndex,
   sortGroups,
 } from '@/core/grouping';
@@ -29,13 +30,21 @@ describe('getRealTabs', () => {
 });
 
 describe('groupTabs', () => {
-  it('groups by hostname, and collects local files into one bucket', () => {
+  it('groups by registrable domain, merging subdomains, and collects local files into one bucket', () => {
     const byHost = groupTabs(
       tabs('https://example.com/a', 'https://example.com/b', 'https://other.com/'),
       emptySettings(),
     );
     expect(byHost.map((g) => g.key)).toEqual(['example.com', 'other.com']);
     expect(byHost[0]!.tabs).toHaveLength(2);
+
+    const merged = groupTabs(
+      tabs('https://mail.google.com/', 'https://calendar.google.com/'),
+      emptySettings(),
+    );
+    expect(merged).toHaveLength(1);
+    expect(merged[0]!.key).toBe('google.com');
+    expect(merged[0]!.tabs).toHaveLength(2);
 
     const files = groupTabs(tabs('file:///a.md', 'file:///b.md'), emptySettings());
     expect(files).toHaveLength(1);
@@ -59,26 +68,11 @@ describe('groupTabs', () => {
     expect(result[1]!.tabs).toHaveLength(1);
   });
 
-  it('applies rules in precedence order: disposable, then custom, then hostname', () => {
-    const custom = emptySettings({
-      customGroups: [{ groupKey: 'work', groupLabel: 'Work', hostnameEndsWith: '.acme.net' }],
-    });
-    const grouped = groupTabs(tabs('https://jira.acme.net/a', 'https://wiki.acme.net/b'), custom);
-    expect(grouped).toHaveLength(1);
-    expect(grouped[0]).toMatchObject({ key: 'work', label: 'Work', kind: 'custom' });
-
-    const both = emptySettings({
-      disposableRules: [{ hostname: 'acme.net', pathExact: ['/'] }],
-      customGroups: [{ groupKey: 'work', groupLabel: 'Work', hostname: 'acme.net' }],
-    });
-    expect(groupTabs(tabs('https://acme.net/'), both)[0]!.key).toBe(DISPOSABLE_GROUP_KEY);
-  });
-
   it('skips tabs whose URL cannot be parsed', () => {
     expect(groupTabs([tab('nonsense')], emptySettings())).toHaveLength(0);
   });
 
-  it('groups by hostname instead when disposableEnabled is off, without touching the stored rules', () => {
+  it('groups by domain instead when disposableEnabled is off, without touching the stored rules', () => {
     // Off means "stop applying", not "forget" — the rule stays configured.
     const settings = emptySettings({
       disposableEnabled: false,
@@ -88,11 +82,9 @@ describe('groupTabs', () => {
     expect(result).toEqual([{ key: 'github.com', kind: 'domain', tabs: expect.any(Array) }]);
   });
 
-  it('merges the three shipped Google hostnames into one custom card by default', () => {
-    // This is what DEFAULT_CUSTOM_GROUPS exists to demonstrate: three
-    // unrelated hostnames, one shared groupKey, one card. A reading of a
-    // specific Gmail thread is used (not the inbox) since the inbox itself
-    // is claimed by the disposable Gmail rule first.
+  it('merges the three shipped Google hostnames into one domain card by default, since their registrable domain is shared', () => {
+    // A reading of a specific Gmail thread is used (not the inbox) since the
+    // inbox itself is claimed by the disposable Gmail rule first.
     const result = groupTabs(
       tabs(
         'https://calendar.google.com/',
@@ -103,7 +95,7 @@ describe('groupTabs', () => {
     );
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ key: 'google-suite', label: 'Google', kind: 'custom' });
+    expect(result[0]).toMatchObject({ key: 'google.com', kind: 'domain' });
     expect(result[0]!.tabs).toHaveLength(3);
   });
 });
@@ -138,124 +130,58 @@ describe('sortGroups', () => {
   });
 });
 
-describe('applyPinnedSites', () => {
-  it('promotes an existing group and preserves the configured pinned order', () => {
-    const groups = [
-      { key: 'other.com', kind: 'domain' as const, tabs: tabs('https://other.com/') },
-      { key: 'a.com', kind: 'domain' as const, tabs: tabs('https://a.com/') },
-      { key: 'b.com', kind: 'domain' as const, tabs: tabs('https://b.com/') },
-    ];
-    const { orderedGroups } = applyPinnedSites(groups, [], [
-      { url: 'https://b.com' },
-      { url: 'https://a.com' },
-    ]);
-    expect(orderedGroups.map((g) => g.key)).toEqual(['b.com', 'a.com', 'other.com']);
-  });
+describe('buildPinnedStrip', () => {
+  it('carries the matching open tab for each pinned site, in configured order', () => {
+    const githubTab = tab('https://github.com/', { id: 1 });
+    const items = buildPinnedStrip(
+      [{ url: 'https://github.com' }, { url: 'https://absent.com', label: 'Absent' }],
+      [githubTab],
+    );
 
-  it('renders a placeholder when a pinned site has no open tabs', () => {
-    const { entries } = applyPinnedSites([], [], [{ url: 'https://absent.com', label: 'Absent' }]);
-    expect(entries).toEqual([
-      { type: 'placeholder', site: { url: 'https://absent.com', label: 'Absent' }, pinnedIndex: 0 },
+    expect(items).toEqual([
+      { site: { url: 'https://github.com' }, pinnedIndex: 0, tab: githubTab },
+      { site: { url: 'https://absent.com', label: 'Absent' }, pinnedIndex: 1, tab: null },
     ]);
   });
 
-  it('reclaims a pinned site\u2019s tabs from Disposable without duplicating them', () => {
-    const homeTab = tab('https://github.com/', { id: 10 });
-    const otherTab = tab('https://x.com/home', { id: 11 });
-    const groups = [
-      { key: DISPOSABLE_GROUP_KEY, kind: 'disposable' as const, tabs: [homeTab, otherTab] },
-    ];
-
-    const { orderedGroups } = applyPinnedSites(groups, [homeTab, otherTab], [
-      { url: 'https://github.com' },
-    ]);
-
-    expect(orderedGroups[0]!.key).toBe('github.com');
-    expect(orderedGroups[0]!.tabs.map((t) => t.id)).toEqual([10]);
-    expect(orderedGroups[1]!.tabs.map((t) => t.id)).toEqual([11]);
+  it('ignores a pinned entry with an unusable URL', () => {
+    expect(buildPinnedStrip([{ url: 'nonsense' }], [])).toHaveLength(0);
   });
 
-  it('drops a group that has had all of its tabs reclaimed', () => {
-    const only = tab('https://github.com/', { id: 20 });
-    const groups = [{ key: DISPOSABLE_GROUP_KEY, kind: 'disposable' as const, tabs: [only] }];
-
-    const { orderedGroups } = applyPinnedSites(groups, [only], [{ url: 'https://github.com' }]);
-    expect(orderedGroups).toHaveLength(1);
-    expect(orderedGroups[0]!.key).toBe('github.com');
+  it('collapses duplicate hostnames to the first entry', () => {
+    const items = buildPinnedStrip(
+      [{ url: 'https://a.com/x' }, { url: 'https://a.com/y' }],
+      [],
+    );
+    expect(items).toHaveLength(1);
   });
+});
 
-  it('ignores pinned entries with an unusable URL', () => {
-    expect(applyPinnedSites([], [], [{ url: 'nonsense' }]).entries).toHaveLength(0);
-  });
-
-  it('does not mutate the groups it was given', () => {
-    const original = [{ key: 'a.com', kind: 'domain' as const, tabs: tabs('https://a.com/') }];
-    const snapshot = JSON.stringify(original);
-    applyPinnedSites(original, [], [{ url: 'https://a.com' }]);
-    expect(JSON.stringify(original)).toBe(snapshot);
-  });
-
-  describe('pinning a custom group', () => {
-    // Pinning several sites that share a custom-group rule (the shipped
-    // Calendar/Gmail/Chat -> "Google" example) is meant to behave as *one*
-    // pinned unit, not three: groupTabs() already merges their tabs into one
-    // kind:'custom' group before applyPinnedSites ever runs.
-    const rules = [
-      { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'a.com' },
-      { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'b.com' },
-    ];
-    const pinned = [{ url: 'https://a.com/' }, { url: 'https://b.com/' }];
-
-    it('promotes the one shared group instead of duplicating it per pinned site', () => {
-      const groups = [
-        { key: 'google-suite', kind: 'custom' as const, label: 'Google', tabs: tabs('https://a.com/', 'https://b.com/') },
-      ];
-      const { entries, orderedGroups } = applyPinnedSites(groups, [], pinned, rules);
-
-      expect(entries).toHaveLength(1);
-      expect(orderedGroups).toHaveLength(1);
-      expect(orderedGroups[0]).toMatchObject({ key: 'google-suite', kind: 'custom' });
-    });
-
-    it('renders one placeholder for the whole group, not one per pinned site, when nothing is open', () => {
-      const { entries } = applyPinnedSites([], [], pinned, rules);
-
-      expect(entries).toEqual([
-        { type: 'placeholder', site: { url: 'https://a.com/', label: 'Google' }, pinnedIndex: 0 },
-      ]);
-    });
-
-    it('still falls back to per-site pinning for a hostname no custom rule claims', () => {
-      const soloPinned = [{ url: 'https://a.com/' }, { url: 'https://solo.com/' }];
-      const { entries } = applyPinnedSites([], [], soloPinned, rules);
-
-      expect(entries).toEqual([
-        { type: 'placeholder', site: { url: 'https://a.com/', label: 'Google' }, pinnedIndex: 0 },
-        { type: 'placeholder', site: { url: 'https://solo.com/' }, pinnedIndex: 1 },
-      ]);
-    });
+describe('pinnedHostnameSet', () => {
+  it('collects the hostnames of every pinned entry', () => {
+    const items = buildPinnedStrip([{ url: 'https://a.com' }, { url: 'https://b.com' }], []);
+    expect(pinnedHostnameSet(items)).toEqual(new Set(['a.com', 'b.com']));
   });
 });
 
 describe('buildDashboardModel', () => {
-  it('pins the shipped Google group as one card, wherever any of the three is open', () => {
-    // chat.google.com, not mail.google.com: a bare Gmail tab matches the
-    // disposable Gmail rule first and lands in Disposable instead, which is
-    // a different behaviour (documented on DEFAULT_DISPOSABLE_RULES) than
-    // what this test is about.
+  it('merges the shipped Google pinned sites into one domain card, and pins the open one', () => {
     const model = buildDashboardModel(tabs('https://chat.google.com/'), defaultSettings());
 
-    expect(model.entries).toHaveLength(1);
-    expect(model.entries[0]).toMatchObject({ type: 'group', group: { key: 'google-suite', kind: 'custom' } });
+    expect(model.orderedGroups).toHaveLength(1);
+    expect(model.orderedGroups[0]).toMatchObject({ key: 'google.com', kind: 'domain' });
+    // chat.google.com is one of the three shipped pinned sites, and it's open.
+    expect(model.pinned.some((item) => item.tab?.url === 'https://chat.google.com/')).toBe(true);
   });
 
-  it('shows exactly one placeholder for the shipped Google group when none of the three are open', () => {
+  it('shows a pinned-strip placeholder for a shipped pinned site with nothing open', () => {
     const model = buildDashboardModel([], defaultSettings());
 
-    const placeholders = model.entries.filter((e) => e.type === 'placeholder');
-    expect(placeholders).toHaveLength(1);
-    expect(placeholders[0]).toMatchObject({ site: { label: 'Google' } });
+    expect(model.orderedGroups).toHaveLength(0);
+    expect(model.pinned).toHaveLength(3);
+    expect(model.pinned.every((item) => item.tab === null)).toBe(true);
   });
+
   it('produces the full render model from raw tabs', () => {
     const settings = emptySettings({
       pinnedSites: [{ url: 'https://absent.com/' }],
@@ -272,23 +198,41 @@ describe('buildDashboardModel', () => {
 
     expect(model.realTabs).toHaveLength(3);
     expect(model.groupCount).toBe(model.orderedGroups.length);
-    // The one pinned site above has no open tabs.
-    expect(model.entries.filter((e) => e.type === 'placeholder')).toHaveLength(1);
+    // The one pinned site above has no open tab.
+    expect(model.pinned).toEqual([
+      { site: { url: 'https://absent.com/' }, pinnedIndex: 0, tab: null },
+    ]);
   });
 
   it('returns an empty model when nothing is open', () => {
-    expect(buildDashboardModel([], emptySettings())).toMatchObject({ entries: [], groupCount: 0 });
+    expect(buildDashboardModel([], emptySettings())).toMatchObject({
+      orderedGroups: [],
+      pinned: [],
+      groupCount: 0,
+    });
   });
 
-  it('skips pinned promotion and placeholders entirely when pinnedEnabled is off', () => {
+  it('empties the pinned strip, without changing grouping, when pinnedEnabled is off', () => {
     const settings = emptySettings({
       pinnedEnabled: false,
-      pinnedSites: [{ url: 'https://absent.com/' }],
+      pinnedSites: [{ url: 'https://github.com/' }],
     });
     const model = buildDashboardModel(tabs('https://github.com/'), settings);
 
-    expect(model.entries.some((e) => e.type === 'placeholder')).toBe(false);
+    expect(model.pinned).toHaveLength(0);
     expect(model.orderedGroups.map((g) => g.key)).toEqual(['github.com']);
+  });
+
+  it('keeps a pinned tab in its own domain card rather than extracting it — the strip is a shortcut, not a second copy', () => {
+    const settings = emptySettings({ pinnedSites: [{ url: 'https://github.com/' }] });
+    const model = buildDashboardModel(
+      tabs('https://github.com/', 'https://github.com/acme/app'),
+      settings,
+    );
+
+    expect(model.orderedGroups).toHaveLength(1);
+    expect(model.orderedGroups[0]!.tabs).toHaveLength(2);
+    expect(model.pinned[0]!.tab?.url).toBe('https://github.com/');
   });
 });
 

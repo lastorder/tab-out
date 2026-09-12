@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { groupTitle, renderEmptyState, renderEntries, VISIBLE_CHIP_LIMIT } from '@/ui/render/cards';
+import { groupTitle, renderEmptyState, renderGroups, renderPinnedStrip, VISIBLE_CHIP_LIMIT } from '@/ui/render/cards';
 import { renderArchiveList, renderSavedItem } from '@/ui/render/saved';
 import { DISPOSABLE_GROUP_KEY } from '@/core/grouping';
 import type { TabGroup } from '@/types';
@@ -14,13 +14,13 @@ const group = (tabsList = [tab('https://github.com/acme/app')]): TabGroup => ({
 });
 
 /** Renders a single group card, as the dashboard would. */
-const card = (g: TabGroup = group()) => renderEntries([{ type: 'group', group: g }]);
+const card = (g: TabGroup = group()) => renderGroups([g]);
 
 describe('groupTitle', () => {
   it('uses the explicit label, else the friendly brand name', () => {
     expect(groupTitle(group())).toBe('GitHub');
     expect(groupTitle({ key: DISPOSABLE_GROUP_KEY, kind: 'disposable', tabs: [] })).toBe('Disposable');
-    expect(groupTitle({ key: 'work', label: 'Work', kind: 'custom', tabs: [] })).toBe('Work');
+    expect(groupTitle({ key: 'work.com', label: 'Work', kind: 'domain', tabs: [] })).toBe('Work');
   });
 });
 
@@ -78,15 +78,13 @@ describe('group cards', () => {
   });
 });
 
-describe('renderEntries', () => {
-  it('numbers group cards consecutively, skipping placeholders', () => {
+describe('renderGroups', () => {
+  it('numbers group cards consecutively', () => {
     // Handlers resolve a card back to its group by this index, so a gap or a
     // double-count would act on the wrong group.
-    const html = renderEntries([
-      { type: 'placeholder', site: { url: 'https://a.com' }, pinnedIndex: 0 },
-      { type: 'group', group: group() },
-      { type: 'placeholder', site: { url: 'https://b.com' }, pinnedIndex: 1 },
-      { type: 'group', group: { key: 'x.com', kind: 'domain', tabs: [tab('https://x.com/')] } },
+    const html = renderGroups([
+      group(),
+      { key: 'x.com', kind: 'domain', tabs: [tab('https://x.com/')] },
     ]);
 
     expect(html).toContain('data-group-index="0"');
@@ -94,19 +92,40 @@ describe('renderEntries', () => {
     expect(html).not.toContain('data-group-index="2"');
   });
 
-  it('renders pinned placeholders as click-to-open cards', () => {
-    const html = renderEntries([
-      { type: 'placeholder', site: { url: 'https://a.com', label: 'A' }, pinnedIndex: 2 },
-    ]);
-    expect(html).toContain('data-action="open-pinned-site"');
-    expect(html).toContain('data-pinned-url="https://a.com"');
-    expect(html).toContain('data-pinned-index="2"');
-    expect(html).toContain('Click to open');
+  it('sorts a pinned tab first within its card, and marks it', () => {
+    const a = tab('https://github.com/a');
+    const b = tab('https://github.com/pinned-me', { url: 'https://pinned.com/x' });
+    const html = renderGroups(
+      [{ key: 'x', kind: 'domain', tabs: [a, b] }],
+      new Set(['pinned.com']),
+    );
 
-    const unlabelled = renderEntries([
-      { type: 'placeholder', site: { url: 'https://mail.google.com' }, pinnedIndex: 0 },
+    expect(html).toContain('chip-pin-badge');
+    // The pinned tab's chip appears before the unpinned one.
+    expect(html.indexOf('pinned.com')).toBeLessThan(html.indexOf(a.url));
+  });
+});
+
+describe('renderPinnedStrip', () => {
+  it('renders an open pinned tab as focusable, and a closed one as a placeholder', () => {
+    const openTab = tab('https://mail.google.com/');
+    const html = renderPinnedStrip([
+      { site: { url: 'https://mail.google.com/', label: 'Gmail' }, pinnedIndex: 0, tab: openTab },
+      { site: { url: 'https://absent.com/', label: 'Absent' }, pinnedIndex: 1, tab: null },
     ]);
-    expect(unlabelled).toContain('Gmail');
+
+    expect(html).toContain('data-action="focus-tab"');
+    expect(html).toContain(`data-tab-url="${openTab.url}"`);
+    expect(html).toContain('data-action="open-pinned-site"');
+    expect(html).toContain('data-pinned-url="https://absent.com/"');
+    expect(html).toContain('data-pinned-index="1"');
+    expect(html).toContain('pinned-chip-closed');
+    expect(html).toContain('Gmail');
+    expect(html).toContain('Absent');
+  });
+
+  it('returns nothing when there is nothing pinned', () => {
+    expect(renderPinnedStrip([])).toBe('');
   });
 });
 

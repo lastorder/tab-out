@@ -25,14 +25,62 @@ export function hostnameOf(url: string | undefined | null): string {
 }
 
 /**
+ * Second-level public-suffix-style labels under which the *third* label from
+ * the end is still part of the registrable domain (`acme.co.uk`, not
+ * `co.uk`). Not an exhaustive public-suffix-list implementation — just the
+ * common real-world cases — since Tab Out only needs "close enough" grouping,
+ * not exact registrability.
+ */
+const KNOWN_SECOND_LEVEL_SUFFIXES: ReadonlySet<string> = new Set([
+  'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'net.uk', 'sch.uk',
+  'com.cn', 'net.cn', 'org.cn', 'gov.cn',
+  'co.jp', 'ne.jp', 'or.jp', 'ac.jp', 'go.jp',
+  'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au',
+  'co.nz', 'net.nz', 'org.nz',
+  'co.in', 'net.in', 'org.in', 'gov.in', 'firm.in',
+  'co.kr', 'or.kr',
+  'com.br', 'net.br', 'org.br',
+  'com.mx',
+  'co.za',
+  'com.tw', 'org.tw',
+  'com.sg', 'net.sg', 'org.sg',
+  'com.hk', 'org.hk', 'net.hk',
+]);
+
+/**
+ * Returns the registrable domain (colloquially the "second-level domain") of
+ * a hostname: the site's identity, ignoring which subdomain a particular
+ * page lives on. `mail.google.com` and `calendar.google.com` both become
+ * `google.com`, so they land in the same dashboard card without needing a
+ * merge rule.
+ *
+ * Hosts with two labels or fewer (`example.com`, `localhost`) are returned
+ * unchanged, as are bare IPv4/IPv6 addresses — there is nothing to strip.
+ */
+export function registrableDomainOf(hostname: string): string {
+  if (!hostname) return '';
+  if (/^[0-9.]+$/.test(hostname)) return hostname; // IPv4
+  if (hostname.includes(':')) return hostname; // IPv6, already bracket-free from URL parsing
+
+  const labels = hostname.split('.');
+  if (labels.length <= 2) return hostname;
+
+  const lastTwo = labels.slice(-2).join('.');
+  if (labels.length >= 3 && KNOWN_SECOND_LEVEL_SUFFIXES.has(lastTwo)) {
+    return labels.slice(-3).join('.');
+  }
+  return lastTwo;
+}
+
+/**
  * Returns the grouping key for a tab URL.
  *
  * `file://` URLs collapse into a single "Local Files" bucket; everything else
- * groups by hostname.
+ * groups by registrable domain, so subdomains of the same site share a card.
  */
 export function groupKeyOf(url: string | undefined | null): string {
   if (url && url.startsWith('file://')) return LOCAL_FILES_KEY;
-  return hostnameOf(url);
+  return registrableDomainOf(hostnameOf(url));
 }
 
 /**

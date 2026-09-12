@@ -40,21 +40,6 @@ describe('TabActions.closeGroup', () => {
 
     expect(browser.tabs.map((t) => t.id)).toEqual([2]);
   });
-
-  it('closes a custom group by exact URL, since its key is not a hostname', async () => {
-    const inGroup = tab('https://acme.net/jira/1', { id: 1 });
-    const outside = tab('https://acme.net/wiki', { id: 2 });
-    const browser = createFakeBrowser([inGroup, outside]);
-
-    await new TabActions(browser).closeGroup({
-      key: 'work',
-      label: 'Work',
-      kind: 'custom',
-      tabs: [inGroup],
-    });
-
-    expect(browser.tabs.map((t) => t.id)).toEqual([2]);
-  });
 });
 
 describe('TabActions closing', () => {

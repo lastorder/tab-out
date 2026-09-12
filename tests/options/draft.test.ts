@@ -21,7 +21,6 @@ const blankDraft = {
   pinned: [],
   disposableEnabled: true,
   disposable: [],
-  custom: [],
   maxHistoryItems: '100',
   autoSortTabs: true,
 };
@@ -104,7 +103,8 @@ describe('draft round-trip', () => {
     const draft = settingsToDraft(createDefaultSettings());
     expect(draft.pinnedEnabled).toBe(true);
     expect(draft.disposableEnabled).toBe(true);
-    // Pinned and merged into one custom group at once — see config/defaults.ts.
+    // All three share google.com's registrable domain, so they already
+    // land in one domain card without a merge feature.
     expect(draft.pinned).toEqual([
       { url: 'https://calendar.google.com/', label: 'Google Calendar' },
       { url: 'https://mail.google.com/', label: 'Gmail' },
@@ -114,12 +114,6 @@ describe('draft round-trip', () => {
       hostname: 'mail.google.com',
       pattern: '/*, !#inbox/, !#sent/, !#search/',
     });
-    // The shipped custom-group example: three hostnames, one shared card.
-    expect(draft.custom).toEqual([
-      { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'calendar.google.com', pathPrefix: '' },
-      { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'mail.google.com', pathPrefix: '' },
-      { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'chat.google.com', pathPrefix: '' },
-    ]);
     expect(draft.maxHistoryItems).toBe('100');
     expect(draft.autoSortTabs).toBe(true);
   });
@@ -147,17 +141,6 @@ describe('draft round-trip', () => {
   });
 
   it('builds rules from form rows, omitting blank optional fields', () => {
-    const custom = draftToSettings({
-      ...blankDraft,
-      custom: [{ groupKey: 'work', groupLabel: 'Work', hostname: '.acme.net', pathPrefix: '/jira' }],
-    });
-    expect(custom.settings.customGroups[0]).toEqual({
-      groupKey: 'work',
-      groupLabel: 'Work',
-      hostnameEndsWith: '.acme.net',
-      pathPrefix: '/jira',
-    });
-
     const disposable = draftToSettings({
       ...blankDraft,
       disposable: [{ hostname: 'x.com', pattern: '/home' }],

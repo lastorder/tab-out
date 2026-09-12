@@ -1,17 +1,16 @@
 /**
- * core/matching.ts — evaluating the user's declarative grouping rules.
+ * core/matching.ts — evaluating the user's declarative disposable-tab rules.
  *
- * Both disposable rules and custom-group rules are plain data objects (see
- * `src/types`), which means they can be stored in `chrome.storage` and edited
- * from the options page. This module is the single place that knows how to
- * interpret them.
+ * Disposable rules are plain data objects (see `src/types`), which means they
+ * can be stored in `chrome.storage` and edited from the options page. This
+ * module is the single place that knows how to interpret them.
  */
 
-import type { CustomGroupRule, DisposableRule } from '../types';
-import { parseUrl } from './url';
+import type { DisposableRule } from '../types';
+import { parseUrl, registrableDomainOf } from './url';
 
 /**
- * Shared hostname test for both rule kinds.
+ * Shared hostname test.
  *
  * `hostname` wins when present; otherwise `hostnameEndsWith` does a suffix
  * match. A rule with neither never matches — that is deliberate, so a
@@ -54,39 +53,31 @@ export function isDisposable(url: string, rules: readonly DisposableRule[]): boo
   return rules.some((rule) => matchesDisposableRule(rule, url));
 }
 
-/** Tests one custom-group rule against a URL. */
-export function matchesCustomGroup(rule: CustomGroupRule, url: string): boolean {
-  const parsed = parseUrl(url);
-  if (!parsed) return false;
-  if (!hostnameMatches(rule, parsed.hostname)) return false;
-  if (rule.pathPrefix) return parsed.pathname.startsWith(rule.pathPrefix);
-  return true;
-}
-
 /**
- * Returns the first custom-group rule matching this URL, or `null`.
- * Order matters: earlier rules win, so the options page lets users reorder.
- */
-export function findCustomGroup(
-  url: string,
-  rules: readonly CustomGroupRule[],
-): CustomGroupRule | null {
-  return rules.find((rule) => matchesCustomGroup(rule, url)) ?? null;
-}
-
-/**
- * Hostnames that disposable rules care about. Used to bump those domains'
- * cards toward the top of the dashboard even when the specific tab isn't
- * disposable itself (e.g. a GitHub issue still sorts near the GitHub
+ * Registrable domains that disposable rules care about. Used to bump those
+ * domains' cards toward the top of the dashboard even when the specific tab
+ * isn't disposable itself (e.g. a GitHub issue still sorts near the GitHub
  * homepage).
+ *
+ * `domain` is already a registrable domain (see `core/url.ts`'s
+ * `groupKeyOf`/`registrableDomainOf`), so a rule's exact `hostname` is
+ * reduced to its own registrable domain before comparing, and a
+ * `hostnameEndsWith` suffix is compared both as given (for a domain that
+ * still has subdomain labels, e.g. matching won't normally see one — this
+ * only exists for a corner case) and with its leading dot stripped, since
+ * `.zoom.us`'s registrable domain is `zoom.us` itself, which doesn't end
+ * with the dotted suffix.
  */
 export function isDisposableDomain(
   domain: string,
   rules: readonly DisposableRule[],
 ): boolean {
   return rules.some((rule) => {
-    if (rule.hostname) return rule.hostname === domain;
-    if (rule.hostnameEndsWith) return domain.endsWith(rule.hostnameEndsWith);
+    if (rule.hostname) return registrableDomainOf(rule.hostname) === domain;
+    if (rule.hostnameEndsWith) {
+      const bare = rule.hostnameEndsWith.replace(/^\./, '');
+      return domain === bare || domain.endsWith(rule.hostnameEndsWith);
+    }
     return false;
   });
 }

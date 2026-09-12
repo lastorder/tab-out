@@ -9,7 +9,6 @@
  */
 
 import type {
-  CustomGroupRule,
   DisposableRule,
   PinnedSite,
   TabOutSettings,
@@ -97,10 +96,10 @@ export function normalizePinnedSite(raw: unknown, path: string, issues: Validati
 }
 
 /**
- * Parses the hostname constraint shared by disposable rules and custom
- * groups. Returns `null` when neither form is present — a rule that
- * constrains no hostname would match every tab on the internet, which is
- * never what a half-filled form meant.
+ * Parses the hostname constraint used by disposable rules. Returns `null`
+ * when neither form is present — a rule that constrains no hostname would
+ * match every tab on the internet, which is never what a half-filled form
+ * meant.
  */
 function normalizeHostnameConstraint(
   raw: Record<string, unknown>,
@@ -145,41 +144,6 @@ export function normalizeDisposableRule(
   if (urlNotContains.length > 0) pattern.urlNotContains = urlNotContains;
 
   return pattern;
-}
-
-/**
- * A custom group needs a key (used as the group identity) and a hostname
- * constraint. The label falls back to the key so a card is never nameless.
- */
-export function normalizeCustomGroup(
-  raw: unknown,
-  path: string,
-  issues: ValidationIssue[],
-): CustomGroupRule | null {
-  if (!isObject(raw)) {
-    issues.push({ path, message: 'Expected a rule object.' });
-    return null;
-  }
-
-  const groupKey = asTrimmedString(raw['groupKey']);
-  if (!groupKey) {
-    issues.push({ path, message: 'Missing "groupKey".' });
-    return null;
-  }
-
-  const host = normalizeHostnameConstraint(raw, path, issues);
-  if (!host) return null;
-
-  const rule: CustomGroupRule = {
-    groupKey,
-    groupLabel: asTrimmedString(raw['groupLabel']) || groupKey,
-    ...host,
-  };
-
-  const pathPrefix = asPath(raw['pathPrefix']);
-  if (pathPrefix) rule.pathPrefix = pathPrefix;
-
-  return rule;
 }
 
 /**
@@ -238,23 +202,6 @@ function dedupeBy<T>(items: T[], keyOf: (item: T) => string, path: string, issue
 }
 
 /**
- * Identifies a custom-group rule for de-duplication.
- *
- * Deliberately *not* just `groupKey`: merging several hostnames into one
- * card — the whole point of custom groups — means giving multiple rules the
- * *same* `groupKey` on purpose (see `DEFAULT_CUSTOM_GROUPS` for a worked
- * example: three rules, one per hostname, all sharing `groupKey:
- * 'google-suite'`). Deduping on `groupKey` alone would keep only the first
- * of those and silently discard the rest. Identity therefore also includes
- * what the rule actually matches, so only a genuine copy-pasted duplicate —
- * same group, same target — gets dropped.
- */
-function customGroupIdentity(rule: CustomGroupRule): string {
-  const host = rule.hostname ?? rule.hostnameEndsWith ?? '';
-  return [rule.groupKey, host, rule.pathPrefix ?? ''].filter(Boolean).join(' ');
-}
-
-/**
  * Coerces arbitrary input into valid settings.
  *
  * Missing sections fall back to defaults; invalid individual entries are
@@ -296,17 +243,6 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
         .filter((item): item is DisposableRule => item !== null)
     : defaults.disposableRules;
 
-  const customGroups = Array.isArray(raw['customGroups'])
-    ? dedupeBy(
-        (raw['customGroups'] as unknown[])
-          .map((item, i) => normalizeCustomGroup(item, `customGroups[${i}]`, issues))
-          .filter((item): item is CustomGroupRule => item !== null),
-        customGroupIdentity,
-        'customGroups',
-        issues,
-      )
-    : defaults.customGroups;
-
   const version =
     typeof raw['version'] === 'number' && Number.isFinite(raw['version'])
       ? raw['version']
@@ -324,7 +260,6 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
       pinnedSites,
       disposableEnabled,
       disposableRules,
-      customGroups,
       maxHistoryItems,
       autoSortTabs,
     },
@@ -338,9 +273,12 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
  * v1 → v2 is handled by `normalizeSettings` itself (the `disposableRules` /
  * `landingPatterns` key fallback, and `pinnedEnabled` / `disposableEnabled`
  * defaulting to `true` when absent) since normalisation runs *before*
- * migration and would otherwise see a renamed field as simply missing. This
- * function only stamps the version number — but the hook exists so a future
- * shape change that isn't just "renamed and defaulted" has an obvious home.
+ * migration and would otherwise see a renamed field as simply missing. v3
+ * drops `customGroupsEnabled` / `customGroups` entirely — `normalizeSettings`
+ * simply no longer reads them, so old stored values are silently ignored
+ * rather than needing an explicit migration step. This function only stamps
+ * the version number — but the hook exists so a future shape change that
+ * isn't just "renamed/dropped and defaulted" has an obvious home.
  */
 export function migrateSettings(settings: TabOutSettings): TabOutSettings {
   if (settings.version === SETTINGS_VERSION) return settings;

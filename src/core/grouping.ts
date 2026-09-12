@@ -2,13 +2,13 @@
  * core/grouping.ts — the heart of the dashboard.
  *
  * Pure functions that turn a flat list of open tabs plus the user's settings
- * into the exact ordered list of cards the UI should render. Because nothing
- * here touches `chrome.*` or the DOM, the whole layout algorithm is unit
- * testable with plain objects.
+ * into the exact ordered list of cards the UI should render, plus the pinned
+ * strip's contents. Because nothing here touches `chrome.*` or the DOM, the
+ * whole layout algorithm is unit testable with plain objects.
  */
 
-import type { CustomGroupRule, DisposableRule, PinnedSite, TabGroup, TabInfo, TabOutSettings } from '../types';
-import { findCustomGroup, isDisposable, isDisposableDomain } from './matching';
+import type { PinnedSite, TabGroup, TabInfo, DisposableRule, TabOutSettings } from '../types';
+import { isDisposable, isDisposableDomain } from './matching';
 import { groupKeyOf, hostnameOf, isInternalUrl } from './url';
 
 /** Reserved key for the synthetic "Disposable" card. */
@@ -17,20 +17,29 @@ export const DISPOSABLE_GROUP_KEY = '__disposable__';
 /** Display name for the synthetic "Disposable" card. */
 export const DISPOSABLE_GROUP_LABEL = 'Disposable';
 
-/** One rendered card: either a real group of tabs or a pinned placeholder. */
-export type DashboardEntry =
-  | { type: 'group'; group: TabGroup }
-  | { type: 'placeholder'; site: PinnedSite; pinnedIndex: number };
+/**
+ * One entry in the "Pinned" strip shown above the grid.
+ *
+ * Pinning is tab-level: `tab` is the pinned site's matching open tab, if any
+ * — it is *not* a separate card, and it is still rendered in its own domain
+ * group below like any other tab. When nothing matches, `tab` is `null` and
+ * the strip renders a click-to-open placeholder chip instead.
+ */
+export interface PinnedStripItem {
+  site: PinnedSite;
+  pinnedIndex: number;
+  tab: TabInfo | null;
+}
 
 /** Everything the renderer needs for one paint of the dashboard. */
 export interface DashboardModel {
-  /** Cards in render order: pinned sites first, then the rest by size. */
-  entries: DashboardEntry[];
-  /** Just the groups, in render order. Drives the "sort tabs" feature. */
+  /** Cards in render order. */
   orderedGroups: TabGroup[];
+  /** The "Pinned" strip's contents, in the user's configured order. */
+  pinned: PinnedStripItem[];
   /** Tabs that are real web pages (the denominator for "close all N tabs"). */
   realTabs: TabInfo[];
-  /** Number of group cards (placeholders excluded). */
+  /** Number of group cards. */
   groupCount: number;
 }
 
@@ -42,29 +51,21 @@ export function getRealTabs(tabs: readonly TabInfo[]): TabInfo[] {
 /**
  * Buckets tabs into groups and sorts them.
  *
- * Precedence per tab: disposable rules win, then custom-group rules, then a
- * plain hostname bucket. Disposable tabs are pulled out first so that closing
- * the "Disposable" card never takes content tabs from the same domain with
- * it. When `disposableEnabled` is off, that step is skipped entirely and
- * every tab groups by hostname (or custom group) as if no rule existed —
- * the rules themselves are left untouched in storage, just not applied.
+ * Precedence per tab: disposable rules win, then a plain registrable-domain
+ * bucket (subdomains of the same site share one card — see
+ * `core/url.ts`'s `groupKeyOf`). Disposable tabs are pulled out first so
+ * that closing the "Disposable" card never takes content tabs from the same
+ * domain with it. When `disposableEnabled` is off, that step is skipped
+ * entirely and every tab groups by domain as if no rule existed — the rules
+ * themselves are left untouched in storage, just not applied.
  */
 export function groupTabs(
   tabs: readonly TabInfo[],
-  settings: Pick<TabOutSettings, 'disposableEnabled' | 'disposableRules' | 'customGroups'>,
+  settings: Pick<TabOutSettings, 'disposableEnabled' | 'disposableRules'>,
 ): TabGroup[] {
-  const { disposableEnabled, disposableRules, customGroups } = settings;
+  const { disposableEnabled, disposableRules } = settings;
   const byKey = new Map<string, TabGroup>();
   const disposableTabs: TabInfo[] = [];
-
-  const ensureGroup = (key: string, kind: TabGroup['kind'], label?: string): TabGroup => {
-    let group = byKey.get(key);
-    if (!group) {
-      group = label === undefined ? { key, kind, tabs: [] } : { key, kind, label, tabs: [] };
-      byKey.set(key, group);
-    }
-    return group;
-  };
 
   for (const tab of tabs) {
     if (disposableEnabled && isDisposable(tab.url, disposableRules)) {
@@ -72,15 +73,14 @@ export function groupTabs(
       continue;
     }
 
-    const customRule = findCustomGroup(tab.url, customGroups);
-    if (customRule) {
-      ensureGroup(customRule.groupKey, 'custom', customRule.groupLabel).tabs.push(tab);
-      continue;
-    }
-
     const key = groupKeyOf(tab.url);
     if (!key) continue;
-    ensureGroup(key, 'domain').tabs.push(tab);
+    let group = byKey.get(key);
+    if (!group) {
+      group = { key, kind: 'domain', tabs: [] };
+      byKey.set(key, group);
+    }
+    group.tabs.push(tab);
   }
 
   if (disposableTabs.length > 0) {
@@ -119,130 +119,58 @@ export function sortGroups(
 }
 
 /**
- * Places pinned sites at the front of the dashboard.
+ * Builds the "Pinned" strip: one entry per pinned site, in the user's
+ * configured order, each carrying its matching open tab (by hostname) if one
+ * exists. Duplicate hostnames (two pinned entries for the same site) collapse
+ * to the first — a second chip for the same tab would be redundant.
  *
- * For each pinned site, in the user's configured order:
- *   1. If its URL is claimed by a custom-group rule, the *whole group* is the
- *      pinned unit, not just this one hostname — see below.
- *   2. Otherwise, if a domain group already exists for its hostname, promote
- *      that group.
- *   3. Otherwise, if any open tab matches the hostname (it may be sitting in
- *      the Disposable card), build a synthetic group from those tabs and take
- *      them away from whichever group currently holds them, so no tab is
- *      rendered twice.
- *   4. Otherwise, render a click-to-open placeholder card.
- *
- * **Pinning a custom group.** Pinning several sites that share a custom-group
- * `groupKey` (e.g. the shipped Calendar/Gmail/Chat → "Google" example) makes
- * them behave as *one* pinned unit rather than three: `groupTabs()` already
- * buckets their tabs into one `kind: 'custom'` group whenever any of them are
- * open, before this function ever runs, so there is nothing to "reclaim"
- * here — only the first pinned entry mapping to a given `groupKey` does
- * anything, and it either promotes that one shared group, or — if none of
- * the group's hostnames have an open tab — renders a *single* placeholder
- * for the whole group (labelled with the rule's `groupLabel`, opening the
- * first pinned entry's URL when clicked) instead of one placeholder per site.
+ * This does *not* touch `groups` — a pinned tab still renders in its own
+ * domain (or Disposable) card exactly like any other tab. The strip is a
+ * quick-access shortcut, not a second copy of the grid.
  */
-export function applyPinnedSites(
-  groups: readonly TabGroup[],
-  realTabs: readonly TabInfo[],
+export function buildPinnedStrip(
   pinnedSites: readonly PinnedSite[],
-  customGroups: readonly CustomGroupRule[] = [],
-): { entries: DashboardEntry[]; orderedGroups: TabGroup[] } {
-  let remaining = groups.map((group) => ({ ...group, tabs: [...group.tabs] }));
-  const entries: DashboardEntry[] = [];
-  const orderedGroups: TabGroup[] = [];
-  const seenIdentities = new Set<string>();
+  realTabs: readonly TabInfo[],
+): PinnedStripItem[] {
+  const seenHostnames = new Set<string>();
+  const items: PinnedStripItem[] = [];
 
   pinnedSites.forEach((site, pinnedIndex) => {
     const hostname = hostnameOf(site.url);
-    if (!hostname) return;
+    if (!hostname || seenHostnames.has(hostname)) return;
+    seenHostnames.add(hostname);
 
-    const rule = findCustomGroup(site.url, customGroups);
-    const identity = rule ? `custom:${rule.groupKey}` : `site:${hostname}`;
-    if (seenIdentities.has(identity)) return;
-    seenIdentities.add(identity);
-
-    if (rule) {
-      const existingIdx = remaining.findIndex(
-        (group) => group.kind === 'custom' && group.key === rule.groupKey,
-      );
-      if (existingIdx !== -1) {
-        const [group] = remaining.splice(existingIdx, 1);
-        entries.push({ type: 'group', group: group! });
-        orderedGroups.push(group!);
-        return;
-      }
-
-      // None of this group's hostnames have an open tab: one placeholder
-      // for the whole group, not one per pinned site sharing its groupKey.
-      entries.push({
-        type: 'placeholder',
-        site: { url: site.url, label: rule.groupLabel },
-        pinnedIndex,
-      });
-      return;
-    }
-
-    const existingIdx = remaining.findIndex(
-      (group) => group.kind === 'domain' && group.key === hostname,
-    );
-
-    if (existingIdx !== -1) {
-      const [group] = remaining.splice(existingIdx, 1);
-      const promoted: TabGroup = site.label ? { ...group!, label: site.label } : group!;
-      entries.push({ type: 'group', group: promoted });
-      orderedGroups.push(promoted);
-      return;
-    }
-
-    const matchingTabs = realTabs.filter((tab) => hostnameOf(tab.url) === hostname);
-    if (matchingTabs.length === 0) {
-      entries.push({ type: 'placeholder', site, pinnedIndex });
-      return;
-    }
-
-    const synthetic: TabGroup = {
-      key: hostname,
-      kind: 'domain',
-      ...(site.label ? { label: site.label } : {}),
-      tabs: matchingTabs,
-    };
-    entries.push({ type: 'group', group: synthetic });
-    orderedGroups.push(synthetic);
-
-    // Reclaim these tabs from whichever group (usually Disposable) held them.
-    const claimed = new Set(matchingTabs.map((tab) => tab.id));
-    remaining = remaining
-      .map((group) => ({ ...group, tabs: group.tabs.filter((tab) => !claimed.has(tab.id)) }))
-      .filter((group) => group.tabs.length > 0);
+    const tab = realTabs.find((candidate) => hostnameOf(candidate.url) === hostname) ?? null;
+    items.push({ site, pinnedIndex, tab });
   });
 
-  for (const group of remaining) {
-    entries.push({ type: 'group', group });
-    orderedGroups.push(group);
-  }
+  return items;
+}
 
-  return { entries, orderedGroups };
+/**
+ * Set of hostnames currently pinned, for highlighting a tab's chip inside its
+ * own domain card. Empty when pinning is disabled.
+ */
+export function pinnedHostnameSet(pinned: readonly PinnedStripItem[]): Set<string> {
+  return new Set(pinned.map((item) => hostnameOf(item.site.url)).filter(Boolean));
 }
 
 /**
  * One-shot: open tabs + settings → the complete render model.
  *
- * When `pinnedEnabled` is off, pinned sites are skipped entirely — no
- * promotion, no reclaiming tabs from other groups, no placeholders — so
- * every group renders exactly as `groupTabs`/`sortGroups` produced it.
+ * When `pinnedEnabled` is off, the pinned strip is empty and no tab is
+ * highlighted as pinned — grouping itself is completely unaffected by
+ * pinning either way, since pinning no longer changes which card a tab
+ * belongs to.
  */
 export function buildDashboardModel(
   tabs: readonly TabInfo[],
   settings: TabOutSettings,
 ): DashboardModel {
   const realTabs = getRealTabs(tabs);
-  const groups = groupTabs(realTabs, settings);
-  const { entries, orderedGroups } = settings.pinnedEnabled
-    ? applyPinnedSites(groups, realTabs, settings.pinnedSites, settings.customGroups)
-    : { entries: groups.map((group): DashboardEntry => ({ type: 'group', group })), orderedGroups: groups };
-  return { entries, orderedGroups, realTabs, groupCount: orderedGroups.length };
+  const orderedGroups = groupTabs(realTabs, settings);
+  const pinned = settings.pinnedEnabled ? buildPinnedStrip(settings.pinnedSites, realTabs) : [];
+  return { orderedGroups, pinned, realTabs, groupCount: orderedGroups.length };
 }
 
 /**

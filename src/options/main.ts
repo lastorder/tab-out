@@ -16,7 +16,6 @@ import {
   addRow,
   addSuggestedDisposableRules,
   draftToSettings,
-  EMPTY_CUSTOM_ROW,
   EMPTY_DISPOSABLE_ROW,
   EMPTY_PINNED_ROW,
   moveRow,
@@ -32,7 +31,6 @@ const historyService = new TabHistoryService(createChromeStore('local'));
 const CONTAINERS: Record<SectionName, string> = {
   pinned: 'pinnedRows',
   disposable: 'disposableRows',
-  custom: 'customRows',
 };
 
 /** Panel element id + the draft field that enables it, for the dimming effect. */
@@ -194,9 +192,6 @@ document.addEventListener('click', (event) => {
         ...draft,
         disposable: addSuggestedDisposableRules(draft.disposable, DEFAULT_DISPOSABLE_RULES),
       };
-      break;
-    case 'add-custom':
-      draft = { ...draft, custom: addRow(draft.custom, { ...EMPTY_CUSTOM_ROW }) };
       break;
     case 'remove':
       if (!section || index < 0) return;

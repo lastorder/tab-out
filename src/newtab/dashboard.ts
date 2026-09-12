@@ -22,7 +22,8 @@ import { createDefaultSettings } from '../config/defaults';
 import { getDateDisplay, getGreeting } from '../core/time';
 import { escapeHtml, plural } from '../ui/html';
 import { ICONS } from '../ui/icons';
-import { renderEmptyState, renderEntries } from '../ui/render/cards';
+import { renderEmptyState, renderGroups, renderPinnedStrip } from '../ui/render/cards';
+import { pinnedHostnameSet } from '../core/grouping';
 import { renderHistoryList } from '../ui/render/history';
 import { renderArchiveList, renderSavedItem } from '../ui/render/saved';
 
@@ -153,10 +154,19 @@ export class Dashboard {
     const section = byId('openTabsSection');
     const missions = byId('openTabsMissions');
     const count = byId('openTabsSectionCount');
+    const pinnedStrip = byId('pinnedStrip');
+
+    if (pinnedStrip) {
+      const html = renderPinnedStrip(model.pinned);
+      pinnedStrip.innerHTML = html;
+      pinnedStrip.style.display = html ? 'flex' : 'none';
+    }
+
     if (!section || !missions || !count) return;
 
-    if (model.entries.length === 0) {
+    if (model.orderedGroups.length === 0) {
       section.style.display = 'none';
+      missions.innerHTML = '';
       return;
     }
 
@@ -174,7 +184,7 @@ export class Dashboard {
         : '';
 
     count.innerHTML = domainText + closeAll + tidyButtonHtml(tidy);
-    missions.innerHTML = renderEntries(model.entries);
+    missions.innerHTML = renderGroups(model.orderedGroups, pinnedHostnameSet(model.pinned));
   }
 
   /**
@@ -354,7 +364,6 @@ export class Dashboard {
   /** Removes any card whose chips are all gone. */
   pruneEmptyCards(): void {
     document.querySelectorAll<HTMLElement>('.mission-card').forEach((card) => {
-      if (card.classList.contains('pinned-placeholder')) return;
       if (card.querySelectorAll('.page-chip[data-action="focus-tab"]').length > 0) return;
       card.classList.add('closing');
       window.setTimeout(() => {

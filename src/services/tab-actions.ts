@@ -9,7 +9,7 @@
 import type { BrowserTabs } from '../platform/browser';
 import type { PinnedSite, TabGroup } from '../types';
 import { selectDuplicateTabIds } from '../core/duplicates';
-import { DISPOSABLE_GROUP_KEY, pinnedInsertIndex } from '../core/grouping';
+import { pinnedInsertIndex } from '../core/grouping';
 import { findDashboardTabNeedingMove } from '../core/dashboard';
 import {
   findFocusTarget,
@@ -38,14 +38,14 @@ export class TabActions {
   /**
    * Closes an entire group.
    *
-   * Disposable and custom groups match by exact URL, because their keys are
-   * not real hostnames and a hostname sweep would take unrelated tabs with it.
-   * Plain domain cards match by hostname, which is the whole point of the card.
+   * The Disposable card matches by exact URL, because its key is not a real
+   * hostname and a hostname sweep would take unrelated tabs with it. Plain
+   * domain cards match by hostname, which is the whole point of the card.
    */
   async closeGroup(group: TabGroup): Promise<number> {
     const urls = group.tabs.map((tab) => tab.url);
     const tabs = await this.#browser.queryAll();
-    const useExact = group.kind !== 'domain' || group.key === DISPOSABLE_GROUP_KEY;
+    const useExact = group.kind === 'disposable';
     const ids = useExact
       ? selectTabIdsByExactUrl(tabs, urls)
       : selectTabIdsByHostname(tabs, urls);

@@ -43,8 +43,8 @@ export function selectTabIdsByHostname(
 /**
  * Selects tabs by exact URL.
  *
- * Used for the Disposable card and custom groups: closing "Gmail inbox" must
- * not also close the email threads you have open on the same hostname.
+ * Used for the Disposable card: closing "Gmail inbox" must not also close the
+ * email threads you have open on the same hostname.
  */
 export function selectTabIdsByExactUrl(
   tabs: readonly TabInfo[],

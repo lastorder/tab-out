@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupKeyOf, hostnameOf, isInternalUrl, normalizeUrlInput, stripWww } from '@/core/url';
+import { groupKeyOf, hostnameOf, isInternalUrl, normalizeUrlInput, registrableDomainOf, stripWww } from '@/core/url';
 
 describe('hostnameOf', () => {
   it('extracts the hostname, and returns empty for anything unparseable', () => {
@@ -10,10 +10,36 @@ describe('hostnameOf', () => {
   });
 });
 
+describe('registrableDomainOf', () => {
+  it('collapses subdomains to the registrable domain', () => {
+    expect(registrableDomainOf('mail.google.com')).toBe('google.com');
+    expect(registrableDomainOf('calendar.google.com')).toBe('google.com');
+    expect(registrableDomainOf('gist.github.com')).toBe('github.com');
+    expect(registrableDomainOf('example.com')).toBe('example.com');
+  });
+
+  it('keeps a known two-label public suffix intact', () => {
+    expect(registrableDomainOf('news.bbc.co.uk')).toBe('bbc.co.uk');
+    expect(registrableDomainOf('acme.com.cn')).toBe('acme.com.cn');
+  });
+
+  it('leaves hosts with two labels or fewer, and IP addresses, unchanged', () => {
+    expect(registrableDomainOf('localhost')).toBe('localhost');
+    expect(registrableDomainOf('example.com')).toBe('example.com');
+    expect(registrableDomainOf('127.0.0.1')).toBe('127.0.0.1');
+  });
+
+  it('returns empty for an empty hostname', () => {
+    expect(registrableDomainOf('')).toBe('');
+  });
+});
+
 describe('groupKeyOf', () => {
-  it('groups web pages by hostname, keeping subdomains distinct', () => {
+  it('groups web pages by registrable domain, merging subdomains of the same site', () => {
     expect(groupKeyOf('https://example.com/deep/path')).toBe('example.com');
-    expect(groupKeyOf('https://gist.github.com/x')).toBe('gist.github.com');
+    expect(groupKeyOf('https://gist.github.com/x')).toBe('github.com');
+    expect(groupKeyOf('https://mail.google.com/')).toBe('google.com');
+    expect(groupKeyOf('https://calendar.google.com/')).toBe('google.com');
     expect(groupKeyOf('http://localhost:3000/x')).toBe('localhost');
   });
 

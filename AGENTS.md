@@ -18,13 +18,13 @@ Before doing anything technical, tell the user what they're about to get:
 > **Tab Out** replaces your new tab page with a clean dashboard of everything you have open, grouped by domain.
 >
 > Here's what makes it great:
-> - **See all your open tabs at a glance** grouped by domain on a grid
+> - **See all your open tabs at a glance** grouped by registrable domain on a grid — subdomains of the same site (like `mail.google.com` and `calendar.google.com`) share one card automatically
 > - **Disposable tabs group** collects tabs that are safe to close — a site's own homepage (Gmail, X, GitHub) and spent one-off pages like a Zoom meeting's post-join screen — into one card, with a "Tidy up" button for closing them (plus duplicates and already-saved tabs) in one click
 > - **Close tabs with style** satisfying swoosh sound + confetti burst
 > - **Duplicate detection** flags when you have the same page open twice
 > - **Click any tab title to jump to it** even across different Chrome windows
 > - **Save for later** bookmark individual tabs to a checklist before closing them
-> - **Fully configurable** a settings page for pinned sites, disposable rules and custom groups — pinned sites and disposable rules can each be switched off entirely with one checkbox
+> - **Fully configurable** a settings page for pinned sites and disposable rules — each can be switched off entirely with one checkbox
 > - **100% local** no server, no accounts, no data sent anywhere
 >
 > It's a Chrome extension. Setup takes about 2 minutes.
@@ -98,7 +98,7 @@ Once the extension is loaded:
 > You're all set! Open a **new tab** and you'll see Tab Out.
 >
 > Here's how it works:
-> 1. **Your open tabs are grouped by domain** in a grid layout.
+> 1. **Your open tabs are grouped by registrable domain** in a grid layout — `mail.google.com` and `calendar.google.com` land in the same card, since they're the same site underneath.
 > 2. **Disposable tabs** (Gmail inbox, X home, YouTube, a spent Zoom meeting page, etc.) are in their own group at the top — safe to close because reopening them costs nothing.
 > 3. **Click any tab title** to jump directly to that tab, even in another window.
 > 4. **Click the X** next to any tab to close just that one (with swoosh + confetti).
@@ -109,6 +109,7 @@ Once the extension is loaded:
 > 9. **Only one Tab Out page stays open** — opening a new one automatically closes the others, and it always sits on the rightmost tab, so anything you open next appears to its left.
 > 10. **History** — click the clock icon to see every tab you've recently closed, however you closed it, and reopen one with a click. It updates live — close a tab and it shows up immediately, no refresh needed — and a reopened tab drops off the list immediately too.
 > 11. **Your tab bar quietly reorders itself** to match the dashboard — this is on by default; turn it off in Settings for a manual "Sort tabs" banner instead.
+> 12. **Pinned sites get a "Pinned" strip up top**, one small chip per site — click to jump to it if it's open, or to open it if it's not. A pinned tab is also highlighted and sorted first inside its own domain card below; pinning never pulls a tab into a separate card of its own.
 
 ## Step 4 — Point them at the settings page
 
@@ -116,9 +117,8 @@ Most people miss this, so mention it explicitly:
 
 > Click the **gear icon** in the top-right of the dashboard (or right-click the extension icon → Options) to configure:
 >
-> - **Pinned sites** — the sites that always sit at the top. Sites with no open tabs show as click-to-open placeholders. Has its own on/off switch.
+> - **Pinned sites** — a compact "Pinned" strip above the grid, plus a highlight on the matching tab inside its own domain card. Pinning is tab-level: it never merges or promotes a whole card. Has its own on/off switch.
 > - **Disposable tabs** — which tabs are safe to close and get collected into the shared Disposable card: a site's own homepage, or a spent one-off page like Zoom's post-join screen. Also has its own on/off switch.
-> - **Custom groups** — merge several hostnames into one card (give them the same Group key), or split one site into separate cards by path. Shipped with a worked example: Calendar, Gmail and Chat are pinned *and* merged into one "Google" card at once.
 > - **Tab sorting** — turn auto-sort off if you'd rather sort manually via a banner.
 > - **History** — how many recently closed tabs to remember (default 100).
 >
@@ -128,7 +128,7 @@ Rule syntax worth explaining if they ask:
 
 - Hostname `x.com` matches exactly; a **leading dot** like `.zoom.us` matches any subdomain.
 - Disposable rules narrow by a single **Path pattern** field, comma-separated: `/j/*` (prefix — that path and everything under it), `/home` (exact path only), `!#inbox/` (veto — excludes any URL containing that text). Blank matches only the site root. `/*, !#inbox/, !#sent/` is the shipped Gmail rule.
-- To merge hostnames with Custom groups, give each rule the same **Group key** — one rule per hostname, since a rule only matches one. Pinning those same hostnames pins the *whole merged group* as one card (see the shipped Calendar/Gmail/Chat example) — the two features are meant to combine like this, not conflict.
+- Grouping merges subdomains of the same site automatically (by registrable domain), so there's no separate "merge these hostnames into one card" feature to configure any more.
 
 If they had homepage or pinned-site rules saved from an older version, mention that a shipped default only ever seeds a fresh install — their own saved settings are never touched.
 
@@ -208,20 +208,20 @@ Consequences you must respect:
 - **`normalizeSettings()` must never throw.** It repairs bad input and reports issues. Corrupt storage must never break the new tab page.
 - **Keep defaults in normalised form.** `normalizeSettings(defaults)` must equal `defaults` — a test guards this.
 - **Group cards are addressed by index** via `data-group-index`, not by a slugified name. Don't reintroduce string-derived DOM ids; they collide.
-- **Closing by hostname vs exact URL is a real distinction.** Domain cards close by hostname; Disposable and custom groups close by exact URL so they don't take unrelated tabs with them. See `TabActions.closeGroup`.
+- **Closing by hostname vs exact URL is a real distinction.** Domain cards close by hostname; the Disposable card closes by exact URL so it doesn't take unrelated tabs with it. See `TabActions.closeGroup`.
 - **History is recorded in the background worker, not the dashboard.** `chrome.tabs.onRemoved` doesn't include the tab's URL, so `background/main.ts` keeps a `TabSnapshotCache` (`chrome.storage.session`) updated on every create/update, and consumes it on removal. If you add a way to close tabs that bypasses `chrome.tabs.remove`, history recording still works — it listens at the browser level, not through `TabActions`.
 - **The dashboard stays pinned to the rightmost tab.** `background/main.ts` calls `TabActions.moveDashboardToEnd` on every `chrome.tabs.onCreated`, and `newtab/main.ts` calls it once at boot. Both share `dashboardUrls()` from `core/dashboard.ts` — don't redefine "what counts as a dashboard tab" anywhere else.
 - **Storage-backed panels should react to `onChanged`, not just to tab events.** `TabHistoryService.onChanged` (mirroring `SettingsStore.onChanged`) is what makes the History panel update the instant the background worker records a closure, instead of waiting for the next unrelated repaint or a manual refresh. If you add another background-written, dashboard-displayed list, wire it the same way rather than relying on `RenderScheduler`.
 - **Don't derive live state from `Dashboard`'s last render model.** `#model` is a snapshot from the previous full render, and the moments you most want to repaint (a tab just closed) are exactly when it is stale. `renderHistoryPanel` queries open tabs live for this reason — reading `#model.realTabs` made a just-closed tab still look "open", which filtered its new history entry straight back out until the user refreshed.
 - **`RenderScheduler.suppress()` delays repaints; it must never drop them.** The close handlers mutate the DOM directly for instant feedback, but only a real render recomputes derived state — e.g. a pinned site whose last tab closed has to return as a click-to-open placeholder instead of vanishing. `suppress()` therefore queues a catch-up render; if you add a new suppressed action, don't bypass it.
-- **A settings field that isn't a row table (a number, a checkbox) lives directly on `DraftState`, not inside `pinned`/`disposable`/`custom`.** See `maxHistoryItems` (string, parsed on save) and `autoSortTabs` (boolean, no parsing needed) for the pattern: add the field to `DraftState`, copy it in `settingsToDraft`/`draftToSettings`, validate it in `config/schema.ts` with a `normalize*` function that never throws, and give it its own `if (input.id === '…')` branch in `options/main.ts`'s input listener — it does not go through `mutateSection`.
+- **A settings field that isn't a row table (a number, a checkbox) lives directly on `DraftState`, not inside `pinned`/`disposable`.** See `maxHistoryItems` (string, parsed on save) and `autoSortTabs` (boolean, no parsing needed) for the pattern: add the field to `DraftState`, copy it in `settingsToDraft`/`draftToSettings`, validate it in `config/schema.ts` with a `normalize*` function that never throws, and give it its own `if (input.id === '…')` branch in `options/main.ts`'s input listener — it does not go through `mutateSection`.
 - **Never render a user-controlled URL as a plain `<a href>`.** Chrome silently blocks top-level navigation to `file://` from an extension page, so a saved or historical `file://` tab could never be reopened by clicking a link. Every reopen path goes through `TabActions.openOrFocusTab()` (`chrome.tabs.create`/`chrome.tabs.update` under the hood) via a `data-action="open-saved"` / `"reopen-history"` button instead. If you add another place that reopens a stored URL, use this method, not an anchor tag.
 - **`isInternalUrl()` excludes as little as it can get away with.** Browser system pages (`chrome://extensions`, `chrome://settings`, `edge://...`, `brave://...`) are real tabs the user manages on purpose, so they group, close and get recorded into history like any other page. The only things actually excluded are `chrome://newtab/` (the dashboard itself, in disguise), `chrome-extension://` (any extension's UI), `about:` (a loading placeholder), and `devtools://`. Don't broaden this back to a blanket `chrome://` prefix match.
 - **A renamed stored field needs a legacy-key fallback in `normalizeSettings`, not just in `migrateSettings`.** `SettingsStore.load()` calls `normalizeSettings(raw)` *before* `migrateSettings(settings)`. When `landingPatterns` became `disposableRules`, a naive rename would have made `normalizeSettings` see the old key as simply absent and silently substitute the defaults — destroying every real user's saved rules on their first load after upgrading. The fix reads `raw['disposableRules'] ?? raw['landingPatterns']` inside `normalizeSettings` itself; `migrateSettings` only stamps the version number. Any future field rename needs the same shape of fix, in the same place.
 - **A pure decision that both a button's visibility and its label depend on belongs in `core/`, not in the renderer.** `core/tidy.ts`'s `selectTidyTabIds()` decides *which* tabs "Tidy up" would close and *why* (as a `{ disposable, saved, duplicates }` breakdown that always sums to the total); `newtab/dashboard.ts` only turns that into HTML and a tooltip string. This is what makes "does the button appear, and does its count match reality" testable without a DOM.
 - **The options-page "Path pattern" field is a presentation-layer encoding, not a schema change.** `DisposableRule` still has separate `pathPrefix` / `pathExact` / `urlNotContains` fields in storage and in `core/matching.ts` — nothing there changed. Only `options/draft.ts`'s `patternToField()` / `patternFromField()` collapse those three into one comma-separated field (`/j/*` = prefix, `/home` = exact, `!#inbox/` = veto) for editing, the same way `hostnameToField()` / `hostnameFromField()` already collapse `hostname` / `hostnameEndsWith` into one. If you touch this, keep the round-trip lossless for every shipped default — there's a test for exactly that.
-- **Custom-group rules can legitimately share a `groupKey`.** That's the only way to merge several hostnames into one card — a single `CustomGroupRule` matches only one hostname, so N hostnames on one card means N rules with the same key (see `DEFAULT_CUSTOM_GROUPS`: three rules, one `groupKey: 'google-suite'`). `normalizeSettings`'s de-dup for this section therefore identifies a rule by `customGroupIdentity()` (groupKey **+** hostname **+** pathPrefix), not by `groupKey` alone — deduping on `groupKey` alone silently discarded every rule after the first sharing a key, which broke this exact pattern. Don't revert that.
-- **Pinning a hostname that a custom-group rule also claims pins the whole group, not just that hostname.** `applyPinnedSites()` checks each pinned site against `customGroups` first; if a rule claims it, the pinned *identity* becomes that rule's `groupKey`, and every later pinned site sharing the same `groupKey` is a no-op (already handled). This works because `groupTabs()` already buckets the group's tabs together before `applyPinnedSites` ever runs, so there's nothing to reclaim — the function only needs to promote the one shared `kind: 'custom'` group if it exists, or render one placeholder (labelled with the rule's `groupLabel`) if it doesn't. This is what makes the shipped Calendar/Gmail/Chat example pinned *and* merged at once: three Pinned sites entries, three Custom-group rules sharing `groupKey: 'google-suite'`. Don't special-case "pinned + grouped" as a conflict to avoid — it's a supported combination.
+- **Domain cards group by registrable domain, not raw hostname.** `core/url.ts`'s `groupKeyOf`/`registrableDomainOf` collapse `mail.google.com` and `calendar.google.com` to `google.com` before `core/grouping.ts`'s `groupTabs()` ever buckets tabs, so subdomains of one site share a card without a merge rule. `isDisposableDomain` (in `core/matching.ts`) compares against this same registrable-domain key, not the rule's raw hostname — don't compare a rule's `hostname` field directly against a group's `key` again.
+- **Pinning is tab-level, not group-level.** `core/grouping.ts#buildPinnedStrip` never touches which card a tab belongs to — it only looks up, per pinned site, the matching open tab (by hostname) for the "Pinned" strip, and `pinnedHostnameSet()` feeds `ui/render/cards.ts#renderGroupCard` a set used purely to sort that tab first within its own card and badge its chip. If you need "pin this whole card" back, that is a deliberately different feature from this one — don't quietly conflate them.
 
 ## Testing
 
@@ -232,7 +232,7 @@ adding one, ask what bug it would catch.
 - Decision logic with branches — grouping precedence, which tabs an action
   closes, rule matching, validation.
 - Invariants worth stating out loud (`normalizeSettings(defaults) === defaults`;
-  `applyPinnedSites` doesn't mutate its input).
+  `buildPinnedStrip` doesn't mutate its input).
 - Past bugs, so they stay fixed. Several tests exist only for this and say so
   in a comment — leave those alone.
 - HTML escaping, since page titles are attacker-controlled.
@@ -269,6 +269,8 @@ Don't "restore" these — their absence is the design:
 - **`config.local.js`.** Personal configuration now lives in the settings page and `chrome.storage`, not in a gitignored source file.
 - **The `extension/` directory and `app.js`.** Replaced by `src/` plus a build step. `dist/` is generated and gitignored — never edit it by hand.
 - **The `activeTab` permission.** It was unused; `tabs` already covers what's needed.
+- **Custom groups.** `CustomGroupRule`, `customGroups`/`customGroupsEnabled`, `findCustomGroup`/`matchesCustomGroup`, and the whole "Custom groups" options panel are gone. Merging several hostnames into one card is now automatic — grouping by registrable domain (see below) already puts `mail.google.com` and `calendar.google.com` on one card without a rule. Don't reintroduce a merge-rule feature to solve a problem registrable-domain grouping already solves.
+- **Whole-card pinning.** Pinning used to promote a pinned site's entire card to the front of the grid (and render a placeholder card when nothing was open). It's tab-level now: see the "Pinning is tab-level, not group-level" convention above. `applyPinnedSites()` and the `DashboardEntry` `'placeholder'` variant are gone along with it — don't resurrect a "promote this whole card" code path.
 
 ## Key facts
 
