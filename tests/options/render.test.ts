@@ -14,32 +14,43 @@ const emptyDraft = {
   autoSortTabs: true,
 };
 
+/** Three pinned rows, independent of whatever the shipped defaults contain. */
+const threePinnedRows = {
+  ...emptyDraft,
+  pinned: [
+    { url: 'https://a.com/', label: 'A' },
+    { url: 'https://b.com/', label: 'B' },
+    { url: 'https://c.com/', label: 'C' },
+  ],
+};
+
 describe('renderSection', () => {
   it('renders one row per pinned site, tagged for the event delegate', () => {
-    const html = renderSection('pinned', draft);
+    const html = renderSection('pinned', threePinnedRows);
     expect(html.match(/class="row row-pinned"/g)).toHaveLength(3);
     expect(html).toContain('data-section="pinned"');
     expect(html).toContain('data-field="url"');
-    expect(html).toContain('value="https://mail.google.com/"');
+    expect(html).toContain('value="https://b.com/"');
   });
 
-  it('renders the disposable rule fields', () => {
+  it('renders the disposable rule fields, using the shipped Gmail default', () => {
     const html = renderSection('disposable', draft);
     expect(html).toContain('data-field="hostname"');
     expect(html).toContain('data-field="pattern"');
+    expect(html).toContain('value="mail.google.com"');
   });
 
-  it('renders custom group fields', () => {
-    const html = renderSection('custom', {
-      ...emptyDraft,
-      custom: [{ groupKey: 'work', groupLabel: 'Work', hostname: '.acme.net', pathPrefix: '' }],
-    });
+  it('renders custom group fields, including the shipped multi-hostname example', () => {
+    // The default merges three Google hostnames under one groupKey, so this
+    // is also a smoke test that shipping multiple same-groupKey rows works.
+    const html = renderSection('custom', draft);
     expect(html).toContain('data-field="groupKey"');
-    expect(html).toContain('value="work"');
+    expect(html.match(/value="google-suite"/g)).toHaveLength(3);
+    expect(html.match(/class="row row-custom"/g)).toHaveLength(3);
   });
 
   it('disables move-up on the first row and move-down on the last', () => {
-    const html = renderSection('pinned', draft);
+    const html = renderSection('pinned', threePinnedRows);
     const rows = html.split('class="row row-pinned"').slice(1);
 
     expect(rows[0]).toContain('data-action="move-up"');
@@ -49,7 +60,7 @@ describe('renderSection', () => {
   });
 
   it('gives every row a remove button', () => {
-    expect(renderSection('pinned', draft).match(/data-action="remove"/g)).toHaveLength(3);
+    expect(renderSection('pinned', threePinnedRows).match(/data-action="remove"/g)).toHaveLength(3);
   });
 
   it('shows a helpful message when a table is empty', () => {
@@ -68,7 +79,7 @@ describe('renderSection', () => {
   });
 
   it('emits no inline event handlers', () => {
-    expect(renderSection('pinned', draft)).not.toMatch(/\son\w+=/);
+    expect(renderSection('pinned', threePinnedRows)).not.toMatch(/\son\w+=/);
   });
 });
 

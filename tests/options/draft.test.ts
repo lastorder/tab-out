@@ -104,14 +104,18 @@ describe('draft round-trip', () => {
     const draft = settingsToDraft(createDefaultSettings());
     expect(draft.pinnedEnabled).toBe(true);
     expect(draft.disposableEnabled).toBe(true);
-    expect(draft.pinned[0]).toEqual({
-      url: 'https://calendar.google.com/',
-      label: 'Google Calendar',
-    });
+    // Pinned sites ships empty by default — see config/defaults.ts for why.
+    expect(draft.pinned).toEqual([]);
     expect(draft.disposable[0]).toEqual({
       hostname: 'mail.google.com',
       pattern: '/*, !#inbox/, !#sent/, !#search/',
     });
+    // The shipped custom-group example: three hostnames, one shared card.
+    expect(draft.custom).toEqual([
+      { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'calendar.google.com', pathPrefix: '' },
+      { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'mail.google.com', pathPrefix: '' },
+      { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'chat.google.com', pathPrefix: '' },
+    ]);
     expect(draft.maxHistoryItems).toBe('100');
     expect(draft.autoSortTabs).toBe(true);
   });
@@ -122,7 +126,7 @@ describe('draft round-trip', () => {
     draft.disposable.push({ ...EMPTY_DISPOSABLE_ROW });
 
     const { settings, issues } = draftToSettings(draft);
-    expect(settings.pinnedSites).toHaveLength(3);
+    expect(settings.pinnedSites).toHaveLength(0);
     expect(issues).toHaveLength(0);
   });
 

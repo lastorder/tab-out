@@ -238,6 +238,23 @@ function dedupeBy<T>(items: T[], keyOf: (item: T) => string, path: string, issue
 }
 
 /**
+ * Identifies a custom-group rule for de-duplication.
+ *
+ * Deliberately *not* just `groupKey`: merging several hostnames into one
+ * card — the whole point of custom groups — means giving multiple rules the
+ * *same* `groupKey` on purpose (see `DEFAULT_CUSTOM_GROUPS` for a worked
+ * example: three rules, one per hostname, all sharing `groupKey:
+ * 'google-suite'`). Deduping on `groupKey` alone would keep only the first
+ * of those and silently discard the rest. Identity therefore also includes
+ * what the rule actually matches, so only a genuine copy-pasted duplicate —
+ * same group, same target — gets dropped.
+ */
+function customGroupIdentity(rule: CustomGroupRule): string {
+  const host = rule.hostname ?? rule.hostnameEndsWith ?? '';
+  return [rule.groupKey, host, rule.pathPrefix ?? ''].filter(Boolean).join(' ');
+}
+
+/**
  * Coerces arbitrary input into valid settings.
  *
  * Missing sections fall back to defaults; invalid individual entries are
@@ -284,7 +301,7 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
         (raw['customGroups'] as unknown[])
           .map((item, i) => normalizeCustomGroup(item, `customGroups[${i}]`, issues))
           .filter((item): item is CustomGroupRule => item !== null),
-        (rule) => rule.groupKey,
+        customGroupIdentity,
         'customGroups',
         issues,
       )

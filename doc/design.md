@@ -140,7 +140,7 @@ tab-out/
 │   │   ├── dashboard.css
 │   │   └── options.css
 │   └── icons/
-├── tests/                    ← 单元测试（27 个文件，309 个用例）
+├── tests/                    ← 单元测试（27 个文件，311 个用例）
 │   ├── helpers/              ← 测试替身：假浏览器、数据工厂
 │   ├── core/ config/ services/ ui/ options/ newtab/ background/
 │   └── setup.ts
@@ -162,7 +162,7 @@ v1 的卖点之一是"**没有 package.json，没有构建步骤，写完直接�
 
 | v1 的痛点 | v2 的解法 |
 |-----------|-----------|
-| 改一个函数不知道会不会影响别处 | TypeScript 静态类型 + 309 个单元测试 |
+| 改一个函数不知道会不会影响别处 | TypeScript 静态类型 + 311 个单元测试 |
 | 想加功能得在 1700 行里找位置 | 按职责分成 34 个模块 |
 | 逻辑和 `chrome.*` 调用混在一起，没法测试 | `platform/` 接缝层，测试注入假对象 |
 | 首页规则是硬编码的 JS 函数，用户改不了 | 改成可序列化的声明式"可丢弃规则" + 设置页 |
@@ -779,6 +779,20 @@ export interface TabOutSettings {
 
 **铁律：设置里不允许出现函数。** 它必须能被 `chrome.storage` 序列化。这也是 [6.4](#64-matchingts--声明式规则引擎) 把可丢弃规则改成声明式数据的根本原因。
 
+**默认值本身也是一份"配置参考"**，`DEFAULT_PINNED_SITES` 目前是空的，`DEFAULT_CUSTOM_GROUPS` 反而不是空的——这个安排本身就是一个例子：
+
+```ts
+export const DEFAULT_PINNED_SITES: readonly PinnedSite[] = Object.freeze([]);
+
+export const DEFAULT_CUSTOM_GROUPS: readonly CustomGroupRule[] = Object.freeze([
+  { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'calendar.google.com' },
+  { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'mail.google.com' },
+  { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'chat.google.com' },
+]);
+```
+
+Calendar / Gmail / Chat 曾经是三条独立的 Pinned sites。但 Pinned sites 是**按精确 hostname 认领标签**的（见 6.5 节第三步）：即使这三个域名同时被自定义分组合并成一张卡，只要它们还留在 Pinned sites 里，`applyPinnedSites` 就会把它们的标签重新拆回三张独立卡片，**合并形同虚设**。所以要把三个域名合成一张卡，正确做法是**从 Pinned sites 里移除，改成三条共享同一个 `groupKey` 的 Custom groups 规则**——这正是上面默认值的写法，也是设置页里"Custom groups"那节应该教给别人的参考模式。
+
 ### 8.2 `schema.ts` — 一个永不抛异常的校验器
 
 设置数据可能来自三个**不可信**的地方：
@@ -852,7 +866,32 @@ it('leaves the shipped defaults untouched', () => {
 
 > 这正是单元测试的价值：**它逼你把"本该成立的性质"明确写出来，然后发现它其实不成立。**
 
-### 8.4 存储位置的选择
+### 8.4 第二个真实 bug：去重逻辑和"合并卡片"这个功能互相冲突
+
+Custom groups 有个用法是"把好几个不同的域名合并成一张卡片"——比如把 `calendar.google.com`、`mail.google.com`、`chat.google.com` 三个毫不相关的域名，用同一个 `groupKey: 'google-suite'` 合并成一张"Google"卡片（这也是这三个域名现在的默认配置，见 8.5）。
+
+`CustomGroupRule` 一条规则只能约束**一个** `hostname`，所以"合并三个域名"必然要写**三条 groupKey 相同的规则**。但 `normalizeSettings` 校验 `customGroups` 时用的去重逻辑最初是这样写的：
+
+```ts
+dedupeBy(rules, (rule) => rule.groupKey, 'customGroups', issues)
+```
+
+**这行代码假设 `groupKey` 是每条规则的唯一身份。** 于是三条"故意共享同一个 groupKey"的规则，在校验时被当成了"用户不小心重复填了三遍"，后两条被直接丢弃——保存设置之后，合并功能形同虚设，只剩第一个域名生效。
+
+这是加默认值时自己踩到的坑（写完 `DEFAULT_CUSTOM_GROUPS` 三条规则后，`normalizeSettings(defaults) === defaults` 那条不变量测试立刻失败，和 8.3 的 bug 是同一个测试抓到的，只是这次问题出在去重上而不是 URL 规范化上）。修复是把"身份"从单纯的 `groupKey` 换成 `groupKey + hostname + pathPrefix` 的组合：
+
+```ts
+function customGroupIdentity(rule: CustomGroupRule): string {
+  const host = rule.hostname ?? rule.hostnameEndsWith ?? '';
+  return [rule.groupKey, host, rule.pathPrefix ?? ''].filter(Boolean).join(' ');
+}
+```
+
+这样，**真正的重复**（同一个 groupKey 配了两条完全一样的规则）还是会被识别并丢弃，但"同一个 groupKey、不同 hostname"这种合并写法不再被误伤。
+
+> 教训：一个字段被当作"去重键"之前，先想清楚它在业务上**是不是真的必须唯一**。`groupKey` 只是"这些标签该显示在同一张卡片上"的标记，从来没规定过"一个 groupKey 只能对应一条规则"。
+
+### 8.5 存储位置的选择
 
 | Key | 存储区 | 内容 | 为什么 |
 |-----|--------|------|--------|
@@ -1218,7 +1257,7 @@ document.addEventListener('input', (event) => {
 
 ### 12.1 规模
 
-**27 个测试文件，309 个用例**，用 [Vitest](https://vitest.dev) 运行，全套跑完约 0.8 秒。
+**27 个测试文件，311 个用例**，用 [Vitest](https://vitest.dev) 运行，全套跑完约 0.8 秒。
 
 ```bash
 npm test              # 跑一次
@@ -1451,8 +1490,8 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 | `platform/browser.ts` | 107 | `BrowserTabs` 接口 + Chrome 实现 |
 | `platform/storage.ts` | 74 | `KeyValueStore` 接口 + Chrome/内存实现 |
 | **config/** | | **设置系统** |
-| `config/schema.ts` | 351 | 校验与规范化（永不抛异常，含 v1→v2 字段兼容） |
-| `config/defaults.ts` | 92 | 默认设置 |
+| `config/schema.ts` | 368 | 校验与规范化（永不抛异常，含 v1→v2 字段兼容） |
+| `config/defaults.ts` | 117 | 默认设置（含 Custom groups 参考配置） |
 | `config/store.ts` | 69 | 读写 `chrome.storage.sync` |
 | **services/** | | **业务编排** |
 | `services/tab-actions.ts` | 191 | 所有对浏览器的写操作 |
@@ -1483,7 +1522,7 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 
 | 文件 | 行数 | 职责 |
 |------|-----:|------|
-| `tests/**` | ~3242 | 27 个测试文件，309 个用例 |
+| `tests/**` | ~3296 | 27 个测试文件，311 个用例 |
 | `styles/dashboard.css` | 1578 | 仪表盘视觉体系 |
 | `styles/options.css` | 376 | 设置页样式 |
 | `newtab/index.html` | 162 | 仪表盘骨架 |
@@ -1493,8 +1532,8 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 
 ### 规模小结
 
-- **源代码**：约 4888 行 TypeScript + 1963 行 CSS + 313 行 HTML
-- **测试代码**：约 3242 行，309 个用例
+- **源代码**：约 4930 行 TypeScript + 1963 行 CSS + 313 行 HTML
+- **测试代码**：约 3296 行，311 个用例
 - **构建产物**：约 130 KB，零运行时依赖
 - **测试/源码比**：约 0.66 —— 测试只覆盖真正会出错的地方，不追求行数
 
@@ -1502,7 +1541,7 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 
 ## 结语
 
-v1 用 1738 行的单文件证明了"**想法是对的**"；v2 用分层架构和 309 个测试让它"**可以继续长大**"。
+v1 用 1738 行的单文件证明了"**想法是对的**"；v2 用分层架构和 311 个测试让它"**可以继续长大**"。
 
 如果你只想从这份文档带走一句话，那就是：
 

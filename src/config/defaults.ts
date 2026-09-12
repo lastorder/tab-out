@@ -14,15 +14,19 @@ export const SETTINGS_VERSION = 2;
 /**
  * Sites always shown at the front of the dashboard.
  *
- * URLs are written in already-normalised form (with the trailing slash the URL
- * parser produces) so that `normalizeSettings(defaults)` returns the defaults
- * unchanged. The settings-schema tests assert that invariant.
+ * Empty by default. Calendar, Gmail and Chat used to live here as three
+ * separate pinned entries, but Pinned sites always renders one card per
+ * *exact hostname* — so even with a custom group merging those three
+ * hostnames into one card (see `DEFAULT_CUSTOM_GROUPS` below), pinning them
+ * would have reclaimed each hostname's tabs back out into three separate
+ * cards, undoing the merge. Moving them to custom groups is what actually
+ * puts them on one card; see that constant's doc comment for the full story.
+ *
+ * URLs must be written in already-normalised form (with the trailing slash
+ * the URL parser produces) so that `normalizeSettings(defaults)` returns the
+ * defaults unchanged. The settings-schema tests assert that invariant.
  */
-export const DEFAULT_PINNED_SITES: readonly PinnedSite[] = Object.freeze([
-  { url: 'https://calendar.google.com/', label: 'Google Calendar' },
-  { url: 'https://mail.google.com/', label: 'Gmail' },
-  { url: 'https://chat.google.com/', label: 'Google Chat' },
-]);
+export const DEFAULT_PINNED_SITES: readonly PinnedSite[] = Object.freeze([]);
 
 /** Whether pinned sites are applied by default. */
 export const DEFAULT_PINNED_ENABLED = true;
@@ -39,8 +43,11 @@ export const DEFAULT_PINNED_ENABLED = true;
  *
  * Note the Gmail rule: it matches every Gmail path (`pathPrefix: '/'`) but is
  * vetoed for URLs containing a thread fragment, so reading an email keeps its
- * own card. This is why the rule format is declarative rather than a
- * hard-coded predicate function.
+ * own card — in this case, the shared "Google" card from
+ * `DEFAULT_CUSTOM_GROUPS`, since disposable rules are checked first and only
+ * the vetoed (non-disposable) Gmail tabs ever reach the custom-group check.
+ * This is why the rule format is declarative rather than a hard-coded
+ * predicate function.
  *
  * Google Meet and Microsoft Teams meeting URLs are deliberately **not**
  * included here: unlike Zoom's post-join page, the call itself runs inside
@@ -63,8 +70,26 @@ export const DEFAULT_DISPOSABLE_RULES: readonly DisposableRule[] = Object.freeze
 /** Whether disposable rules are applied by default. */
 export const DEFAULT_DISPOSABLE_ENABLED = true;
 
-/** Rules that merge or split tabs into custom cards. Empty by default. */
-export const DEFAULT_CUSTOM_GROUPS: readonly CustomGroupRule[] = Object.freeze([]);
+/**
+ * Rules that merge or split tabs into custom cards.
+ *
+ * Shipped as a worked example of the "merge several hostnames into one
+ * card" pattern: Google Calendar, Gmail and Google Chat are three unrelated
+ * hostnames (`calendar.google.com`, `mail.google.com`, `chat.google.com`)
+ * that would otherwise render as three separate domain cards. Giving all
+ * three rules the same `groupKey` buckets their tabs into a single "Google"
+ * card instead — see `core/grouping.ts`'s `groupTabs()`, which keys cards by
+ * `groupKey`, not by hostname, for `kind: 'custom'` groups.
+ *
+ * This only works because these three hostnames are *not* also configured
+ * as pinned sites (see `DEFAULT_PINNED_SITES` above) — a pinned entry claims
+ * tabs by exact hostname and would split this same merge back apart.
+ */
+export const DEFAULT_CUSTOM_GROUPS: readonly CustomGroupRule[] = Object.freeze([
+  { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'calendar.google.com' },
+  { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'mail.google.com' },
+  { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'chat.google.com' },
+]);
 
 /** How many recently-closed tabs to remember by default. */
 export const DEFAULT_MAX_HISTORY_ITEMS = 100;

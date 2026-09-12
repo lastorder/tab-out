@@ -78,18 +78,35 @@ describe('normalizeSettings', () => {
       });
     });
 
-    it('requires a group key, defaults the label to it, and de-dupes keys', () => {
+    it('requires a group key, defaults the label to it, and drops a true duplicate', () => {
       const { settings, issues } = normalizeSettings({
         customGroups: [
-          { groupLabel: 'X', hostname: 'a.com' },
+          { groupLabel: 'X', hostname: 'a.com' }, // missing groupKey -> dropped
           { groupKey: 'work', hostname: 'a.com' },
-          { groupKey: 'work', hostname: 'b.com' },
+          { groupKey: 'work', hostname: 'a.com' }, // exact repeat -> dropped
         ],
       });
       expect(settings.customGroups).toEqual([
         { groupKey: 'work', groupLabel: 'work', hostname: 'a.com' },
       ]);
       expect(issues).toHaveLength(2);
+    });
+
+    it('keeps multiple rules that intentionally share one groupKey to merge several hostnames into one card', () => {
+      // This is the whole point of custom groups: a single card can only
+      // come from one CustomGroupRule per hostname, so merging N hostnames
+      // into one card means N rules with the same groupKey. De-duping on
+      // groupKey alone would silently keep only the first and defeat the
+      // feature — see DEFAULT_CUSTOM_GROUPS for the shipped example.
+      const { settings, issues } = normalizeSettings({
+        customGroups: [
+          { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'calendar.google.com' },
+          { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'mail.google.com' },
+          { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'chat.google.com' },
+        ],
+      });
+      expect(settings.customGroups).toHaveLength(3);
+      expect(issues).toEqual([]);
     });
   });
 

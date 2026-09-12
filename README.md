@@ -72,13 +72,21 @@ Click the gear icon in the top-right of the dashboard, or right-click the extens
 
 | Section | What it controls |
 |---------|------------------|
-| **Pinned sites** | Sites always shown first. With open tabs they get a normal card; without, a click-to-open placeholder. Has its own "Enabled" toggle — turn it off to stop applying the list without deleting it. |
+| **Pinned sites** | Sites always shown first. With open tabs they get a normal card; without, a click-to-open placeholder. Has its own "Enabled" toggle — turn it off to stop applying the list without deleting it. Empty by default. |
 | **Disposable tabs** | Which tabs are safe to close because reopening them costs nothing, collected into a shared **Disposable** card and counted by the "Tidy up" button. Also has its own "Enabled" toggle. |
 | **Custom groups** | Merge several hostnames into one card, or split one site into separate cards by path. |
 | **Tab sorting** | Whether tabs are reordered to match the dashboard automatically (on by default) or only via a manual "Sort tabs" banner. |
 | **History** | How many recently closed tabs to remember (default 100). |
 
 Settings are stored in `chrome.storage.sync`, so they follow your Chrome profile across machines. Use **Export** / **Import** to move them as JSON.
+
+### Custom groups: merging several hostnames into one card
+
+A single custom-group rule can only match one hostname. To merge *several* hostnames into one card, add one rule per hostname and give them all the **same `Group key`** — every tab matching any of those rules lands on the same card, titled by whichever `Card title` you gave the rules (keep it consistent across them).
+
+The shipped default is a worked example of exactly this: Google Calendar, Gmail and Google Chat are three unrelated hostnames (`calendar.google.com`, `mail.google.com`, `chat.google.com`) that would otherwise render as three separate cards. All three rules share `groupKey: google-suite`, so they render as one "Google" card instead.
+
+> ⚠️ **This only works because those three hostnames are *not* also configured as Pinned sites.** A pinned entry claims tabs by exact hostname — if `mail.google.com` were pinned *and* in a custom group, the pinned-site logic would pull its tabs back out into their own card, undoing the merge. That's why Pinned sites ships empty by default now: these three used to live there.
 
 ### Rule syntax
 
@@ -99,7 +107,7 @@ Blank matches only the site's root. Mix freely, e.g. `/*, !#inbox/, !#sent/` —
 
 The shipped defaults cover two shapes of "disposable": a site's own homepage (Gmail inbox, X home, GitHub front page, LinkedIn feed), and Zoom's post-join launcher page (`.zoom.us` + `/j/*`) — since the call itself runs in the desktop app, that leftover browser tab is pure clutter. Google Meet and Microsoft Teams are **not** included by default, because their calls run *inside* the tab — auto-closing one would end a live meeting. Add a rule for them yourself only if that's genuinely safe for how you use them.
 
-If you're upgrading from an older version with your own homepage rules already saved, they migrate automatically — nothing to re-enter. Click **"+ Add suggested rules"** on the Disposable tabs panel to pick up new or corrected defaults (like the Zoom rule) without touching what you've already configured.
+If you're upgrading from an older version with your own homepage or pinned-site rules already saved, they're untouched — a default only ever seeds a fresh install or a "Reset to defaults". Click **"+ Add suggested rules"** on the Disposable tabs panel to pick up new or corrected defaults (like the Zoom rule) without touching what you've already configured.
 
 ---
 

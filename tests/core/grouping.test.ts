@@ -87,6 +87,25 @@ describe('groupTabs', () => {
     const result = groupTabs(tabs('https://github.com/'), settings);
     expect(result).toEqual([{ key: 'github.com', kind: 'domain', tabs: expect.any(Array) }]);
   });
+
+  it('merges the three shipped Google hostnames into one custom card by default', () => {
+    // This is what DEFAULT_CUSTOM_GROUPS exists to demonstrate: three
+    // unrelated hostnames, one shared groupKey, one card. A reading of a
+    // specific Gmail thread is used (not the inbox) since the inbox itself
+    // is claimed by the disposable Gmail rule first.
+    const result = groupTabs(
+      tabs(
+        'https://calendar.google.com/',
+        'https://mail.google.com/mail/u/0/#inbox/thread123',
+        'https://chat.google.com/',
+      ),
+      defaultSettings(),
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ key: 'google-suite', label: 'Google', kind: 'custom' });
+    expect(result[0]!.tabs).toHaveLength(3);
+  });
 });
 
 describe('sortGroups', () => {
@@ -179,6 +198,9 @@ describe('applyPinnedSites', () => {
 
 describe('buildDashboardModel', () => {
   it('produces the full render model from raw tabs', () => {
+    const settings = emptySettings({
+      pinnedSites: [{ url: 'https://absent.com/' }],
+    });
     const model = buildDashboardModel(
       tabs(
         'chrome://newtab/',
@@ -186,13 +208,13 @@ describe('buildDashboardModel', () => {
         'https://github.com/acme/app',
         'https://example.com/',
       ),
-      defaultSettings(),
+      settings,
     );
 
     expect(model.realTabs).toHaveLength(3);
     expect(model.groupCount).toBe(model.orderedGroups.length);
-    // The three pinned defaults have no open tabs here.
-    expect(model.entries.filter((e) => e.type === 'placeholder')).toHaveLength(3);
+    // The one pinned site above has no open tabs.
+    expect(model.entries.filter((e) => e.type === 'placeholder')).toHaveLength(1);
   });
 
   it('returns an empty model when nothing is open', () => {
