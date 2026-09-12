@@ -99,7 +99,7 @@ describe('groupTabs', () => {
 });
 
 describe('sortGroups', () => {
-  it('orders Disposable first, then alphabetically by displayed title', () => {
+  it('sorts alphabetically by displayed title, with Disposable always last', () => {
     const groups = [
       { key: 'small.com', kind: 'domain' as const, tabs: tabs('https://small.com/') },
       {
@@ -111,12 +111,12 @@ describe('sortGroups', () => {
       { key: DISPOSABLE_GROUP_KEY, kind: 'disposable' as const, tabs: tabs('https://x.com/home') },
     ];
 
-    // Titles: Disposable, Big, GitHub, Small — alphabetical after Disposable.
+    // Titles: Big, GitHub, Small, then Disposable last regardless of title.
     expect(sortGroups(groups).map((g) => g.key)).toEqual([
-      DISPOSABLE_GROUP_KEY,
       'big.com',
       'github.com',
       'small.com',
+      DISPOSABLE_GROUP_KEY,
     ]);
   });
 
@@ -128,7 +128,7 @@ describe('sortGroups', () => {
     expect(sortGroups(groups).map((g) => g.key)).toEqual(['a.com', 'b.com']);
   });
 
-  it('orders pinned cards by their earliest configured pinnedIndex, ahead of unpinned ones, but still behind Disposable', () => {
+  it('orders pinned cards by their earliest configured pinnedIndex, ahead of unpinned ones, with Disposable still last', () => {
     const groups = [
       { key: DISPOSABLE_GROUP_KEY, kind: 'disposable' as const, tabs: tabs('https://x.com/home') },
       { key: 'aaa.com', kind: 'domain' as const, tabs: tabs('https://aaa.com/') },
@@ -141,10 +141,10 @@ describe('sortGroups', () => {
     ]);
 
     expect(sortGroups(groups, pinnedGroupOrder).map((g) => g.key)).toEqual([
-      DISPOSABLE_GROUP_KEY,
       'first-pin.com',
       'second-pin.com',
       'aaa.com',
+      DISPOSABLE_GROUP_KEY,
     ]);
   });
 });

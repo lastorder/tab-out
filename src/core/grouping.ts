@@ -119,10 +119,12 @@ export function groupDisplayTitle(group: Pick<TabGroup, 'key' | 'label'>): strin
 }
 
 /**
- * Orders groups for display: the Disposable card first, then cards holding a
- * pinned site — in the order those sites are configured, so an earlier
- * pinned entry's card leads even when pinned sites from different cards are
- * interleaved — then everything else, alphabetically by displayed title.
+ * Orders groups for display: cards holding a pinned site first — in the
+ * order those sites are configured, so an earlier pinned entry's card leads
+ * even when pinned sites from different cards are interleaved — then
+ * everything else alphabetically by displayed title, with the Disposable
+ * card always last (it's a housekeeping bucket, not content worth leading
+ * with).
  *
  * `pinnedGroupOrder` maps a card's `key` to the earliest `pinnedIndex` of any
  * pinned site that belongs under it (see {@link buildPinnedPriorities});
@@ -136,7 +138,7 @@ export function sortGroups(
   return [...groups].sort((a, b) => {
     const aDisposable = a.key === DISPOSABLE_GROUP_KEY;
     const bDisposable = b.key === DISPOSABLE_GROUP_KEY;
-    if (aDisposable !== bDisposable) return aDisposable ? -1 : 1;
+    if (aDisposable !== bDisposable) return aDisposable ? 1 : -1;
 
     const aIdx = pinnedGroupOrder.get(a.key);
     const bIdx = pinnedGroupOrder.get(b.key);
