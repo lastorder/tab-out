@@ -24,6 +24,11 @@ export function hostnameOf(url: string | undefined | null): string {
   return parseUrl(url)?.hostname ?? '';
 }
 
+/** Returns the pathname of a URL, or `''` when it cannot be parsed. */
+export function pathnameOf(url: string | undefined | null): string {
+  return parseUrl(url)?.pathname ?? '';
+}
+
 /**
  * Second-level public-suffix-style labels under which the *third* label from
  * the end is still part of the registrable domain (`acme.co.uk`, not

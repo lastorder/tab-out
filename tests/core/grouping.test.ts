@@ -3,6 +3,7 @@ import {
   attachPinnedPlaceholders,
   buildDashboardModel,
   buildPinnedPriorities,
+  matchPinnedSite,
   DISPOSABLE_GROUP_KEY,
   getRealTabs,
   groupDisplayTitle,
@@ -197,16 +198,18 @@ describe('attachPinnedPlaceholders', () => {
 });
 
 describe('buildPinnedPriorities', () => {
-  it('records the earliest pinnedIndex and configured label per hostname', () => {
-    const { byHostname, byGroupKey } = buildPinnedPriorities([
+  it('records one match per pinned site, with its path prefix, index and label', () => {
+    const { matches, byGroupKey } = buildPinnedPriorities([
       { url: 'https://calendar.google.com/', label: 'Google Calendar' },
       { url: 'https://mail.google.com/', label: 'Gmail' },
       { url: 'https://github.com/' },
     ]);
 
-    expect(byHostname.get('calendar.google.com')).toEqual({ pinnedIndex: 0, label: 'Google Calendar' });
-    expect(byHostname.get('mail.google.com')).toEqual({ pinnedIndex: 1, label: 'Gmail' });
-    expect(byHostname.get('github.com')).toEqual({ pinnedIndex: 2 });
+    expect(matches).toEqual([
+      { hostname: 'calendar.google.com', pathPrefix: '', pinnedIndex: 0, label: 'Google Calendar' },
+      { hostname: 'mail.google.com', pathPrefix: '', pinnedIndex: 1, label: 'Gmail' },
+      { hostname: 'github.com', pathPrefix: '', pinnedIndex: 2 },
+    ]);
 
     // Both Google hostnames share the registrable domain "google.com" — the
     // earlier-configured one (calendar, index 0) wins the card's priority.
@@ -214,18 +217,79 @@ describe('buildPinnedPriorities', () => {
     expect(byGroupKey.get('github.com')).toBe(2);
   });
 
-  it('keeps the first entry when two pinned sites share a hostname', () => {
-    const { byHostname } = buildPinnedPriorities([
+  it('keeps both entries when two pinned sites share a hostname but differ by path', () => {
+    // Collapsing these to one entry is exactly the bug that made every Jira
+    // tab on one host show the same pinned label.
+    const { matches } = buildPinnedPriorities([
       { url: 'https://a.com/x', label: 'First' },
       { url: 'https://a.com/y', label: 'Second' },
     ]);
-    expect(byHostname.get('a.com')).toEqual({ pinnedIndex: 0, label: 'First' });
+    expect(matches).toEqual([
+      { hostname: 'a.com', pathPrefix: '/x', pinnedIndex: 0, label: 'First' },
+      { hostname: 'a.com', pathPrefix: '/y', pinnedIndex: 1, label: 'Second' },
+    ]);
   });
 
   it('ignores an entry with an unusable URL', () => {
-    const { byHostname, byGroupKey } = buildPinnedPriorities([{ url: 'nonsense' }]);
-    expect(byHostname.size).toBe(0);
+    const { matches, byGroupKey } = buildPinnedPriorities([{ url: 'nonsense' }]);
+    expect(matches).toHaveLength(0);
     expect(byGroupKey.size).toBe(0);
+  });
+});
+
+describe('matchPinnedSite', () => {
+  const matches = buildPinnedPriorities([
+    { url: 'https://calendar.google.com/', label: 'Google Calendar' },
+    {
+      url: 'https://acme.atlassian.net/jira/software/c/projects/ROTF2OTROR/boards/10559',
+      label: 'Jira Board',
+    },
+  ]).matches;
+
+  it('still claims a pinned root after the page redirects to a deeper path', () => {
+    expect(
+      matchPinnedSite('https://calendar.google.com/calendar/u/0/r', matches)?.label,
+    ).toBe('Google Calendar');
+  });
+
+  it('does not claim an unrelated path on the same host as a deep pin', () => {
+    // The bug this whole change exists to fix: a pinned Jira board must not
+    // relabel every other Jira tab on the same hostname.
+    expect(matchPinnedSite('https://acme.atlassian.net/browse/ROTF2OTROR-260', matches)).toBeNull();
+  });
+
+  it('claims the pinned page itself and anything under it', () => {
+    const board = 'https://acme.atlassian.net/jira/software/c/projects/ROTF2OTROR/boards/10559';
+    expect(matchPinnedSite(board, matches)?.label).toBe('Jira Board');
+    expect(matchPinnedSite(`${board}/backlog`, matches)?.label).toBe('Jira Board');
+  });
+
+  it('respects path-segment boundaries, so /board never claims /boardroom', () => {
+    const pinned = buildPinnedPriorities([{ url: 'https://a.com/board', label: 'Board' }]).matches;
+    expect(matchPinnedSite('https://a.com/board', pinned)?.label).toBe('Board');
+    expect(matchPinnedSite('https://a.com/boardroom', pinned)).toBeNull();
+  });
+
+  it('prefers the most specific pin when a root and a deep page are both pinned', () => {
+    const pinned = buildPinnedPriorities([
+      { url: 'https://a.com/', label: 'Site' },
+      { url: 'https://a.com/deep/page', label: 'Deep' },
+    ]).matches;
+
+    expect(matchPinnedSite('https://a.com/deep/page', pinned)?.label).toBe('Deep');
+    expect(matchPinnedSite('https://a.com/deep/page/child', pinned)?.label).toBe('Deep');
+    expect(matchPinnedSite('https://a.com/elsewhere', pinned)?.label).toBe('Site');
+  });
+
+  it('ignores a different hostname, and an unparseable URL', () => {
+    expect(matchPinnedSite('https://other.com/', matches)).toBeNull();
+    expect(matchPinnedSite('nonsense', matches)).toBeNull();
+  });
+
+  it('treats a trailing slash as equivalent, in the pin and in the tab alike', () => {
+    const pinned = buildPinnedPriorities([{ url: 'https://a.com/team/', label: 'Team' }]).matches;
+    expect(matchPinnedSite('https://a.com/team', pinned)?.label).toBe('Team');
+    expect(matchPinnedSite('https://a.com/team/', pinned)?.label).toBe('Team');
   });
 });
 
@@ -322,11 +386,10 @@ describe('buildDashboardModel', () => {
       'first.example',
       'aaa.example',
     ]);
-    expect(model.pinnedHostnames.get('second.example')).toEqual({
-      pinnedIndex: 0,
-      label: 'Second Pin',
-    });
-    expect(model.pinnedHostnames.get('first.example')).toEqual({ pinnedIndex: 1, label: 'First Pin' });
+    expect(model.pinnedMatches).toEqual([
+      { hostname: 'second.example', pathPrefix: '', pinnedIndex: 0, label: 'Second Pin' },
+      { hostname: 'first.example', pathPrefix: '', pinnedIndex: 1, label: 'First Pin' },
+    ]);
   });
 });
 

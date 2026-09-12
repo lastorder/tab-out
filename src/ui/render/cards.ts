@@ -6,11 +6,11 @@
  * implementation detail of a card — nothing else renders them.
  */
 
-import type { PinnedHostnameEntry, PinnedPlaceholder } from '../../core/grouping';
+import type { PinnedMatch, PinnedPlaceholder } from '../../core/grouping';
 import type { TabGroup, TabInfo } from '../../types';
 import { analyzeDuplicates, uniqueByUrl } from '../../core/duplicates';
 import { friendlyDomain } from '../../core/domain';
-import { groupDisplayTitle } from '../../core/grouping';
+import { groupDisplayTitle, matchPinnedSite } from '../../core/grouping';
 import { displayTitle, withLocalhostPort } from '../../core/title';
 import { hostnameOf } from '../../core/url';
 import { escapeHtml, faviconUrl, plural } from '../html';
@@ -86,25 +86,22 @@ function renderPlaceholderChip(item: PinnedPlaceholder): string {
 }
 
 /** A chip item's pinned priority (its configured position), or `undefined` when it isn't pinned. */
-function itemPinnedIndex(
-  item: ChipItem,
-  pinnedHostnames: ReadonlyMap<string, PinnedHostnameEntry>,
-): number | undefined {
+function itemPinnedIndex(item: ChipItem, pinnedMatches: readonly PinnedMatch[]): number | undefined {
   if (item.kind === 'placeholder') return item.placeholder.pinnedIndex;
-  return pinnedHostnames.get(hostnameOf(item.tab.url))?.pinnedIndex;
+  return matchPinnedSite(item.tab.url, pinnedMatches)?.pinnedIndex;
 }
 
 /** The text a chip item sorts (and, for a pinned tab, displays) by. */
 function itemLabel(
   item: ChipItem,
   groupHostname: string,
-  pinnedHostnames: ReadonlyMap<string, PinnedHostnameEntry>,
+  pinnedMatches: readonly PinnedMatch[],
 ): string {
   if (item.kind === 'placeholder') {
     const hostname = hostnameOf(item.placeholder.site.url);
     return item.placeholder.site.label || friendlyDomain(hostname) || item.placeholder.site.url;
   }
-  const pinnedLabel = pinnedHostnames.get(hostnameOf(item.tab.url))?.label;
+  const pinnedLabel = matchPinnedSite(item.tab.url, pinnedMatches)?.label;
   return pinnedLabel || chipLabel(item.tab, groupHostname);
 }
 
@@ -116,18 +113,18 @@ function itemLabel(
 function sortChipItems(
   items: readonly ChipItem[],
   groupHostname: string,
-  pinnedHostnames: ReadonlyMap<string, PinnedHostnameEntry>,
+  pinnedMatches: readonly PinnedMatch[],
 ): ChipItem[] {
   return [...items].sort((a, b) => {
-    const aIdx = itemPinnedIndex(a, pinnedHostnames);
-    const bIdx = itemPinnedIndex(b, pinnedHostnames);
+    const aIdx = itemPinnedIndex(a, pinnedMatches);
+    const bIdx = itemPinnedIndex(b, pinnedMatches);
     const aPinned = aIdx !== undefined;
     const bPinned = bIdx !== undefined;
     if (aPinned !== bPinned) return aPinned ? -1 : 1;
     if (aPinned && bPinned && aIdx !== bIdx) return (aIdx as number) - (bIdx as number);
 
-    return itemLabel(a, groupHostname, pinnedHostnames).localeCompare(
-      itemLabel(b, groupHostname, pinnedHostnames),
+    return itemLabel(a, groupHostname, pinnedMatches).localeCompare(
+      itemLabel(b, groupHostname, pinnedMatches),
     );
   });
 }
@@ -137,10 +134,10 @@ function renderChipItem(
   item: ChipItem,
   counts: Record<string, number>,
   groupHostname: string,
-  pinnedHostnames: ReadonlyMap<string, PinnedHostnameEntry>,
+  pinnedMatches: readonly PinnedMatch[],
 ): string {
   if (item.kind === 'placeholder') return renderPlaceholderChip(item.placeholder);
-  const pinnedLabel = pinnedHostnames.get(hostnameOf(item.tab.url))?.label;
+  const pinnedLabel = matchPinnedSite(item.tab.url, pinnedMatches)?.label;
   return renderChip(item.tab, counts[item.tab.url] ?? 1, groupHostname, pinnedLabel);
 }
 
@@ -152,11 +149,11 @@ function renderOverflowItems(
   hiddenItems: readonly ChipItem[],
   counts: Record<string, number>,
   groupHostname: string,
-  pinnedHostnames: ReadonlyMap<string, PinnedHostnameEntry>,
+  pinnedMatches: readonly PinnedMatch[],
 ): string {
   if (hiddenItems.length === 0) return '';
   const hidden = hiddenItems
-    .map((item) => renderChipItem(item, counts, groupHostname, pinnedHostnames))
+    .map((item) => renderChipItem(item, counts, groupHostname, pinnedMatches))
     .join('');
 
   return `
@@ -184,15 +181,17 @@ export function groupTitle(group: TabGroup): string {
  * placeholders with zero real tabs at all (`tabCount` is 0), in which case
  * the tab-count badge and "Close all" button are omitted.
  *
- * `pinnedHostnames` (empty when pinning is off) sorts pinned chips — real or
+ * `pinnedMatches` (empty when pinning is off) sorts pinned chips — real or
  * placeholder — first, in configured order, ahead of every other chip, which
- * instead sorts alphabetically by its displayed label.
+ * instead sorts alphabetically by its displayed label. A real tab counts as
+ * pinned only when a pinned site claims its hostname *and* path prefix, so
+ * one deep pin on a big site never relabels every other tab on that host.
  */
 export function renderGroupCard(
   group: TabGroup,
   index: number,
   placeholders: readonly PinnedPlaceholder[] = [],
-  pinnedHostnames: ReadonlyMap<string, PinnedHostnameEntry> = new Map(),
+  pinnedMatches: readonly PinnedMatch[] = [],
 ): string {
   const tabCount = group.tabs.length;
   const { counts, hasDuplicates, extraCount } = analyzeDuplicates(group.tabs);
@@ -204,13 +203,13 @@ export function renderGroupCard(
     ...uniqueByUrl(group.tabs).map((tab): ChipItem => ({ kind: 'tab', tab })),
     ...placeholders.map((placeholder): ChipItem => ({ kind: 'placeholder', placeholder })),
   ];
-  const sorted = sortChipItems(items, groupHostname, pinnedHostnames);
+  const sorted = sortChipItems(items, groupHostname, pinnedMatches);
   const visible = sorted.slice(0, VISIBLE_CHIP_LIMIT);
   const hidden = sorted.slice(VISIBLE_CHIP_LIMIT);
 
   const chips =
-    visible.map((item) => renderChipItem(item, counts, groupHostname, pinnedHostnames)).join('') +
-    renderOverflowItems(hidden, counts, groupHostname, pinnedHostnames);
+    visible.map((item) => renderChipItem(item, counts, groupHostname, pinnedMatches)).join('') +
+    renderOverflowItems(hidden, counts, groupHostname, pinnedMatches);
 
   const dupeBadge = hasDuplicates
     ? `<span class="open-tabs-badge badge-amber">${escapeHtml(
@@ -265,11 +264,11 @@ export function renderGroupCard(
 export function renderGroups(
   groups: readonly TabGroup[],
   placeholders: ReadonlyMap<string, PinnedPlaceholder[]> = new Map(),
-  pinnedHostnames: ReadonlyMap<string, PinnedHostnameEntry> = new Map(),
+  pinnedMatches: readonly PinnedMatch[] = [],
 ): string {
   return groups
     .map((group, index) =>
-      renderGroupCard(group, index, placeholders.get(group.key) ?? [], pinnedHostnames),
+      renderGroupCard(group, index, placeholders.get(group.key) ?? [], pinnedMatches),
     )
     .join('');
 }

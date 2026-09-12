@@ -10,7 +10,7 @@
 import type { PinnedSite, TabGroup, TabInfo, TabOutSettings } from '../types';
 import { friendlyDomain } from './domain';
 import { isDisposable } from './matching';
-import { groupKeyOf, hostnameOf, isInternalUrl, registrableDomainOf } from './url';
+import { groupKeyOf, hostnameOf, isInternalUrl, pathnameOf, registrableDomainOf } from './url';
 
 /** Reserved key for the synthetic "Disposable" card. */
 export const DISPOSABLE_GROUP_KEY = '__disposable__';
@@ -30,15 +30,27 @@ export interface PinnedPlaceholder {
 }
 
 /**
- * What a pinned site contributes to *any* tab sharing its hostname — used to
- * sort that tab's chip first within its card (by `pinnedIndex`, matching the
- * order pinned sites are configured in) and, when the site has a configured
- * `label`, to prefer that label over the tab's own title. This is what keeps
- * `https://calendar.google.com/` labelled "Google Calendar" even after it
- * navigates to `https://calendar.google.com/calendar/u/0/r` — the hostname
- * (and therefore this lookup) doesn't change, only the path does.
+ * What a pinned site contributes to any tab it claims — used to sort that
+ * tab's chip first within its card (by `pinnedIndex`, matching the order
+ * pinned sites are configured in) and, when the site has a configured
+ * `label`, to prefer that label over the tab's own title.
+ *
+ * A pinned site claims a tab by hostname **plus path prefix** (see
+ * {@link matchPinnedSite}), not by hostname alone. That distinction is
+ * load-bearing in both directions:
+ *
+ *   - `https://calendar.google.com/` has prefix `/`, so it still claims
+ *     `https://calendar.google.com/calendar/u/0/r` after the redirect — the
+ *     label survives navigation, which is the whole point.
+ *   - a deep pin like `.../jira/software/c/projects/ROTF2OTROR/boards/10559`
+ *     claims only that board and pages under it, so an unrelated issue at
+ *     `/browse/ROTF2OTROR-260` on the same Jira host keeps its own title
+ *     instead of being mislabelled "Jira Board".
  */
-export interface PinnedHostnameEntry {
+export interface PinnedMatch {
+  hostname: string;
+  /** Pathname of the pinned URL, without a trailing slash (`''` means site root). */
+  pathPrefix: string;
   pinnedIndex: number;
   label?: string;
 }
@@ -49,8 +61,8 @@ export interface DashboardModel {
   orderedGroups: TabGroup[];
   /** Pinned-but-not-open placeholder chips, keyed by the card's `key`. */
   placeholders: Map<string, PinnedPlaceholder[]>;
-  /** Per-hostname pinned info (sort priority + preferred label), for chips. */
-  pinnedHostnames: Map<string, PinnedHostnameEntry>;
+  /** Pinned sites, for sorting and labelling chips. Empty when pinning is off. */
+  pinnedMatches: PinnedMatch[];
   /** Tabs that are real web pages (the denominator for "close all N tabs"). */
   realTabs: TabInfo[];
   /** Number of cards that actually have open tabs (placeholder-only cards don't count). */
@@ -193,31 +205,80 @@ export function attachPinnedPlaceholders(
 /**
  * Computes the two lookups the rest of the dashboard needs for pinned-site
  * priority: `byGroupKey` (registrable domain → earliest `pinnedIndex`) for
- * {@link sortGroups}, and `byHostname` (exact hostname → `pinnedIndex` +
- * optional `label`) for sorting and labelling chips *within* a card. Both
- * dedupe by "first entry wins" — if two pinned sites somehow resolve to the
- * same key, the earlier-configured one decides its priority.
+ * {@link sortGroups}, and `matches` (one {@link PinnedMatch} per pinned site,
+ * in configured order) for sorting and labelling chips *within* a card.
+ *
+ * `byGroupKey` dedupes by "first entry wins" — if two pinned sites resolve to
+ * the same card, the earlier-configured one decides its priority. `matches`
+ * deliberately keeps every entry: two pins on one hostname with different
+ * paths are a legitimate, separately-labelled pair, which is exactly the case
+ * hostname-only matching used to collapse.
  */
 export function buildPinnedPriorities(pinnedSites: readonly PinnedSite[]): {
-  byHostname: Map<string, PinnedHostnameEntry>;
+  matches: PinnedMatch[];
   byGroupKey: Map<string, number>;
 } {
-  const byHostname = new Map<string, PinnedHostnameEntry>();
+  const matches: PinnedMatch[] = [];
   const byGroupKey = new Map<string, number>();
 
   pinnedSites.forEach((site, pinnedIndex) => {
     const hostname = hostnameOf(site.url);
     if (!hostname) return;
 
-    if (!byHostname.has(hostname)) {
-      byHostname.set(hostname, site.label ? { pinnedIndex, label: site.label } : { pinnedIndex });
-    }
+    matches.push({
+      hostname,
+      pathPrefix: normalizePathPrefix(pathnameOf(site.url)),
+      pinnedIndex,
+      ...(site.label ? { label: site.label } : {}),
+    });
 
     const key = registrableDomainOf(hostname);
     if (key && !byGroupKey.has(key)) byGroupKey.set(key, pinnedIndex);
   });
 
-  return { byHostname, byGroupKey };
+  return { matches, byGroupKey };
+}
+
+/** Strips a trailing slash so `/jira/` and `/jira` compare identically; `/` becomes `''`. */
+function normalizePathPrefix(pathname: string): string {
+  return pathname.replace(/\/+$/, '');
+}
+
+/**
+ * Finds the pinned site that claims `url`, or `null`.
+ *
+ * A pinned site claims a URL when the hostname matches exactly *and* the
+ * URL's path sits at or under the pinned path. "Under" respects segment
+ * boundaries, so a pin on `/board` never claims `/boardroom`.
+ *
+ * When several pinned sites claim the same URL, the most specific one wins
+ * (longest `pathPrefix`), so pinning both a site root and a deep page inside
+ * it labels each tab with the closest match rather than the first one
+ * configured. Equal-specificity ties fall back to configured order.
+ */
+export function matchPinnedSite(
+  url: string,
+  matches: readonly PinnedMatch[],
+): PinnedMatch | null {
+  const hostname = hostnameOf(url);
+  if (!hostname) return null;
+  const pathname = normalizePathPrefix(pathnameOf(url));
+
+  let best: PinnedMatch | null = null;
+  for (const match of matches) {
+    if (match.hostname !== hostname) continue;
+    if (match.pathPrefix && pathname !== match.pathPrefix && !pathname.startsWith(`${match.pathPrefix}/`)) {
+      continue;
+    }
+    if (
+      !best ||
+      match.pathPrefix.length > best.pathPrefix.length ||
+      (match.pathPrefix.length === best.pathPrefix.length && match.pinnedIndex < best.pinnedIndex)
+    ) {
+      best = match;
+    }
+  }
+  return best;
 }
 
 /**
@@ -238,15 +299,15 @@ export function buildDashboardModel(
     ? attachPinnedPlaceholders(baseGroups, realTabs, settings.pinnedSites)
     : { groups: baseGroups, placeholders: new Map<string, PinnedPlaceholder[]>() };
 
-  const { byHostname, byGroupKey } = settings.pinnedEnabled
+  const { matches, byGroupKey } = settings.pinnedEnabled
     ? buildPinnedPriorities(settings.pinnedSites)
-    : { byHostname: new Map<string, PinnedHostnameEntry>(), byGroupKey: new Map<string, number>() };
+    : { matches: [] as PinnedMatch[], byGroupKey: new Map<string, number>() };
 
   const orderedGroups = sortGroups(withPlaceholders, byGroupKey);
 
   const groupCount = orderedGroups.filter((group) => group.tabs.length > 0).length;
 
-  return { orderedGroups, placeholders, pinnedHostnames: byHostname, realTabs, groupCount };
+  return { orderedGroups, placeholders, pinnedMatches: matches, realTabs, groupCount };
 }
 
 /**

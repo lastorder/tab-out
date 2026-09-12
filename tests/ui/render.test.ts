@@ -134,7 +134,7 @@ describe('renderGroupCard chip ordering and pinned labels', () => {
   it('sorts pinned chips first, in configured order, ahead of alphabetically-sorted unpinned chips', () => {
     // Distinct hostnames sharing one registrable domain, so they land in one
     // card together (like mail.google.com / calendar.google.com), while
-    // pinning — which matches by exact hostname — only picks out one of them.
+    // pinning — which matches by hostname + path prefix — picks out one.
     const zetaTab = tab('https://zeta.example/', { title: 'Zeta' });
     const alphaTab = tab('https://alpha.example/', { title: 'Alpha' });
     const pinnedTab = tab('https://pinned.example/', { title: 'Pinned Page' });
@@ -143,7 +143,7 @@ describe('renderGroupCard chip ordering and pinned labels', () => {
       { key: 'example', kind: 'domain', tabs: [zetaTab, alphaTab, pinnedTab] },
       0,
       [],
-      new Map([['pinned.example', { pinnedIndex: 0 }]]),
+      [{ hostname: 'pinned.example', pathPrefix: '', pinnedIndex: 0 }],
     );
 
     const pinnedPos = html.indexOf('Pinned Page');
@@ -166,11 +166,43 @@ describe('renderGroupCard chip ordering and pinned labels', () => {
       { key: 'google.com', kind: 'domain', tabs: [navigatedTab] },
       0,
       [],
-      new Map([['calendar.google.com', { pinnedIndex: 0, label: 'Google Calendar' }]]),
+      [{ hostname: 'calendar.google.com', pathPrefix: '', pinnedIndex: 0, label: 'Google Calendar' }],
     );
 
     expect(html).toContain('Google Calendar');
     expect(html).not.toContain('Week of');
+  });
+
+  it('leaves an unrelated tab on the same host alone when the pin is a deep page', () => {
+    // Regression: a pinned Jira board used to relabel *every* tab on that
+    // Jira hostname — issues, backlog, everything — because the label
+    // override matched on hostname alone.
+    const board = 'https://acme.atlassian.net/jira/software/c/projects/ROTF2OTROR/boards/10559';
+    const boardTab = tab(board, { title: 'ROTF2OTROR board - Agile Board' });
+    const issueTab = tab('https://acme.atlassian.net/browse/ROTF2OTROR-260', {
+      title: 'Fix the flaky deploy step',
+    });
+
+    const html = renderGroupCard(
+      { key: 'atlassian.net', kind: 'domain', tabs: [boardTab, issueTab] },
+      0,
+      [],
+      [
+        {
+          hostname: 'acme.atlassian.net',
+          pathPrefix: '/jira/software/c/projects/ROTF2OTROR/boards/10559',
+          pinnedIndex: 0,
+          label: 'Jira Board',
+        },
+      ],
+    );
+
+    expect(html).toContain('Jira Board');
+    // The issue keeps its own title rather than becoming a second "Jira Board".
+    expect(html).toContain('Fix the flaky deploy step');
+    expect(html).toContain(
+      'data-tab-url="https://acme.atlassian.net/browse/ROTF2OTROR-260" title="Fix the flaky deploy step"',
+    );
   });
 
   it('sorts a pinned real tab and a pinned placeholder together, by their configured order, across kinds', () => {
@@ -179,7 +211,7 @@ describe('renderGroupCard chip ordering and pinned labels', () => {
       { key: 'shared.example', kind: 'domain', tabs: [secondPinTab] },
       0,
       [{ site: { url: 'https://first.example/', label: 'First' }, pinnedIndex: 0 }],
-      new Map([['second.example', { pinnedIndex: 1 }]]),
+      [{ hostname: 'second.example', pathPrefix: '', pinnedIndex: 1 }],
     );
 
     expect(html.indexOf('First')).toBeLessThan(html.indexOf('data-tab-url="https://second.example/"'));
