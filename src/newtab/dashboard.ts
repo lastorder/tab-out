@@ -16,6 +16,7 @@ import type { BrowserTabs } from '../platform/browser';
 import type { TabGroup, TabOutSettings } from '../types';
 import { buildDashboardModel } from '../core/grouping';
 import { filterHistory } from '../core/history';
+import { clampSelection, searchTabsAndHistory, type SearchResult } from '../core/search';
 import { desiredTabOrder, needsSorting } from '../core/selection';
 import { selectTidyTabIds } from '../core/tidy';
 import { createDefaultSettings } from '../config/defaults';
@@ -24,6 +25,7 @@ import { escapeHtml, plural } from '../ui/html';
 import { ICONS } from '../ui/icons';
 import { renderEmptyState, renderGroups } from '../ui/render/cards';
 import { renderHistoryList } from '../ui/render/history';
+import { renderSearchResults } from '../ui/render/search';
 import { renderArchiveList, renderSavedItem } from '../ui/render/saved';
 
 export interface DashboardDeps {
@@ -78,6 +80,9 @@ export class Dashboard {
   #desiredOrder: number[] = [];
   /** What "Tidy up" would close, for the "tidy-tabs" action. */
   #tidySelection: TidySelection = EMPTY_TIDY_SELECTION;
+  /** Current Search overlay results and selection, for the controller's keyboard handling. */
+  #searchResults: SearchResult[] = [];
+  #searchSelectedIndex = -1;
 
   constructor(deps: DashboardDeps) {
     this.deps = deps;
@@ -337,6 +342,45 @@ export class Dashboard {
    */
   currentHistoryQuery(): string {
     return byId<HTMLInputElement>('historySearch')?.value ?? '';
+  }
+
+  /** The Search overlay's current result list, for the controller's Enter/arrow handling. */
+  get searchResults(): readonly SearchResult[] {
+    return this.#searchResults;
+  }
+
+  get searchSelectedIndex(): number {
+    return this.#searchSelectedIndex;
+  }
+
+  /**
+   * Repaints the Search overlay: open tabs + closed history, ranked by
+   * `searchTabsAndHistory`, with `selectedIndex` clamped back into range as
+   * the result count changes (e.g. typing narrows the list out from under
+   * whatever row was highlighted).
+   *
+   * Queried live rather than from `#model`, for the same reason
+   * `renderHistoryPanel` is: the moments the overlay is most useful (right
+   * after opening or closing a tab) are exactly when a stale snapshot would
+   * be wrong.
+   */
+  async renderSearchPanel(query: string, selectedIndex: number): Promise<void> {
+    const list = byId('searchResults');
+    if (!list) return;
+
+    const [tabs, history] = await Promise.all([
+      this.deps.browser.queryAll(),
+      this.deps.historyService.list(),
+    ]);
+
+    const results = searchTabsAndHistory(tabs, history, query);
+    this.#searchResults = results;
+    this.#searchSelectedIndex = clampSelection(selectedIndex, results.length);
+
+    list.innerHTML = renderSearchResults(results, this.#searchSelectedIndex, query.trim().length > 0);
+
+    const selected = list.querySelector('.search-result.selected');
+    selected?.scrollIntoView({ block: 'nearest' });
   }
 
   /**

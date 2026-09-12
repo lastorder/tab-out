@@ -9,6 +9,8 @@
 
 import type { Dashboard } from './dashboard';
 import { analyzeDuplicates } from '../core/duplicates';
+import { moveSelection } from '../core/search';
+import { matchesShortcut } from '../core/shortcut';
 import { groupTitle } from '../ui/render/cards';
 import { renderArchiveList } from '../ui/render/saved';
 import { describeTidyBreakdown } from './dashboard';
@@ -36,7 +38,9 @@ export type DashboardAction =
   | 'close-history'
   | 'reopen-history'
   | 'remove-history'
-  | 'clear-history';
+  | 'clear-history'
+  | 'close-search'
+  | 'open-search-result';
 
 /**
  * Coalesces browser tab events into one repaint, and lets the UI temporarily
@@ -145,6 +149,38 @@ export function attachController(
   const closeHistoryPanel = (): void => {
     const overlay = document.getElementById('historyOverlay');
     if (overlay) overlay.style.display = 'none';
+  };
+
+  const openSearchPanel = (): void => {
+    const overlay = document.getElementById('searchOverlay');
+    if (overlay) overlay.style.display = 'flex';
+    const input = document.getElementById('searchInput') as HTMLInputElement | null;
+    if (input) {
+      input.value = '';
+      input.focus();
+    }
+    void dashboard.renderSearchPanel('', 0);
+  };
+
+  const closeSearchPanel = (): void => {
+    const overlay = document.getElementById('searchOverlay');
+    if (overlay) overlay.style.display = 'none';
+  };
+
+  const isSearchPanelOpen = (): boolean =>
+    (document.getElementById('searchOverlay') as HTMLElement | null)?.style.display === 'flex';
+
+  /** Opens or focuses the tab/history result at `index`, then closes the overlay. */
+  const openSearchResult = async (index: number): Promise<void> => {
+    const result = dashboard.searchResults[index];
+    if (!result) return;
+
+    const outcome = await tabActions.openOrFocusTab(result.url);
+    if (result.kind === 'history' && result.historyId && outcome !== 'failed') {
+      await historyService.removeById(result.historyId);
+    }
+    closeSearchPanel();
+    toastOpenResult(outcome, result.url, result.kind === 'history');
   };
 
   const onClick = async (event: MouseEvent): Promise<void> => {
@@ -400,6 +436,18 @@ export function attachController(
         showToast('History cleared');
         return;
       }
+
+      case 'close-search': {
+        closeSearchPanel();
+        return;
+      }
+
+      case 'open-search-result': {
+        const index = Number(actionEl.dataset['index'] ?? -1);
+        if (index < 0) return;
+        await openSearchResult(index);
+        return;
+      }
     }
   };
 
@@ -431,23 +479,73 @@ export function attachController(
     await dashboard.renderHistoryPanel(input.value);
   };
 
+  const onSearchInput = async (event: Event): Promise<void> => {
+    const input = event.target as HTMLInputElement | null;
+    if (!input || input.id !== 'searchInput') return;
+    await dashboard.renderSearchPanel(input.value, 0);
+  };
+
   /** Clicking the dark backdrop (not the modal card itself) closes the panel. */
   const onHistoryBackdropClick = (event: MouseEvent): void => {
     if (event.target === document.getElementById('historyOverlay')) closeHistoryPanel();
   };
 
-  /** Escape closes the History panel, matching standard modal behaviour. */
+  const onSearchBackdropClick = (event: MouseEvent): void => {
+    if (event.target === document.getElementById('searchOverlay')) closeSearchPanel();
+  };
+
+  /**
+   * Global keyboard handling: the configurable shortcut toggles the Search
+   * overlay from anywhere on the page (not just while an input is focused —
+   * that's the whole point of a shortcut), Escape closes whichever overlay
+   * is open, and — while the Search overlay is open — the arrow keys move
+   * its selection and Enter opens/focuses the highlighted result.
+   */
   const onKeydown = (event: KeyboardEvent): void => {
-    if (event.key === 'Escape') closeHistoryPanel();
+    if (matchesShortcut(event, dashboard.settings.searchShortcut)) {
+      event.preventDefault();
+      if (isSearchPanelOpen()) {
+        closeSearchPanel();
+      } else {
+        openSearchPanel();
+      }
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      if (isSearchPanelOpen()) closeSearchPanel();
+      else closeHistoryPanel();
+      return;
+    }
+
+    if (!isSearchPanelOpen()) return;
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const delta = event.key === 'ArrowDown' ? 1 : -1;
+      const next = moveSelection(dashboard.searchSelectedIndex, delta, dashboard.searchResults.length);
+      void dashboard.renderSearchPanel(
+        (document.getElementById('searchInput') as HTMLInputElement | null)?.value ?? '',
+        next,
+      );
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void openSearchResult(dashboard.searchSelectedIndex);
+    }
   };
 
   const clickHandler = (event: MouseEvent): void => {
     void onClick(event);
     onHistoryBackdropClick(event);
+    onSearchBackdropClick(event);
   };
   const inputHandler = (event: Event): void => {
     void onArchiveSearch(event);
     void onHistorySearch(event);
+    void onSearchInput(event);
   };
 
   document.addEventListener('click', clickHandler);

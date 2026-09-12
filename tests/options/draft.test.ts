@@ -23,6 +23,7 @@ const blankDraft = {
   disposable: [],
   maxHistoryItems: '100',
   autoSortTabs: true,
+  searchShortcut: { key: 'f', ctrl: true, meta: false, alt: false, shift: false },
 };
 
 describe('hostname field conversion', () => {

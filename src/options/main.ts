@@ -9,9 +9,10 @@
 import type { DraftRow, DraftState, SectionName } from './draft';
 import { SettingsStore } from '../config/store';
 import { createChromeStore } from '../platform/storage';
-import { createDefaultSettings, DEFAULT_DISPOSABLE_RULES } from '../config/defaults';
+import { createDefaultSettings, DEFAULT_DISPOSABLE_RULES, DEFAULT_SEARCH_SHORTCUT } from '../config/defaults';
 import { parseSettingsJson, stringifySettings } from '../config/schema';
 import { TabHistoryService } from '../services/tab-history';
+import { comboFromEvent, formatShortcut } from '../core/shortcut';
 import {
   addRow,
   addSuggestedDisposableRules,
@@ -26,6 +27,9 @@ import { renderIssues, renderSection } from './render';
 
 const store = new SettingsStore(createChromeStore('sync'));
 const historyService = new TabHistoryService(createChromeStore('local'));
+
+/** Whether to render the shortcut using Mac symbols (⌘) or Win-style text (Ctrl+). */
+const IS_MAC = /mac/i.test(navigator.platform || navigator.userAgent || '');
 
 /** Container element for each table. */
 const CONTAINERS: Record<SectionName, string> = {
@@ -66,6 +70,11 @@ function render(): void {
   const autoSortInput = byId<HTMLInputElement>('autoSortTabs');
   if (autoSortInput && autoSortInput.checked !== draft.autoSortTabs) {
     autoSortInput.checked = draft.autoSortTabs;
+  }
+
+  const shortcutInput = byId<HTMLInputElement>('searchShortcut');
+  if (shortcutInput) {
+    shortcutInput.value = formatShortcut(draft.searchShortcut, IS_MAC);
   }
 
   // The two "apply this section at all" toggles: sync the checkbox, and dim
@@ -295,6 +304,24 @@ window.addEventListener('beforeunload', (event) => {
   if (!isDirty()) return;
   event.preventDefault();
   event.returnValue = '';
+});
+
+/**
+ * The shortcut recorder: focus the field, press a combo, it's captured.
+ * Typing normally is disabled (`readonly` in the markup) so the only way to
+ * change the value is to press the actual keys you want bound.
+ */
+byId<HTMLInputElement>('searchShortcut')?.addEventListener('keydown', (event) => {
+  event.preventDefault();
+  const combo = comboFromEvent(event);
+  if (!combo) return; // a bare modifier key — wait for the real key press
+  draft = { ...draft, searchShortcut: combo };
+  render();
+});
+
+byId('resetShortcutBtn')?.addEventListener('click', () => {
+  draft = { ...draft, searchShortcut: { ...DEFAULT_SEARCH_SHORTCUT } };
+  render();
 });
 
 /* ---------------------------------------------------------------

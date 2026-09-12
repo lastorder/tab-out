@@ -42,6 +42,26 @@
   </header>
 
   <!-- ================================================================
+       SEARCH OVERLAY — search across open tabs + closed-tab history.
+       Toggled by the configurable shortcut (default Cmd+F on Mac).
+       Hidden by default; closed by the X, the backdrop, or Escape.
+       See newtab/controller.ts and newtab/dashboard.ts#renderSearchPanel.
+       ================================================================ -->
+  <div class="search-overlay" id="searchOverlay" style="display:none">
+    <div class="search-modal">
+      <div class="search-modal-header">
+        <input type="text" class="search-input" id="searchInput" placeholder="Search open tabs and history...">
+        <button class="icon-btn icon-btn-sm" data-action="close-search" aria-label="Close search" title="Close">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="search-results" id="searchResults"></div>
+    </div>
+  </div>
+
+  <!-- ================================================================
        HISTORY PANEL — recently closed tabs, opened via the header button.
        Hidden by default; closed by the X, the backdrop, or Escape.
        See newtab/controller.ts and newtab/dashboard.ts#renderHistoryPanel.

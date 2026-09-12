@@ -21,6 +21,7 @@ describe('normalizeSettings', () => {
       disposableRules: [{ hostname: 'x.com', pathExact: ['/home'] }],
       maxHistoryItems: 250,
       autoSortTabs: false,
+      searchShortcut: { key: 'k', ctrl: true, meta: false, alt: false, shift: true },
     };
     expect(normalizeSettings(input).settings).toEqual(input);
   });
@@ -129,6 +130,32 @@ describe('normalizeSettings', () => {
 
     it('reports no issue when a scalar is simply absent', () => {
       expect(normalizeSettings({}).issues).toEqual([]);
+    });
+  });
+
+  describe('searchShortcut', () => {
+    it('defaults to the platform default when absent', () => {
+      expect(normalizeSettings({}).settings.searchShortcut).toEqual(createDefaultSettings().searchShortcut);
+    });
+
+    it('round-trips a valid combo, coercing modifiers to strict booleans', () => {
+      const { settings, issues } = normalizeSettings({
+        searchShortcut: { key: 'K', ctrl: true, meta: 0, alt: undefined, shift: 'yes' },
+      });
+      expect(settings.searchShortcut).toEqual({ key: 'k', ctrl: true, meta: false, alt: false, shift: false });
+      expect(issues).toEqual([]);
+    });
+
+    it('falls back to the default and reports why when the key is missing', () => {
+      const { settings, issues } = normalizeSettings({ searchShortcut: { ctrl: true } });
+      expect(settings.searchShortcut).toEqual(createDefaultSettings().searchShortcut);
+      expect(issues[0]!.path).toBe('searchShortcut');
+    });
+
+    it('falls back to the default when the value is not an object', () => {
+      expect(normalizeSettings({ searchShortcut: 'cmd+f' }).settings.searchShortcut).toEqual(
+        createDefaultSettings().searchShortcut,
+      );
     });
   });
 

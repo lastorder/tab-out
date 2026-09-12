@@ -10,6 +10,7 @@
 
 import type {
   DisposableRule,
+  KeyCombo,
   PinnedSite,
   TabOutSettings,
 } from '../types';
@@ -20,6 +21,7 @@ import {
   DEFAULT_AUTO_SORT_TABS,
   DEFAULT_PINNED_ENABLED,
   DEFAULT_DISPOSABLE_ENABLED,
+  DEFAULT_SEARCH_SHORTCUT,
 } from './defaults';
 import { normalizeUrlInput } from '../core/url';
 
@@ -185,6 +187,36 @@ export function normalizeDisposableEnabled(raw: unknown, issues: ValidationIssue
   return normalizeBoolean(raw, 'disposableEnabled', DEFAULT_DISPOSABLE_ENABLED, issues);
 }
 
+/**
+ * Coerces the Search-overlay shortcut to a valid {@link KeyCombo}, falling
+ * back to the platform default whenever the raw value can't be trusted —
+ * missing key, non-boolean modifier, or not an object at all.
+ */
+export function normalizeSearchShortcut(raw: unknown, issues: ValidationIssue[]): KeyCombo {
+  if (!isObject(raw)) {
+    if (raw !== undefined) {
+      issues.push({ path: 'searchShortcut', message: 'Expected an object; using the default.' });
+    }
+    return { ...DEFAULT_SEARCH_SHORTCUT };
+  }
+
+  const key = asTrimmedString(raw['key']);
+  if (!key) {
+    issues.push({ path: 'searchShortcut', message: 'Missing "key"; using the default.' });
+    return { ...DEFAULT_SEARCH_SHORTCUT };
+  }
+
+  const asBool = (value: unknown): boolean => value === true;
+
+  return {
+    key: key.toLowerCase(),
+    ctrl: asBool(raw['ctrl']),
+    meta: asBool(raw['meta']),
+    alt: asBool(raw['alt']),
+    shift: asBool(raw['shift']),
+  };
+}
+
 /** Drops later entries that reuse an earlier entry's identity. */
 function dedupeBy<T>(items: T[], keyOf: (item: T) => string, path: string, issues: ValidationIssue[]): T[] {
   const seen = new Set<string>();
@@ -252,6 +284,7 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
   const disposableEnabled = normalizeDisposableEnabled(raw['disposableEnabled'], issues);
   const maxHistoryItems = normalizeMaxHistoryItems(raw['maxHistoryItems'], issues);
   const autoSortTabs = normalizeAutoSortTabs(raw['autoSortTabs'], issues);
+  const searchShortcut = normalizeSearchShortcut(raw['searchShortcut'], issues);
 
   return {
     settings: {
@@ -262,6 +295,7 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
       disposableRules,
       maxHistoryItems,
       autoSortTabs,
+      searchShortcut,
     },
     issues,
   };

@@ -54,6 +54,7 @@ export function emptySettings(overrides: Partial<TabOutSettings> = {}): TabOutSe
     disposableRules: [],
     maxHistoryItems: 100,
     autoSortTabs: true,
+    searchShortcut: { key: 'f', ctrl: true, meta: false, alt: false, shift: false },
     ...overrides,
   };
 }

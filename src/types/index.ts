@@ -67,6 +67,16 @@ export interface DisposableRule {
   urlNotContains?: string[];
 }
 
+/** A single key combination: one non-modifier key plus whichever modifiers matter. */
+export interface KeyCombo {
+  /** `event.key`, lower-cased (e.g. `'f'`, `'k'`, `'/'`). */
+  key: string;
+  ctrl: boolean;
+  meta: boolean;
+  alt: boolean;
+  shift: boolean;
+}
+
 /** The complete, user-editable configuration. */
 export interface TabOutSettings {
   version: number;
@@ -91,6 +101,13 @@ export interface TabOutSettings {
    * with a manual "Sort tabs" button instead.
    */
   autoSortTabs: boolean;
+  /**
+   * The keyboard shortcut that opens/closes the Search overlay. Only active
+   * on the Tab Out page itself — it's registered with a plain `keydown`
+   * listener there, not a `chrome.commands` global shortcut, so it never
+   * fires while the user is typing in some other site's tab.
+   */
+  searchShortcut: KeyCombo;
 }
 
 /** An item on the "Saved for later" checklist. */

@@ -9,7 +9,7 @@
  * converting back to settings — is unit tested without a DOM.
  */
 
-import type { DisposableRule, TabOutSettings } from '../types';
+import type { DisposableRule, KeyCombo, TabOutSettings } from '../types';
 import type { NormalizeResult } from '../config/schema';
 import { normalizeSettings } from '../config/schema';
 import { SETTINGS_VERSION } from '../config/defaults';
@@ -49,6 +49,8 @@ export interface DraftState {
   maxHistoryItems: string;
   /** "Automatically sort tabs to match the dashboard" — a checkbox, not a row table. */
   autoSortTabs: boolean;
+  /** The Search overlay's keyboard shortcut — a recorder widget, not a row table. */
+  searchShortcut: KeyCombo;
 }
 
 /** Which row-table a row belongs to. Scalar fields are not tables. */
@@ -172,6 +174,7 @@ export function settingsToDraft(settings: TabOutSettings): DraftState {
     disposable: settings.disposableRules.map(disposableRuleToRow),
     maxHistoryItems: String(settings.maxHistoryItems),
     autoSortTabs: settings.autoSortTabs,
+    searchShortcut: { ...settings.searchShortcut },
   };
 }
 
@@ -202,6 +205,7 @@ export function draftToSettings(draft: DraftState): NormalizeResult {
     disposableRules,
     maxHistoryItems: draft.maxHistoryItems,
     autoSortTabs: draft.autoSortTabs,
+    searchShortcut: draft.searchShortcut,
   });
 }
 

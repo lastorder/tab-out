@@ -6,7 +6,17 @@
  * only affects new installs and anyone who hits "Reset to defaults".
  */
 
-import type { DisposableRule, PinnedSite, TabOutSettings } from '../types';
+import type { DisposableRule, KeyCombo, PinnedSite, TabOutSettings } from '../types';
+import { defaultSearchShortcut } from '../core/shortcut';
+
+/**
+ * Whether this default set targets macOS. Read once at module load — the
+ * only place that needs it — since defaults are generated per-runtime, not
+ * per-render. `navigator` is absent in the Node test environment, hence the
+ * guard.
+ */
+const IS_MAC =
+  typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || navigator.userAgent || '');
 
 /** Bumped whenever the stored shape changes; drives migrations. */
 export const SETTINGS_VERSION = 3;
@@ -83,6 +93,13 @@ export const DEFAULT_MAX_HISTORY_ITEMS = 100;
  */
 export const DEFAULT_AUTO_SORT_TABS = true;
 
+/**
+ * The default Search-overlay shortcut: Cmd+F on macOS, Ctrl+F elsewhere —
+ * whichever key survives per-platform "find on page" muscle memory, since
+ * the overlay works like an omnibox-style find across tabs and history.
+ */
+export const DEFAULT_SEARCH_SHORTCUT: KeyCombo = defaultSearchShortcut(IS_MAC);
+
 /** Returns a fresh, deeply-copied default settings object. */
 export function createDefaultSettings(): TabOutSettings {
   return {
@@ -93,5 +110,6 @@ export function createDefaultSettings(): TabOutSettings {
     disposableRules: DEFAULT_DISPOSABLE_RULES.map((rule) => ({ ...rule })),
     maxHistoryItems: DEFAULT_MAX_HISTORY_ITEMS,
     autoSortTabs: DEFAULT_AUTO_SORT_TABS,
+    searchShortcut: { ...DEFAULT_SEARCH_SHORTCUT },
   };
 }
