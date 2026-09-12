@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   attachPinnedPlaceholders,
   buildDashboardModel,
+  buildPinnedPriorities,
   DISPOSABLE_GROUP_KEY,
   getRealTabs,
+  groupDisplayTitle,
   groupTabs,
   pinnedInsertIndex,
   sortGroups,
@@ -97,7 +99,7 @@ describe('groupTabs', () => {
 });
 
 describe('sortGroups', () => {
-  it('orders Disposable first, then domains the rules mention, then by size, then by key', () => {
+  it('orders Disposable first, then alphabetically by displayed title', () => {
     const groups = [
       { key: 'small.com', kind: 'domain' as const, tabs: tabs('https://small.com/') },
       {
@@ -109,37 +111,49 @@ describe('sortGroups', () => {
       { key: DISPOSABLE_GROUP_KEY, kind: 'disposable' as const, tabs: tabs('https://x.com/home') },
     ];
 
-    expect(sortGroups(groups, defaultSettings().disposableRules).map((g) => g.key)).toEqual([
+    // Titles: Disposable, Big, GitHub, Small — alphabetical after Disposable.
+    expect(sortGroups(groups).map((g) => g.key)).toEqual([
       DISPOSABLE_GROUP_KEY,
-      'github.com',
       'big.com',
+      'github.com',
       'small.com',
     ]);
   });
 
-  it('breaks ties on key, so the layout does not shuffle between renders', () => {
+  it('sorts case-insensitively by displayed title, not by key', () => {
     const groups = [
       { key: 'b.com', kind: 'domain' as const, tabs: tabs('https://b.com/') },
       { key: 'a.com', kind: 'domain' as const, tabs: tabs('https://a.com/') },
     ];
-    expect(sortGroups(groups, []).map((g) => g.key)).toEqual(['a.com', 'b.com']);
+    expect(sortGroups(groups).map((g) => g.key)).toEqual(['a.com', 'b.com']);
   });
 
-  it('bumps a pinned card ahead of same-sized or bigger non-pinned domains, but still behind Disposable', () => {
+  it('orders pinned cards by their earliest configured pinnedIndex, ahead of unpinned ones, but still behind Disposable', () => {
     const groups = [
       { key: DISPOSABLE_GROUP_KEY, kind: 'disposable' as const, tabs: tabs('https://x.com/home') },
-      {
-        key: 'big.com',
-        kind: 'domain' as const,
-        tabs: tabs('https://big.com/1', 'https://big.com/2'),
-      },
-      { key: 'pinned.com', kind: 'domain' as const, tabs: tabs('https://pinned.com/') },
+      { key: 'aaa.com', kind: 'domain' as const, tabs: tabs('https://aaa.com/') },
+      { key: 'second-pin.com', kind: 'domain' as const, tabs: tabs('https://second-pin.com/') },
+      { key: 'first-pin.com', kind: 'domain' as const, tabs: tabs('https://first-pin.com/') },
     ];
-    expect(sortGroups(groups, [], new Set(['pinned.com'])).map((g) => g.key)).toEqual([
-      DISPOSABLE_GROUP_KEY,
-      'pinned.com',
-      'big.com',
+    const pinnedGroupOrder = new Map([
+      ['first-pin.com', 0],
+      ['second-pin.com', 1],
     ]);
+
+    expect(sortGroups(groups, pinnedGroupOrder).map((g) => g.key)).toEqual([
+      DISPOSABLE_GROUP_KEY,
+      'first-pin.com',
+      'second-pin.com',
+      'aaa.com',
+    ]);
+  });
+});
+
+describe('groupDisplayTitle', () => {
+  it('uses the explicit label, else the friendly brand name, else Disposable', () => {
+    expect(groupDisplayTitle({ key: 'github.com' })).toBe('GitHub');
+    expect(groupDisplayTitle({ key: 'work.com', label: 'Work' })).toBe('Work');
+    expect(groupDisplayTitle({ key: DISPOSABLE_GROUP_KEY })).toBe('Disposable');
   });
 });
 
@@ -179,6 +193,39 @@ describe('attachPinnedPlaceholders', () => {
     const { groups, placeholders } = attachPinnedPlaceholders([], [], [{ url: 'nonsense' }]);
     expect(groups).toHaveLength(0);
     expect(placeholders.size).toBe(0);
+  });
+});
+
+describe('buildPinnedPriorities', () => {
+  it('records the earliest pinnedIndex and configured label per hostname', () => {
+    const { byHostname, byGroupKey } = buildPinnedPriorities([
+      { url: 'https://calendar.google.com/', label: 'Google Calendar' },
+      { url: 'https://mail.google.com/', label: 'Gmail' },
+      { url: 'https://github.com/' },
+    ]);
+
+    expect(byHostname.get('calendar.google.com')).toEqual({ pinnedIndex: 0, label: 'Google Calendar' });
+    expect(byHostname.get('mail.google.com')).toEqual({ pinnedIndex: 1, label: 'Gmail' });
+    expect(byHostname.get('github.com')).toEqual({ pinnedIndex: 2 });
+
+    // Both Google hostnames share the registrable domain "google.com" — the
+    // earlier-configured one (calendar, index 0) wins the card's priority.
+    expect(byGroupKey.get('google.com')).toBe(0);
+    expect(byGroupKey.get('github.com')).toBe(2);
+  });
+
+  it('keeps the first entry when two pinned sites share a hostname', () => {
+    const { byHostname } = buildPinnedPriorities([
+      { url: 'https://a.com/x', label: 'First' },
+      { url: 'https://a.com/y', label: 'Second' },
+    ]);
+    expect(byHostname.get('a.com')).toEqual({ pinnedIndex: 0, label: 'First' });
+  });
+
+  it('ignores an entry with an unusable URL', () => {
+    const { byHostname, byGroupKey } = buildPinnedPriorities([{ url: 'nonsense' }]);
+    expect(byHostname.size).toBe(0);
+    expect(byGroupKey.size).toBe(0);
   });
 });
 
@@ -254,6 +301,32 @@ describe('buildDashboardModel', () => {
     expect(model.orderedGroups).toHaveLength(1);
     expect(model.orderedGroups[0]!.tabs).toHaveLength(2);
     expect(model.placeholders.size).toBe(0);
+  });
+
+  it('orders interleaved pinned cards by configured order, ahead of unpinned cards, and exposes per-hostname pinned info', () => {
+    const settings = emptySettings({
+      pinnedSites: [
+        { url: 'https://second.example/', label: 'Second Pin' },
+        { url: 'https://first.example/', label: 'First Pin' },
+      ],
+    });
+    // "aaa.example" would otherwise sort first alphabetically, but neither
+    // pinned site is configured before it — both pinned cards still lead.
+    const model = buildDashboardModel(
+      tabs('https://aaa.example/', 'https://first.example/', 'https://second.example/'),
+      settings,
+    );
+
+    expect(model.orderedGroups.map((g) => g.key)).toEqual([
+      'second.example',
+      'first.example',
+      'aaa.example',
+    ]);
+    expect(model.pinnedHostnames.get('second.example')).toEqual({
+      pinnedIndex: 0,
+      label: 'Second Pin',
+    });
+    expect(model.pinnedHostnames.get('first.example')).toEqual({ pinnedIndex: 1, label: 'First Pin' });
   });
 });
 

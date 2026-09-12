@@ -129,9 +129,9 @@ describe('Dashboard.render', () => {
     const cards = document.querySelectorAll<HTMLElement>('[data-group-index]');
     const first = dashboard.groupAt(Number(cards[0]!.dataset['groupIndex']));
 
-    // GitHub has more tabs, so it sorts first.
-    expect(first!.key).toBe('github.com');
-    expect(first!.tabs).toHaveLength(2);
+    // "Example" sorts before "GitHub" alphabetically.
+    expect(first!.key).toBe('example.com');
+    expect(first!.tabs).toHaveLength(1);
   });
 
   it('renders a placeholder-only card for a pinned site with no open tabs', async () => {
@@ -148,12 +148,13 @@ describe('Dashboard.render', () => {
   it('shows the sort banner only when the tab bar is out of order, if auto-sort is off', async () => {
     const banner = () => document.getElementById('tabSortBanner')!.style.display;
 
-    // github.com sorts first in the dashboard, but sits last in the tab bar.
+    // example.com sorts first alphabetically ("Example" < "GitHub"), but sits
+    // last in the tab bar here.
     const { dashboard } = await buildDashboard(
       [
-        tab('https://example.com/', { index: 0, windowId: 1 }),
-        tab('https://github.com/a', { index: 1, windowId: 1 }),
-        tab('https://github.com/b', { index: 2, windowId: 1 }),
+        tab('https://github.com/a', { index: 0, windowId: 1 }),
+        tab('https://github.com/b', { index: 1, windowId: 1 }),
+        tab('https://example.com/', { index: 2, windowId: 1 }),
       ],
       { autoSortTabs: false },
     );
@@ -164,9 +165,9 @@ describe('Dashboard.render', () => {
     // Now in matching order.
     const ordered = await buildDashboard(
       [
-        tab('https://github.com/a', { index: 0, windowId: 1 }),
-        tab('https://github.com/b', { index: 1, windowId: 1 }),
-        tab('https://example.com/', { index: 2, windowId: 1 }),
+        tab('https://example.com/', { index: 0, windowId: 1 }),
+        tab('https://github.com/a', { index: 1, windowId: 1 }),
+        tab('https://github.com/b', { index: 2, windowId: 1 }),
       ],
       { autoSortTabs: false },
     );
@@ -176,26 +177,26 @@ describe('Dashboard.render', () => {
 
   it('sorts tabs automatically by default, keeping the banner hidden', async () => {
     const { dashboard, browser } = await buildDashboard([
-      tab('https://example.com/', { id: 1, index: 0, windowId: 1 }),
-      tab('https://github.com/a', { id: 2, index: 1, windowId: 1 }),
-      tab('https://github.com/b', { id: 3, index: 2, windowId: 1 }),
+      tab('https://github.com/a', { id: 1, index: 0, windowId: 1 }),
+      tab('https://github.com/b', { id: 2, index: 1, windowId: 1 }),
+      tab('https://example.com/', { id: 3, index: 2, windowId: 1 }),
     ]);
     await dashboard.render();
 
     expect(document.getElementById('tabSortBanner')!.style.display).toBe('none');
-    // github.com (2 tabs) sorts ahead of example.com (1 tab).
+    // example.com sorts ahead of github.com alphabetically.
     expect(browser.moved).toEqual([
-      { tabId: 2, index: 0 },
-      { tabId: 3, index: 1 },
-      { tabId: 1, index: 2 },
+      { tabId: 3, index: 0 },
+      { tabId: 1, index: 1 },
+      { tabId: 2, index: 2 },
     ]);
   });
 
   it('does not move anything when auto-sort is on but the order already matches', async () => {
     const { dashboard, browser } = await buildDashboard([
-      tab('https://github.com/a', { id: 1, index: 0, windowId: 1 }),
-      tab('https://github.com/b', { id: 2, index: 1, windowId: 1 }),
-      tab('https://example.com/', { id: 3, index: 2, windowId: 1 }),
+      tab('https://example.com/', { id: 1, index: 0, windowId: 1 }),
+      tab('https://github.com/a', { id: 2, index: 1, windowId: 1 }),
+      tab('https://github.com/b', { id: 3, index: 2, windowId: 1 }),
     ]);
     await dashboard.render();
 

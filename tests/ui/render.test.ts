@@ -103,7 +103,7 @@ describe('renderGroups', () => {
 });
 
 describe('renderGroupCard with placeholders', () => {
-  it('appends a grayed, click-to-open placeholder chip after the real tabs', () => {
+  it('renders a grayed, click-to-open placeholder chip, sorted ahead of unpinned real tabs', () => {
     const html = renderGroupCard(group(), 0, [
       { site: { url: 'https://absent.com/', label: 'Absent' }, pinnedIndex: 2 },
     ]);
@@ -113,6 +113,9 @@ describe('renderGroupCard with placeholders', () => {
     expect(html).toContain('data-pinned-url="https://absent.com/"');
     expect(html).toContain('data-pinned-index="2"');
     expect(html).toContain('Absent');
+    // Every placeholder is pinned by definition, so it sorts ahead of the
+    // group's one unpinned real tab.
+    expect(html.indexOf('Absent')).toBeLessThan(html.indexOf('data-action="focus-tab"'));
   });
 
   it('omits the tab-count badge and "Close all" button for a placeholder-only card', () => {
@@ -124,6 +127,62 @@ describe('renderGroupCard with placeholders', () => {
     expect(html).not.toContain('tabs open');
     expect(html).not.toContain('data-action="close-group"');
     expect(html).toContain('pinned-only-card');
+  });
+});
+
+describe('renderGroupCard chip ordering and pinned labels', () => {
+  it('sorts pinned chips first, in configured order, ahead of alphabetically-sorted unpinned chips', () => {
+    // Distinct hostnames sharing one registrable domain, so they land in one
+    // card together (like mail.google.com / calendar.google.com), while
+    // pinning — which matches by exact hostname — only picks out one of them.
+    const zetaTab = tab('https://zeta.example/', { title: 'Zeta' });
+    const alphaTab = tab('https://alpha.example/', { title: 'Alpha' });
+    const pinnedTab = tab('https://pinned.example/', { title: 'Pinned Page' });
+
+    const html = renderGroupCard(
+      { key: 'example', kind: 'domain', tabs: [zetaTab, alphaTab, pinnedTab] },
+      0,
+      [],
+      new Map([['pinned.example', { pinnedIndex: 0 }]]),
+    );
+
+    const pinnedPos = html.indexOf('Pinned Page');
+    const alphaPos = html.indexOf('data-tab-url="https://alpha.example/"');
+    const zetaPos = html.indexOf('data-tab-url="https://zeta.example/"');
+
+    expect(pinnedPos).toBeGreaterThan(-1);
+    expect(pinnedPos).toBeLessThan(alphaPos);
+    // Unpinned chips fall back to alphabetical order: Alpha before Zeta.
+    expect(alphaPos).toBeLessThan(zetaPos);
+  });
+
+  it("prefers a pinned site's configured label over the tab's own title — even after the tab has navigated to a different path on the same host", () => {
+    // https://calendar.google.com/ redirects to a deep path once opened; the
+    // hostname (what pinning matches on) never changes.
+    const navigatedTab = tab('https://calendar.google.com/calendar/u/0/r', {
+      title: 'Google Calendar - Week of...',
+    });
+    const html = renderGroupCard(
+      { key: 'google.com', kind: 'domain', tabs: [navigatedTab] },
+      0,
+      [],
+      new Map([['calendar.google.com', { pinnedIndex: 0, label: 'Google Calendar' }]]),
+    );
+
+    expect(html).toContain('Google Calendar');
+    expect(html).not.toContain('Week of');
+  });
+
+  it('sorts a pinned real tab and a pinned placeholder together, by their configured order, across kinds', () => {
+    const secondPinTab = tab('https://second.example/', { title: 'Second' });
+    const html = renderGroupCard(
+      { key: 'shared.example', kind: 'domain', tabs: [secondPinTab] },
+      0,
+      [{ site: { url: 'https://first.example/', label: 'First' }, pinnedIndex: 0 }],
+      new Map([['second.example', { pinnedIndex: 1 }]]),
+    );
+
+    expect(html.indexOf('First')).toBeLessThan(html.indexOf('data-tab-url="https://second.example/"'));
   });
 });
 

@@ -7,8 +7,9 @@
  * testable with plain objects.
  */
 
-import type { PinnedSite, TabGroup, TabInfo, DisposableRule, TabOutSettings } from '../types';
-import { isDisposable, isDisposableDomain } from './matching';
+import type { PinnedSite, TabGroup, TabInfo, TabOutSettings } from '../types';
+import { friendlyDomain } from './domain';
+import { isDisposable } from './matching';
 import { groupKeyOf, hostnameOf, isInternalUrl, registrableDomainOf } from './url';
 
 /** Reserved key for the synthetic "Disposable" card. */
@@ -28,12 +29,28 @@ export interface PinnedPlaceholder {
   pinnedIndex: number;
 }
 
+/**
+ * What a pinned site contributes to *any* tab sharing its hostname — used to
+ * sort that tab's chip first within its card (by `pinnedIndex`, matching the
+ * order pinned sites are configured in) and, when the site has a configured
+ * `label`, to prefer that label over the tab's own title. This is what keeps
+ * `https://calendar.google.com/` labelled "Google Calendar" even after it
+ * navigates to `https://calendar.google.com/calendar/u/0/r` — the hostname
+ * (and therefore this lookup) doesn't change, only the path does.
+ */
+export interface PinnedHostnameEntry {
+  pinnedIndex: number;
+  label?: string;
+}
+
 /** Everything the renderer needs for one paint of the dashboard. */
 export interface DashboardModel {
   /** Cards in render order. */
   orderedGroups: TabGroup[];
   /** Pinned-but-not-open placeholder chips, keyed by the card's `key`. */
   placeholders: Map<string, PinnedPlaceholder[]>;
+  /** Per-hostname pinned info (sort priority + preferred label), for chips. */
+  pinnedHostnames: Map<string, PinnedHostnameEntry>;
   /** Tabs that are real web pages (the denominator for "close all N tabs"). */
   realTabs: TabInfo[];
   /** Number of cards that actually have open tabs (placeholder-only cards don't count). */
@@ -95,32 +112,40 @@ export function groupTabs(
   return [...byKey.values()];
 }
 
+/** The display name for a group: explicit label, else a friendly hostname. */
+export function groupDisplayTitle(group: Pick<TabGroup, 'key' | 'label'>): string {
+  if (group.key === DISPOSABLE_GROUP_KEY) return group.label ?? DISPOSABLE_GROUP_LABEL;
+  return group.label ?? friendlyDomain(group.key);
+}
+
 /**
  * Orders groups for display: the Disposable card first, then cards holding a
- * pinned site (open or not), then domains the user's disposable rules
- * mention, then the biggest groups. Ties break on key so the layout does not
- * shuffle between renders.
+ * pinned site — in the order those sites are configured, so an earlier
+ * pinned entry's card leads even when pinned sites from different cards are
+ * interleaved — then everything else, alphabetically by displayed title.
+ *
+ * `pinnedGroupOrder` maps a card's `key` to the earliest `pinnedIndex` of any
+ * pinned site that belongs under it (see {@link buildPinnedPriorities});
+ * empty when pinning is off, so every card falls through to the alphabetical
+ * tier as if pinning didn't exist.
  */
 export function sortGroups(
   groups: readonly TabGroup[],
-  disposableRules: readonly DisposableRule[],
-  pinnedGroupKeys: ReadonlySet<string> = new Set(),
+  pinnedGroupOrder: ReadonlyMap<string, number> = new Map(),
 ): TabGroup[] {
   return [...groups].sort((a, b) => {
     const aDisposable = a.key === DISPOSABLE_GROUP_KEY;
     const bDisposable = b.key === DISPOSABLE_GROUP_KEY;
     if (aDisposable !== bDisposable) return aDisposable ? -1 : 1;
 
-    const aPinned = pinnedGroupKeys.has(a.key);
-    const bPinned = pinnedGroupKeys.has(b.key);
+    const aIdx = pinnedGroupOrder.get(a.key);
+    const bIdx = pinnedGroupOrder.get(b.key);
+    const aPinned = aIdx !== undefined;
+    const bPinned = bIdx !== undefined;
     if (aPinned !== bPinned) return aPinned ? -1 : 1;
+    if (aPinned && bPinned && aIdx !== bIdx) return (aIdx as number) - (bIdx as number);
 
-    const aPriority = isDisposableDomain(a.key, disposableRules);
-    const bPriority = isDisposableDomain(b.key, disposableRules);
-    if (aPriority !== bPriority) return aPriority ? -1 : 1;
-
-    if (b.tabs.length !== a.tabs.length) return b.tabs.length - a.tabs.length;
-    return a.key.localeCompare(b.key);
+    return groupDisplayTitle(a).localeCompare(groupDisplayTitle(b));
   });
 }
 
@@ -163,22 +188,42 @@ export function attachPinnedPlaceholders(
   return { groups: [...byKey.values()], placeholders };
 }
 
-/** Registrable domains of every pinned site, for the sort-priority bump in {@link sortGroups}. */
-function pinnedGroupKeysOf(pinnedSites: readonly PinnedSite[]): Set<string> {
-  const keys = new Set<string>();
-  for (const site of pinnedSites) {
-    const key = registrableDomainOf(hostnameOf(site.url));
-    if (key) keys.add(key);
-  }
-  return keys;
+/**
+ * Computes the two lookups the rest of the dashboard needs for pinned-site
+ * priority: `byGroupKey` (registrable domain → earliest `pinnedIndex`) for
+ * {@link sortGroups}, and `byHostname` (exact hostname → `pinnedIndex` +
+ * optional `label`) for sorting and labelling chips *within* a card. Both
+ * dedupe by "first entry wins" — if two pinned sites somehow resolve to the
+ * same key, the earlier-configured one decides its priority.
+ */
+export function buildPinnedPriorities(pinnedSites: readonly PinnedSite[]): {
+  byHostname: Map<string, PinnedHostnameEntry>;
+  byGroupKey: Map<string, number>;
+} {
+  const byHostname = new Map<string, PinnedHostnameEntry>();
+  const byGroupKey = new Map<string, number>();
+
+  pinnedSites.forEach((site, pinnedIndex) => {
+    const hostname = hostnameOf(site.url);
+    if (!hostname) return;
+
+    if (!byHostname.has(hostname)) {
+      byHostname.set(hostname, site.label ? { pinnedIndex, label: site.label } : { pinnedIndex });
+    }
+
+    const key = registrableDomainOf(hostname);
+    if (key && !byGroupKey.has(key)) byGroupKey.set(key, pinnedIndex);
+  });
+
+  return { byHostname, byGroupKey };
 }
 
 /**
  * One-shot: open tabs + settings → the complete render model.
  *
- * When `pinnedEnabled` is off, no placeholders are attached and no card gets
- * pinned-priority in the sort — every group renders exactly as `groupTabs()`
- * produced it, as if pinning didn't exist.
+ * When `pinnedEnabled` is off, no placeholders are attached and nothing gets
+ * pinned priority or a preferred label — every group and chip renders and
+ * sorts exactly as if pinning didn't exist.
  */
 export function buildDashboardModel(
   tabs: readonly TabInfo[],
@@ -191,17 +236,15 @@ export function buildDashboardModel(
     ? attachPinnedPlaceholders(baseGroups, realTabs, settings.pinnedSites)
     : { groups: baseGroups, placeholders: new Map<string, PinnedPlaceholder[]>() };
 
-  const pinnedGroupKeys = settings.pinnedEnabled ? pinnedGroupKeysOf(settings.pinnedSites) : new Set<string>();
+  const { byHostname, byGroupKey } = settings.pinnedEnabled
+    ? buildPinnedPriorities(settings.pinnedSites)
+    : { byHostname: new Map<string, PinnedHostnameEntry>(), byGroupKey: new Map<string, number>() };
 
-  const orderedGroups = sortGroups(
-    withPlaceholders,
-    settings.disposableEnabled ? settings.disposableRules : [],
-    pinnedGroupKeys,
-  );
+  const orderedGroups = sortGroups(withPlaceholders, byGroupKey);
 
   const groupCount = orderedGroups.filter((group) => group.tabs.length > 0).length;
 
-  return { orderedGroups, placeholders, realTabs, groupCount };
+  return { orderedGroups, placeholders, pinnedHostnames: byHostname, realTabs, groupCount };
 }
 
 /**

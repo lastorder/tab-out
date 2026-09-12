@@ -176,7 +176,7 @@ export class Dashboard {
         : '';
 
     count.innerHTML = domainText + closeAll + tidyButtonHtml(tidy);
-    missions.innerHTML = renderGroups(model.orderedGroups, model.placeholders);
+    missions.innerHTML = renderGroups(model.orderedGroups, model.placeholders, model.pinnedHostnames);
   }
 
   /**

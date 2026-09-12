@@ -6,11 +6,11 @@
  * implementation detail of a card — nothing else renders them.
  */
 
-import type { PinnedPlaceholder } from '../../core/grouping';
+import type { PinnedHostnameEntry, PinnedPlaceholder } from '../../core/grouping';
 import type { TabGroup, TabInfo } from '../../types';
 import { analyzeDuplicates, uniqueByUrl } from '../../core/duplicates';
 import { friendlyDomain } from '../../core/domain';
-import { DISPOSABLE_GROUP_KEY, DISPOSABLE_GROUP_LABEL } from '../../core/grouping';
+import { groupDisplayTitle } from '../../core/grouping';
 import { displayTitle, withLocalhostPort } from '../../core/title';
 import { hostnameOf } from '../../core/url';
 import { escapeHtml, faviconUrl, plural } from '../html';
@@ -19,7 +19,10 @@ import { ICONS } from '../icons';
 /** How many chips a card shows before collapsing the rest behind "+N more". */
 export const VISIBLE_CHIP_LIMIT = 8;
 
-/** Builds the label shown on a chip. */
+/** One renderable chip: a real open tab, or a pinned-but-not-open placeholder. */
+type ChipItem = { kind: 'tab'; tab: TabInfo } | { kind: 'placeholder'; placeholder: PinnedPlaceholder };
+
+/** Builds the label shown on a chip, absent any pinned-label override. */
 function chipLabel(tab: TabInfo, groupHostname: string): string {
   const label = displayTitle(tab.title, tab.url, groupHostname);
   return withLocalhostPort(label, tab.url);
@@ -28,9 +31,18 @@ function chipLabel(tab: TabInfo, groupHostname: string): string {
 /**
  * Renders one page chip: favicon, title, duplicate badge, and the hover
  * actions (save for later / close).
+ *
+ * `pinnedLabel`, when given, overrides the tab's own title — this is what
+ * keeps a pinned site's configured label (e.g. "Google Calendar") showing
+ * even after the tab navigates to a different path on the same hostname.
  */
-function renderChip(tab: TabInfo, duplicateCount: number, groupHostname: string): string {
-  const label = chipLabel(tab, groupHostname);
+function renderChip(
+  tab: TabInfo,
+  duplicateCount: number,
+  groupHostname: string,
+  pinnedLabel?: string,
+): string {
+  const label = pinnedLabel || chipLabel(tab, groupHostname);
   const hostname = hostnameOf(tab.url);
   const favicon = faviconUrl(hostname, 16);
   const isDupe = duplicateCount > 1;
@@ -73,29 +85,90 @@ function renderPlaceholderChip(item: PinnedPlaceholder): string {
     </div>`;
 }
 
+/** A chip item's pinned priority (its configured position), or `undefined` when it isn't pinned. */
+function itemPinnedIndex(
+  item: ChipItem,
+  pinnedHostnames: ReadonlyMap<string, PinnedHostnameEntry>,
+): number | undefined {
+  if (item.kind === 'placeholder') return item.placeholder.pinnedIndex;
+  return pinnedHostnames.get(hostnameOf(item.tab.url))?.pinnedIndex;
+}
+
+/** The text a chip item sorts (and, for a pinned tab, displays) by. */
+function itemLabel(
+  item: ChipItem,
+  groupHostname: string,
+  pinnedHostnames: ReadonlyMap<string, PinnedHostnameEntry>,
+): string {
+  if (item.kind === 'placeholder') {
+    const hostname = hostnameOf(item.placeholder.site.url);
+    return item.placeholder.site.label || friendlyDomain(hostname) || item.placeholder.site.url;
+  }
+  const pinnedLabel = pinnedHostnames.get(hostnameOf(item.tab.url))?.label;
+  return pinnedLabel || chipLabel(item.tab, groupHostname);
+}
+
+/**
+ * Orders a card's chips: pinned items first (real tab or placeholder alike),
+ * in the order their sites are configured, then everything else
+ * alphabetically by displayed label.
+ */
+function sortChipItems(
+  items: readonly ChipItem[],
+  groupHostname: string,
+  pinnedHostnames: ReadonlyMap<string, PinnedHostnameEntry>,
+): ChipItem[] {
+  return [...items].sort((a, b) => {
+    const aIdx = itemPinnedIndex(a, pinnedHostnames);
+    const bIdx = itemPinnedIndex(b, pinnedHostnames);
+    const aPinned = aIdx !== undefined;
+    const bPinned = bIdx !== undefined;
+    if (aPinned !== bPinned) return aPinned ? -1 : 1;
+    if (aPinned && bPinned && aIdx !== bIdx) return (aIdx as number) - (bIdx as number);
+
+    return itemLabel(a, groupHostname, pinnedHostnames).localeCompare(
+      itemLabel(b, groupHostname, pinnedHostnames),
+    );
+  });
+}
+
+/** Renders one chip item, dispatching on its kind. */
+function renderChipItem(
+  item: ChipItem,
+  counts: Record<string, number>,
+  groupHostname: string,
+  pinnedHostnames: ReadonlyMap<string, PinnedHostnameEntry>,
+): string {
+  if (item.kind === 'placeholder') return renderPlaceholderChip(item.placeholder);
+  const pinnedLabel = pinnedHostnames.get(hostnameOf(item.tab.url))?.label;
+  return renderChip(item.tab, counts[item.tab.url] ?? 1, groupHostname, pinnedLabel);
+}
+
 /**
  * Renders the hidden chips plus the "+N more" button that reveals them.
  * The overflow container is display:none until the button is clicked.
  */
-function renderOverflowChips(
-  hiddenTabs: readonly TabInfo[],
+function renderOverflowItems(
+  hiddenItems: readonly ChipItem[],
   counts: Record<string, number>,
   groupHostname: string,
+  pinnedHostnames: ReadonlyMap<string, PinnedHostnameEntry>,
 ): string {
-  if (hiddenTabs.length === 0) return '';
-  const hidden = hiddenTabs.map((tab) => renderChip(tab, counts[tab.url] ?? 1, groupHostname)).join('');
+  if (hiddenItems.length === 0) return '';
+  const hidden = hiddenItems
+    .map((item) => renderChipItem(item, counts, groupHostname, pinnedHostnames))
+    .join('');
 
   return `
     <div class="page-chips-overflow" style="display:none">${hidden}</div>
     <div class="page-chip page-chip-overflow clickable" data-action="expand-chips">
-      <span class="chip-text">+${hiddenTabs.length} more</span>
+      <span class="chip-text">+${hiddenItems.length} more</span>
     </div>`;
 }
 
 /** The display name for a group: explicit label, else a friendly hostname. */
 export function groupTitle(group: TabGroup): string {
-  if (group.key === DISPOSABLE_GROUP_KEY) return group.label ?? DISPOSABLE_GROUP_LABEL;
-  return group.label ?? friendlyDomain(group.key);
+  return groupDisplayTitle(group);
 }
 
 /**
@@ -106,16 +179,20 @@ export function groupTitle(group: TabGroup): string {
  * by a slugified name, so keys containing punctuation can never collide.
  *
  * `placeholders` (empty unless a pinned site with no open tab belongs under
- * this card) renders as extra grayed, click-to-open chips appended after the
- * real tabs — pinning surfaces inside its own card, it never gets one of its
- * own. A card can have placeholders with zero real tabs at all (`tabCount`
- * is 0), in which case the tab-count badge and "Close all" button are
- * omitted — there is nothing open to count or close.
+ * this card) renders as extra grayed, click-to-open chips — pinning surfaces
+ * inside its own card, it never gets one of its own. A card can have
+ * placeholders with zero real tabs at all (`tabCount` is 0), in which case
+ * the tab-count badge and "Close all" button are omitted.
+ *
+ * `pinnedHostnames` (empty when pinning is off) sorts pinned chips — real or
+ * placeholder — first, in configured order, ahead of every other chip, which
+ * instead sorts alphabetically by its displayed label.
  */
 export function renderGroupCard(
   group: TabGroup,
   index: number,
   placeholders: readonly PinnedPlaceholder[] = [],
+  pinnedHostnames: ReadonlyMap<string, PinnedHostnameEntry> = new Map(),
 ): string {
   const tabCount = group.tabs.length;
   const { counts, hasDuplicates, extraCount } = analyzeDuplicates(group.tabs);
@@ -123,14 +200,17 @@ export function renderGroupCard(
   // Hostname context lets chip labels drop a redundant site-name suffix.
   const groupHostname = group.kind === 'domain' ? group.key : '';
 
-  const unique = uniqueByUrl(group.tabs);
-  const visible = unique.slice(0, VISIBLE_CHIP_LIMIT);
-  const hidden = unique.slice(VISIBLE_CHIP_LIMIT);
+  const items: ChipItem[] = [
+    ...uniqueByUrl(group.tabs).map((tab): ChipItem => ({ kind: 'tab', tab })),
+    ...placeholders.map((placeholder): ChipItem => ({ kind: 'placeholder', placeholder })),
+  ];
+  const sorted = sortChipItems(items, groupHostname, pinnedHostnames);
+  const visible = sorted.slice(0, VISIBLE_CHIP_LIMIT);
+  const hidden = sorted.slice(VISIBLE_CHIP_LIMIT);
 
   const chips =
-    visible.map((tab) => renderChip(tab, counts[tab.url] ?? 1, groupHostname)).join('') +
-    renderOverflowChips(hidden, counts, groupHostname) +
-    placeholders.map(renderPlaceholderChip).join('');
+    visible.map((item) => renderChipItem(item, counts, groupHostname, pinnedHostnames)).join('') +
+    renderOverflowItems(hidden, counts, groupHostname, pinnedHostnames);
 
   const dupeBadge = hasDuplicates
     ? `<span class="open-tabs-badge badge-amber">${escapeHtml(
@@ -185,9 +265,12 @@ export function renderGroupCard(
 export function renderGroups(
   groups: readonly TabGroup[],
   placeholders: ReadonlyMap<string, PinnedPlaceholder[]> = new Map(),
+  pinnedHostnames: ReadonlyMap<string, PinnedHostnameEntry> = new Map(),
 ): string {
   return groups
-    .map((group, index) => renderGroupCard(group, index, placeholders.get(group.key) ?? []))
+    .map((group, index) =>
+      renderGroupCard(group, index, placeholders.get(group.key) ?? [], pinnedHostnames),
+    )
     .join('');
 }
 
