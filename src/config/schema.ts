@@ -10,11 +10,18 @@
 
 import type {
   CustomGroupRule,
-  LandingPattern,
+  DisposableRule,
   PinnedSite,
   TabOutSettings,
 } from '../types';
-import { createDefaultSettings, SETTINGS_VERSION, DEFAULT_MAX_HISTORY_ITEMS, DEFAULT_AUTO_SORT_TABS } from './defaults';
+import {
+  createDefaultSettings,
+  SETTINGS_VERSION,
+  DEFAULT_MAX_HISTORY_ITEMS,
+  DEFAULT_AUTO_SORT_TABS,
+  DEFAULT_PINNED_ENABLED,
+  DEFAULT_DISPOSABLE_ENABLED,
+} from './defaults';
 import { normalizeUrlInput } from '../core/url';
 
 /** Bounds enforced on the "keep last N closed tabs" setting. */
@@ -53,6 +60,25 @@ function asPath(value: unknown): string {
 }
 
 /**
+ * Coerces a settings field to a boolean, falling back to `defaultValue` and
+ * reporting why whenever the raw value isn't actually a boolean. Shared by
+ * every scalar on/off setting (`autoSortTabs`, `pinnedEnabled`,
+ * `disposableEnabled`) so the fallback-and-report behaviour can't drift
+ * between them.
+ */
+function normalizeBoolean(
+  raw: unknown,
+  path: string,
+  defaultValue: boolean,
+  issues: ValidationIssue[],
+): boolean {
+  if (raw === undefined) return defaultValue;
+  if (typeof raw === 'boolean') return raw;
+  issues.push({ path, message: 'Not a boolean; using the default.' });
+  return defaultValue;
+}
+
+/**
  * A pinned site needs a resolvable URL; the label is optional and falls back
  * to a friendly hostname at render time.
  */
@@ -71,7 +97,7 @@ export function normalizePinnedSite(raw: unknown, path: string, issues: Validati
 }
 
 /**
- * Parses the hostname constraint shared by landing patterns and custom
+ * Parses the hostname constraint shared by disposable rules and custom
  * groups. Returns `null` when neither form is present — a rule that
  * constrains no hostname would match every tab on the internet, which is
  * never what a half-filled form meant.
@@ -91,14 +117,14 @@ function normalizeHostnameConstraint(
 }
 
 /**
- * A landing pattern must constrain the hostname somehow. Without that it would
- * match every tab on the internet, which is never what the user meant.
+ * A disposable rule must constrain the hostname somehow. Without that it
+ * would match every tab on the internet, which is never what the user meant.
  */
-export function normalizeLandingPattern(
+export function normalizeDisposableRule(
   raw: unknown,
   path: string,
   issues: ValidationIssue[],
-): LandingPattern | null {
+): DisposableRule | null {
   if (!isObject(raw)) {
     issues.push({ path, message: 'Expected a rule object.' });
     return null;
@@ -107,7 +133,7 @@ export function normalizeLandingPattern(
   const host = normalizeHostnameConstraint(raw, path, issues);
   if (!host) return null;
 
-  const pattern: LandingPattern = { ...host };
+  const pattern: DisposableRule = { ...host };
 
   const pathPrefix = asPath(raw['pathPrefix']);
   if (pathPrefix) pattern.pathPrefix = pathPrefix;
@@ -180,15 +206,19 @@ export function normalizeMaxHistoryItems(raw: unknown, issues: ValidationIssue[]
   return rounded;
 }
 
-/**
- * Coerces the "auto-sort tabs" field to a boolean, falling back to the
- * default and reporting why whenever the raw value isn't actually a boolean.
- */
+/** Coerces the "auto-sort tabs" field to a boolean, defaulting to on. */
 export function normalizeAutoSortTabs(raw: unknown, issues: ValidationIssue[]): boolean {
-  if (raw === undefined) return DEFAULT_AUTO_SORT_TABS;
-  if (typeof raw === 'boolean') return raw;
-  issues.push({ path: 'autoSortTabs', message: 'Not a boolean; using the default.' });
-  return DEFAULT_AUTO_SORT_TABS;
+  return normalizeBoolean(raw, 'autoSortTabs', DEFAULT_AUTO_SORT_TABS, issues);
+}
+
+/** Coerces the "pinned sites enabled" field to a boolean, defaulting to on. */
+export function normalizePinnedEnabled(raw: unknown, issues: ValidationIssue[]): boolean {
+  return normalizeBoolean(raw, 'pinnedEnabled', DEFAULT_PINNED_ENABLED, issues);
+}
+
+/** Coerces the "disposable rules enabled" field to a boolean, defaulting to on. */
+export function normalizeDisposableEnabled(raw: unknown, issues: ValidationIssue[]): boolean {
+  return normalizeBoolean(raw, 'disposableEnabled', DEFAULT_DISPOSABLE_ENABLED, issues);
 }
 
 /** Drops later entries that reuse an earlier entry's identity. */
@@ -233,11 +263,21 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
       )
     : defaults.pinnedSites;
 
-  const landingPatterns = Array.isArray(raw['landingPatterns'])
-    ? (raw['landingPatterns'] as unknown[])
-        .map((item, i) => normalizeLandingPattern(item, `landingPatterns[${i}]`, issues))
-        .filter((item): item is LandingPattern => item !== null)
-    : defaults.landingPatterns;
+  // `disposableRules` is the current key. `landingPatterns` is read as a
+  // fallback so settings saved by an older version of Tab Out — in
+  // `chrome.storage`, or a previously-exported JSON file — keep their rules
+  // instead of silently reverting to the defaults on first load.
+  const rawDisposableRules = Array.isArray(raw['disposableRules'])
+    ? (raw['disposableRules'] as unknown[])
+    : Array.isArray(raw['landingPatterns'])
+      ? (raw['landingPatterns'] as unknown[])
+      : null;
+
+  const disposableRules = rawDisposableRules
+    ? rawDisposableRules
+        .map((item, i) => normalizeDisposableRule(item, `disposableRules[${i}]`, issues))
+        .filter((item): item is DisposableRule => item !== null)
+    : defaults.disposableRules;
 
   const customGroups = Array.isArray(raw['customGroups'])
     ? dedupeBy(
@@ -255,11 +295,22 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
       ? raw['version']
       : SETTINGS_VERSION;
 
+  const pinnedEnabled = normalizePinnedEnabled(raw['pinnedEnabled'], issues);
+  const disposableEnabled = normalizeDisposableEnabled(raw['disposableEnabled'], issues);
   const maxHistoryItems = normalizeMaxHistoryItems(raw['maxHistoryItems'], issues);
   const autoSortTabs = normalizeAutoSortTabs(raw['autoSortTabs'], issues);
 
   return {
-    settings: { version, pinnedSites, landingPatterns, customGroups, maxHistoryItems, autoSortTabs },
+    settings: {
+      version,
+      pinnedEnabled,
+      pinnedSites,
+      disposableEnabled,
+      disposableRules,
+      customGroups,
+      maxHistoryItems,
+      autoSortTabs,
+    },
     issues,
   };
 }
@@ -267,8 +318,12 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
 /**
  * Upgrades settings written by an older version of Tab Out.
  *
- * There is only one version so far, so this simply stamps the current version
- * number — but the hook exists so future shape changes have an obvious home.
+ * v1 → v2 is handled by `normalizeSettings` itself (the `disposableRules` /
+ * `landingPatterns` key fallback, and `pinnedEnabled` / `disposableEnabled`
+ * defaulting to `true` when absent) since normalisation runs *before*
+ * migration and would otherwise see a renamed field as simply missing. This
+ * function only stamps the version number — but the hook exists so a future
+ * shape change that isn't just "renamed and defaulted" has an obvious home.
  */
 export function migrateSettings(settings: TabOutSettings): TabOutSettings {
   if (settings.version === SETTINGS_VERSION) return settings;

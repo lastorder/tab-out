@@ -382,3 +382,65 @@ describe('Dashboard pinned sites', () => {
     expect(missions()).toContain('Click to open');
   });
 });
+
+const sectionCount = (): string => document.getElementById('openTabsSectionCount')!.innerHTML;
+
+describe('Dashboard Tidy button', () => {
+  it('stays hidden when nothing qualifies as safe to close', async () => {
+    const { dashboard } = await buildDashboard([tab('https://example.com/')]);
+    await dashboard.render();
+    expect(sectionCount()).not.toContain('data-action="tidy-tabs"');
+  });
+
+  it('appears for a disposable tab, describing why in its tooltip', async () => {
+    const { dashboard } = await buildDashboard(
+      [tab('https://github.com/')],
+      { disposableEnabled: true, disposableRules: [{ hostname: 'github.com', pathExact: ['/'] }] },
+    );
+    await dashboard.render();
+
+    expect(sectionCount()).toContain('data-action="tidy-tabs"');
+    expect(sectionCount()).toContain('Tidy up');
+    expect(sectionCount()).toContain('1 disposable tab');
+  });
+
+  it('appears for a duplicate tab', async () => {
+    const { dashboard } = await buildDashboard([
+      tab('https://a.com/'),
+      tab('https://a.com/'),
+    ]);
+    await dashboard.render();
+
+    expect(sectionCount()).toContain('data-action="tidy-tabs"');
+    expect(sectionCount()).toContain('1 duplicate');
+  });
+
+  it('appears for a tab whose URL is already saved for later', async () => {
+    const { dashboard, savedTabs } = await buildDashboard([tab('https://example.com/article')]);
+    await savedTabs.save({ url: 'https://example.com/article', title: 'Article' });
+    await dashboard.render();
+
+    expect(sectionCount()).toContain('data-action="tidy-tabs"');
+    expect(sectionCount()).toContain('already saved');
+  });
+
+  it('disappears again once disposableEnabled is turned off', async () => {
+    const { dashboard } = await buildDashboard(
+      [tab('https://github.com/')],
+      { disposableEnabled: false, disposableRules: [{ hostname: 'github.com', pathExact: ['/'] }] },
+    );
+    await dashboard.render();
+    expect(sectionCount()).not.toContain('data-action="tidy-tabs"');
+  });
+
+  it('refreshTidyButton recomputes without a full render, e.g. after un-saving a tab', async () => {
+    const { dashboard, savedTabs } = await buildDashboard([tab('https://example.com/article')]);
+    const saved = await savedTabs.save({ url: 'https://example.com/article', title: 'Article' });
+    await dashboard.render();
+    expect(sectionCount()).toContain('data-action="tidy-tabs"');
+
+    await savedTabs.dismiss(saved.id);
+    await dashboard.refreshTidyButton();
+    expect(sectionCount()).not.toContain('data-action="tidy-tabs"');
+  });
+});

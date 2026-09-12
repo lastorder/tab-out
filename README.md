@@ -2,7 +2,7 @@
 
 **Keep tabs on your tabs.**
 
-Tab Out is a Chrome extension that replaces your new tab page with a dashboard of everything you have open. Tabs are grouped by domain, with homepages (Gmail, X, LinkedIn, etc.) pulled into their own group. Close tabs with a satisfying swoosh + confetti.
+Tab Out is a Chrome extension that replaces your new tab page with a dashboard of everything you have open. Tabs are grouped by domain, with disposable ones (Gmail inbox, X home, a spent Zoom meeting page…) pulled into their own group so you can clear them in one click without losing anything. Close tabs with a satisfying swoosh + confetti.
 
 No server. No account. No external API calls. Just a Chrome extension.
 
@@ -23,8 +23,9 @@ The agent will walk you through it. Takes about 2 minutes.
 ## Features
 
 - **See all your tabs at a glance** on a clean grid, grouped by domain — including browser pages like `chrome://extensions` and local `file://` pages, not just websites
-- **Homepages group** pulls Gmail inbox, X home, YouTube, LinkedIn, GitHub homepages into one card
-- **Configurable settings page** edit pinned sites, homepage rules, and custom groups without touching code
+- **Disposable tabs group** collects tabs that are safe to close because reopening them costs nothing — a site's own homepage (Gmail inbox, X home, GitHub front page) *and* spent one-off pages like the screen a Zoom meeting leaves behind — into one card. Fully configurable, and can be turned off entirely.
+- **Tidy up** one button next to "Close all" that closes every duplicate, disposable tab, and already-saved tab in a single click — it only appears when there's something to tidy
+- **Configurable settings page** edit pinned sites, disposable rules, and custom groups without touching code — pinned sites and disposable rules can each be switched off wholesale without deleting anything
 - **Close tabs with style** with swoosh sound + confetti burst
 - **Duplicate detection** flags when you have the same page open twice, with one-click cleanup
 - **Click any tab to jump to it** across windows, no new tab opened
@@ -71,8 +72,8 @@ Click the gear icon in the top-right of the dashboard, or right-click the extens
 
 | Section | What it controls |
 |---------|------------------|
-| **Pinned sites** | Sites always shown first. With open tabs they get a normal card; without, a click-to-open placeholder. |
-| **Homepage rules** | Which URLs count as a "homepage" and get collected into the shared **Homepages** card. |
+| **Pinned sites** | Sites always shown first. With open tabs they get a normal card; without, a click-to-open placeholder. Has its own "Enabled" toggle — turn it off to stop applying the list without deleting it. |
+| **Disposable tabs** | Which tabs are safe to close because reopening them costs nothing, collected into a shared **Disposable** card and counted by the "Tidy up" button. Also has its own "Enabled" toggle. |
 | **Custom groups** | Merge several hostnames into one card, or split one site into separate cards by path. |
 | **Tab sorting** | Whether tabs are reordered to match the dashboard automatically (on by default) or only via a manual "Sort tabs" banner. |
 | **History** | How many recently closed tabs to remember (default 100). |
@@ -84,9 +85,9 @@ Settings are stored in `chrome.storage.sync`, so they follow your Chrome profile
 Both rule types use the same hostname field:
 
 - `x.com` — matches that hostname exactly
-- `.atlassian.net` — a **leading dot** matches any subdomain
+- `.zoom.us` — a **leading dot** matches any subdomain
 
-Homepage rules then narrow by path:
+Disposable rules then narrow by path:
 
 | Field | Meaning |
 |-------|---------|
@@ -94,7 +95,23 @@ Homepage rules then narrow by path:
 | **Exact paths** | Comma-separated list, e.g. `/home, /feed` |
 | **Except URLs containing** | Comma-separated veto list |
 
-That last field is what keeps Gmail useful: the shipped rule matches every `mail.google.com` path *except* URLs containing `#inbox/`, so your inbox counts as a homepage while an individual email thread keeps its own card.
+That last field is what keeps Gmail useful: the shipped rule matches every `mail.google.com` path *except* URLs containing `#inbox/`, so your inbox is disposable while an individual email thread keeps its own card.
+
+The shipped defaults cover two shapes of "disposable": a site's own homepage (Gmail inbox, X home, GitHub front page, LinkedIn feed), and Zoom's post-join launcher page (`.zoom.us` + path starting with `/j/`) — since the call itself runs in the desktop app, that leftover browser tab is pure clutter. Google Meet and Microsoft Teams are **not** included by default, because their calls run *inside* the tab — auto-closing one would end a live meeting. Add a rule for them yourself only if that's genuinely safe for how you use them.
+
+If you're upgrading from an older version with your own homepage rules already saved, they migrate automatically — nothing to re-enter. Click **"+ Add suggested rules"** on the Disposable tabs panel to pick up new or corrected defaults (like the Zoom rule) without touching what you've already configured.
+
+---
+
+## Tidy up
+
+Next to "Close all N tabs" on the dashboard, a **Tidy up** button appears whenever there's something safe to close in one click — any of:
+
+- an open tab that's a duplicate of another open tab (one copy is kept)
+- an open tab matching an enabled disposable rule
+- an open tab whose URL is already on your "Saved for later" checklist
+
+Its tooltip and the toast after clicking both spell out the breakdown, e.g. *"Closed 6 tabs — 3 disposable tabs, 2 duplicates, 1 tab already saved"* — nothing closes silently or as a surprise.
 
 ---
 
@@ -123,7 +140,8 @@ src/
 ├── types/        Shared domain types
 ├── core/         Pure logic — no chrome.*, no DOM, fully unit tested
 │   ├── grouping.ts    Tabs + settings → the ordered list of cards
-│   ├── matching.ts    Evaluates homepage / custom-group rules
+│   ├── matching.ts    Evaluates disposable / custom-group rules
+│   ├── tidy.ts        Which open tabs "Tidy up" would close, and why
 │   ├── selection.ts   Decides which tabs an action applies to
 │   ├── title.ts       Cleans up noisy tab titles
 │   ├── domain.ts      Hostname → friendly brand name
@@ -149,7 +167,7 @@ The architecture follows one organising rule: **decisions are pure, effects are 
 
 ### Tests
 
-271 unit tests across 26 files, run with [Vitest](https://vitest.dev):
+302 unit tests across 27 files, run with [Vitest](https://vitest.dev):
 
 ```bash
 npm test

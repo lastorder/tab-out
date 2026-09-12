@@ -10,7 +10,7 @@ import type { DashboardEntry } from '../../core/grouping';
 import type { PinnedSite, TabGroup, TabInfo } from '../../types';
 import { analyzeDuplicates, uniqueByUrl } from '../../core/duplicates';
 import { friendlyDomain } from '../../core/domain';
-import { LANDING_GROUP_KEY, LANDING_GROUP_LABEL } from '../../core/grouping';
+import { DISPOSABLE_GROUP_KEY, DISPOSABLE_GROUP_LABEL } from '../../core/grouping';
 import { displayTitle, withLocalhostPort } from '../../core/title';
 import { hostnameOf } from '../../core/url';
 import { escapeHtml, faviconUrl, plural } from '../html';
@@ -77,7 +77,7 @@ function renderOverflowChips(
 
 /** The display name for a group: explicit label, else a friendly hostname. */
 export function groupTitle(group: TabGroup): string {
-  if (group.key === LANDING_GROUP_KEY) return group.label ?? LANDING_GROUP_LABEL;
+  if (group.key === DISPOSABLE_GROUP_KEY) return group.label ?? DISPOSABLE_GROUP_LABEL;
   return group.label ?? friendlyDomain(group.key);
 }
 

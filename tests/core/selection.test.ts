@@ -14,7 +14,7 @@ beforeEach(() => resetTabIds());
 /**
  * These decide which tabs get closed, so they carry the most risk in the
  * codebase. The hostname-vs-exact distinction in particular is what stops
- * "close the Homepages card" from also closing the email you're reading.
+ * "close the Disposable card" from also closing the email you're reading.
  */
 describe('selectTabIdsByHostname', () => {
   it('takes every tab on a matching host, but not its subdomains', () => {

@@ -4,7 +4,15 @@ import { settingsToDraft } from '@/options/draft';
 import { createDefaultSettings } from '@/config/defaults';
 
 const draft = settingsToDraft(createDefaultSettings());
-const emptyDraft = { pinned: [], landing: [], custom: [], maxHistoryItems: '100', autoSortTabs: true };
+const emptyDraft = {
+  pinnedEnabled: true,
+  pinned: [],
+  disposableEnabled: true,
+  disposable: [],
+  custom: [],
+  maxHistoryItems: '100',
+  autoSortTabs: true,
+};
 
 describe('renderSection', () => {
   it('renders one row per pinned site, tagged for the event delegate', () => {
@@ -15,8 +23,8 @@ describe('renderSection', () => {
     expect(html).toContain('value="https://mail.google.com/"');
   });
 
-  it('renders the homepage rule fields', () => {
-    const html = renderSection('landing', draft);
+  it('renders the disposable rule fields', () => {
+    const html = renderSection('disposable', draft);
     expect(html).toContain('data-field="hostname"');
     expect(html).toContain('data-field="pathPrefix"');
     expect(html).toContain('data-field="pathExact"');
@@ -48,7 +56,7 @@ describe('renderSection', () => {
 
   it('shows a helpful message when a table is empty', () => {
     expect(renderSection('pinned', emptyDraft)).toContain('No pinned sites yet');
-    expect(renderSection('landing', emptyDraft)).toContain('Homepages card will stay empty');
+    expect(renderSection('disposable', emptyDraft)).toContain('Disposable card will stay empty');
     expect(renderSection('custom', emptyDraft)).toContain('tabs group by hostname');
   });
 

@@ -7,15 +7,15 @@
  * testable with plain objects.
  */
 
-import type { PinnedSite, TabGroup, TabInfo, TabOutSettings } from '../types';
-import { findCustomGroup, isLandingDomain, isLandingPage } from './matching';
+import type { DisposableRule, PinnedSite, TabGroup, TabInfo, TabOutSettings } from '../types';
+import { findCustomGroup, isDisposable, isDisposableDomain } from './matching';
 import { groupKeyOf, hostnameOf, isInternalUrl } from './url';
 
-/** Reserved key for the synthetic "Homepages" card. */
-export const LANDING_GROUP_KEY = '__landing-pages__';
+/** Reserved key for the synthetic "Disposable" card. */
+export const DISPOSABLE_GROUP_KEY = '__disposable__';
 
-/** Display name for the synthetic "Homepages" card. */
-export const LANDING_GROUP_LABEL = 'Homepages';
+/** Display name for the synthetic "Disposable" card. */
+export const DISPOSABLE_GROUP_LABEL = 'Disposable';
 
 /** One rendered card: either a real group of tabs or a pinned placeholder. */
 export type DashboardEntry =
@@ -42,17 +42,20 @@ export function getRealTabs(tabs: readonly TabInfo[]): TabInfo[] {
 /**
  * Buckets tabs into groups and sorts them.
  *
- * Precedence per tab: homepage patterns win, then custom-group rules, then a
- * plain hostname bucket. Homepages are pulled out first so that closing the
- * "Homepages" card never takes content tabs from the same domain with it.
+ * Precedence per tab: disposable rules win, then custom-group rules, then a
+ * plain hostname bucket. Disposable tabs are pulled out first so that closing
+ * the "Disposable" card never takes content tabs from the same domain with
+ * it. When `disposableEnabled` is off, that step is skipped entirely and
+ * every tab groups by hostname (or custom group) as if no rule existed —
+ * the rules themselves are left untouched in storage, just not applied.
  */
 export function groupTabs(
   tabs: readonly TabInfo[],
-  settings: Pick<TabOutSettings, 'landingPatterns' | 'customGroups'>,
+  settings: Pick<TabOutSettings, 'disposableEnabled' | 'disposableRules' | 'customGroups'>,
 ): TabGroup[] {
-  const { landingPatterns, customGroups } = settings;
+  const { disposableEnabled, disposableRules, customGroups } = settings;
   const byKey = new Map<string, TabGroup>();
-  const landingTabs: TabInfo[] = [];
+  const disposableTabs: TabInfo[] = [];
 
   const ensureGroup = (key: string, kind: TabGroup['kind'], label?: string): TabGroup => {
     let group = byKey.get(key);
@@ -64,8 +67,8 @@ export function groupTabs(
   };
 
   for (const tab of tabs) {
-    if (isLandingPage(tab.url, landingPatterns)) {
-      landingTabs.push(tab);
+    if (disposableEnabled && isDisposable(tab.url, disposableRules)) {
+      disposableTabs.push(tab);
       continue;
     }
 
@@ -80,34 +83,34 @@ export function groupTabs(
     ensureGroup(key, 'domain').tabs.push(tab);
   }
 
-  if (landingTabs.length > 0) {
-    byKey.set(LANDING_GROUP_KEY, {
-      key: LANDING_GROUP_KEY,
-      kind: 'landing',
-      label: LANDING_GROUP_LABEL,
-      tabs: landingTabs,
+  if (disposableTabs.length > 0) {
+    byKey.set(DISPOSABLE_GROUP_KEY, {
+      key: DISPOSABLE_GROUP_KEY,
+      kind: 'disposable',
+      label: DISPOSABLE_GROUP_LABEL,
+      tabs: disposableTabs,
     });
   }
 
-  return sortGroups([...byKey.values()], landingPatterns);
+  return sortGroups([...byKey.values()], disposableEnabled ? disposableRules : []);
 }
 
 /**
- * Orders groups for display: the Homepages card first, then domains that the
- * user's homepage rules mention, then the biggest groups. Ties break on key so
- * the layout does not shuffle between renders.
+ * Orders groups for display: the Disposable card first, then domains that the
+ * user's disposable rules mention, then the biggest groups. Ties break on key
+ * so the layout does not shuffle between renders.
  */
 export function sortGroups(
   groups: readonly TabGroup[],
-  landingPatterns: TabOutSettings['landingPatterns'],
+  disposableRules: readonly DisposableRule[],
 ): TabGroup[] {
   return [...groups].sort((a, b) => {
-    const aLanding = a.key === LANDING_GROUP_KEY;
-    const bLanding = b.key === LANDING_GROUP_KEY;
-    if (aLanding !== bLanding) return aLanding ? -1 : 1;
+    const aDisposable = a.key === DISPOSABLE_GROUP_KEY;
+    const bDisposable = b.key === DISPOSABLE_GROUP_KEY;
+    if (aDisposable !== bDisposable) return aDisposable ? -1 : 1;
 
-    const aPriority = isLandingDomain(a.key, landingPatterns);
-    const bPriority = isLandingDomain(b.key, landingPatterns);
+    const aPriority = isDisposableDomain(a.key, disposableRules);
+    const bPriority = isDisposableDomain(b.key, disposableRules);
     if (aPriority !== bPriority) return aPriority ? -1 : 1;
 
     if (b.tabs.length !== a.tabs.length) return b.tabs.length - a.tabs.length;
@@ -121,7 +124,7 @@ export function sortGroups(
  * For each pinned site, in the user's configured order:
  *   1. If a domain group already exists for its hostname, promote that group.
  *   2. Otherwise, if any open tab matches the hostname (it may be sitting in
- *      the Homepages card), build a synthetic group from those tabs and take
+ *      the Disposable card), build a synthetic group from those tabs and take
  *      them away from whichever group currently holds them, so no tab is
  *      rendered twice.
  *   3. Otherwise, render a click-to-open placeholder card.
@@ -166,7 +169,7 @@ export function applyPinnedSites(
     entries.push({ type: 'group', group: synthetic });
     orderedGroups.push(synthetic);
 
-    // Reclaim these tabs from whichever group (usually Homepages) held them.
+    // Reclaim these tabs from whichever group (usually Disposable) held them.
     const claimed = new Set(matchingTabs.map((tab) => tab.id));
     remaining = remaining
       .map((group) => ({ ...group, tabs: group.tabs.filter((tab) => !claimed.has(tab.id)) }))
@@ -181,14 +184,22 @@ export function applyPinnedSites(
   return { entries, orderedGroups };
 }
 
-/** One-shot: open tabs + settings → the complete render model. */
+/**
+ * One-shot: open tabs + settings → the complete render model.
+ *
+ * When `pinnedEnabled` is off, pinned sites are skipped entirely — no
+ * promotion, no reclaiming tabs from other groups, no placeholders — so
+ * every group renders exactly as `groupTabs`/`sortGroups` produced it.
+ */
 export function buildDashboardModel(
   tabs: readonly TabInfo[],
   settings: TabOutSettings,
 ): DashboardModel {
   const realTabs = getRealTabs(tabs);
   const groups = groupTabs(realTabs, settings);
-  const { entries, orderedGroups } = applyPinnedSites(groups, realTabs, settings.pinnedSites);
+  const { entries, orderedGroups } = settings.pinnedEnabled
+    ? applyPinnedSites(groups, realTabs, settings.pinnedSites)
+    : { entries: groups.map((group): DashboardEntry => ({ type: 'group', group })), orderedGroups: groups };
   return { entries, orderedGroups, realTabs, groupCount: orderedGroups.length };
 }
 

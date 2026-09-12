@@ -11,6 +11,7 @@ import type { Dashboard } from './dashboard';
 import { analyzeDuplicates } from '../core/duplicates';
 import { groupTitle } from '../ui/render/cards';
 import { renderArchiveList } from '../ui/render/saved';
+import { describeTidyBreakdown } from './dashboard';
 import { animateCardOut, burstFrom, fadeOut, playCloseSound } from '../ui/effects';
 import { showToast } from '../ui/toast';
 import { plural } from '../ui/html';
@@ -30,6 +31,7 @@ export type DashboardAction =
   | 'close-group'
   | 'close-duplicates'
   | 'close-all-tabs'
+  | 'tidy-tabs'
   | 'open-history'
   | 'close-history'
   | 'reopen-history'
@@ -262,6 +264,9 @@ export function attachController(
           window.setTimeout(() => {
             item.remove();
             void dashboard.renderSavedColumn();
+            // Completing removes the URL from the active saved list, which
+            // can change whether an open tab still counts as "safe to tidy".
+            void dashboard.refreshTidyButton();
           }, 300);
         }, 800);
         return;
@@ -278,6 +283,8 @@ export function attachController(
         window.setTimeout(() => {
           item.remove();
           void dashboard.renderSavedColumn();
+          // Dismissing also drops the URL from the active saved list.
+          void dashboard.refreshTidyButton();
         }, 300);
         return;
       }
@@ -329,6 +336,25 @@ export function attachController(
           .forEach((el) => animateCardOut(el, () => dashboard.checkEmptyState()));
 
         showToast('All tabs closed. Fresh start.');
+        return;
+      }
+
+      case 'tidy-tabs': {
+        const { tabIds, breakdown } = dashboard.tidySelection;
+        if (tabIds.length === 0) return;
+
+        // Unlike "Close all", Tidy usually leaves tabs open — most cards
+        // survive, just smaller. Rather than guess which chips vanished
+        // (several tabs can share one on-screen chip: duplicates collapse to
+        // one), animate nothing here and let the catch-up render that
+        // `suppress()` already schedules repaint the grid correctly once
+        // the tabs have actually closed.
+        scheduler.suppress(1200);
+        await tabActions.closeTabs(tabIds);
+        playCloseSound();
+        burstFrom(actionEl);
+
+        showToast(`Closed ${plural(tabIds.length, 'tab')} — ${describeTidyBreakdown(breakdown)}`);
         return;
       }
 

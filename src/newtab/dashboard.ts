@@ -7,6 +7,7 @@
  */
 
 import type { DashboardModel } from '../core/grouping';
+import type { TidySelection } from '../core/tidy';
 import type { SettingsStore } from '../config/store';
 import type { SavedTabsService } from '../services/saved-tabs';
 import type { TabActions } from '../services/tab-actions';
@@ -16,6 +17,7 @@ import type { TabGroup, TabOutSettings } from '../types';
 import { buildDashboardModel } from '../core/grouping';
 import { filterHistory } from '../core/history';
 import { desiredTabOrder, needsSorting } from '../core/selection';
+import { selectTidyTabIds } from '../core/tidy';
 import { createDefaultSettings } from '../config/defaults';
 import { getDateDisplay, getGreeting } from '../core/time';
 import { escapeHtml, plural } from '../ui/html';
@@ -37,6 +39,35 @@ function byId<T extends HTMLElement = HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
 }
 
+/** No tab qualifies yet — the state before the first render completes. */
+const EMPTY_TIDY_SELECTION: TidySelection = {
+  tabIds: [],
+  breakdown: { disposable: 0, saved: 0, duplicates: 0 },
+};
+
+/**
+ * Renders the breakdown behind a "Tidy up" action, e.g.
+ * "6 disposable tabs, 4 duplicates, 2 already saved" — used for both the
+ * button's tooltip and the toast shown after closing, so the button is never
+ * a mystery about what it's about to do.
+ */
+export function describeTidyBreakdown(breakdown: TidySelection['breakdown']): string {
+  const parts: string[] = [];
+  if (breakdown.disposable > 0) parts.push(plural(breakdown.disposable, 'disposable tab'));
+  if (breakdown.duplicates > 0) parts.push(plural(breakdown.duplicates, 'duplicate'));
+  if (breakdown.saved > 0) parts.push(`${plural(breakdown.saved, 'tab')} already saved`);
+  return parts.join(', ');
+}
+
+/** The "Tidy up · N" button, or `''` when nothing currently qualifies. */
+function tidyButtonHtml(tidy: TidySelection): string {
+  if (tidy.tabIds.length === 0) return '';
+  return `<button class="action-btn save-tabs tidy-btn" data-action="tidy-tabs"
+        title="${escapeHtml(describeTidyBreakdown(tidy.breakdown))}">
+      Tidy up &middot; ${tidy.tabIds.length}
+    </button>`;
+}
+
 export class Dashboard {
   readonly deps: DashboardDeps;
 
@@ -45,6 +76,8 @@ export class Dashboard {
   #settings: TabOutSettings = createDefaultSettings();
   /** Tab ids in dashboard order, for the "Sort tabs" action. */
   #desiredOrder: number[] = [];
+  /** What "Tidy up" would close, for the "tidy-tabs" action. */
+  #tidySelection: TidySelection = EMPTY_TIDY_SELECTION;
 
   constructor(deps: DashboardDeps) {
     this.deps = deps;
@@ -56,6 +89,10 @@ export class Dashboard {
 
   get desiredOrder(): readonly number[] {
     return this.#desiredOrder;
+  }
+
+  get tidySelection(): TidySelection {
+    return this.#tidySelection;
   }
 
   /** Resolves the group behind a card's `data-group-index`. */
@@ -76,11 +113,32 @@ export class Dashboard {
     const model = buildDashboardModel(tabs, settings);
     this.#model = model;
 
-    this.#renderCards(model);
+    this.#tidySelection = selectTidyTabIds(model.realTabs, {
+      disposableEnabled: settings.disposableEnabled,
+      disposableRules: settings.disposableRules,
+      savedUrls: await this.#activeSavedUrls(),
+    });
+
+    this.#renderCards(model, this.#tidySelection);
     this.#renderStats(tabs.length);
     await this.#renderSortBanner(model);
     await this.renderSavedColumn();
     await this.renderHistoryPanel(this.currentHistoryQuery());
+  }
+
+  /**
+   * URLs on the active "Saved for later" checklist — a tab showing one of
+   * these is redundant with something durable, so "Tidy up" can close it.
+   * Swallows errors the same way `renderSavedColumn` does: a saved-tabs
+   * hiccup should never stop the rest of the dashboard from rendering.
+   */
+  async #activeSavedUrls(): Promise<Set<string>> {
+    try {
+      const { active } = await this.deps.savedTabs.list();
+      return new Set(active.map((item) => item.url));
+    } catch {
+      return new Set();
+    }
   }
 
   #renderHeader(): void {
@@ -91,7 +149,7 @@ export class Dashboard {
     if (date) date.textContent = getDateDisplay(now);
   }
 
-  #renderCards(model: DashboardModel): void {
+  #renderCards(model: DashboardModel, tidy: TidySelection): void {
     const section = byId('openTabsSection');
     const missions = byId('openTabsMissions');
     const count = byId('openTabsSectionCount');
@@ -115,8 +173,30 @@ export class Dashboard {
           </button>`
         : '';
 
-    count.innerHTML = domainText + closeAll;
+    count.innerHTML = domainText + closeAll + tidyButtonHtml(tidy);
     missions.innerHTML = renderEntries(model.entries);
+  }
+
+  /**
+   * Recomputes and repaints just the "Tidy up" button, without touching the
+   * rest of the cards.
+   *
+   * Checking off or dismissing a saved item changes what counts as "safe to
+   * close" but is a storage write, not a tab event — nothing else would
+   * notice and refresh the button otherwise.
+   */
+  async refreshTidyButton(): Promise<void> {
+    if (!this.#model) return;
+
+    this.#tidySelection = selectTidyTabIds(this.#model.realTabs, {
+      disposableEnabled: this.#settings.disposableEnabled,
+      disposableRules: this.#settings.disposableRules,
+      savedUrls: await this.#activeSavedUrls(),
+    });
+
+    const count = byId('openTabsSectionCount');
+    count?.querySelector('.tidy-btn')?.remove();
+    count?.insertAdjacentHTML('beforeend', tidyButtonHtml(this.#tidySelection));
   }
 
   #renderStats(totalTabs: number): void {

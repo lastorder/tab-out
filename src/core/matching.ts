@@ -1,13 +1,13 @@
 /**
  * core/matching.ts — evaluating the user's declarative grouping rules.
  *
- * Both landing-page patterns and custom-group rules are plain data objects
- * (see `src/types`), which means they can be stored in `chrome.storage` and
- * edited from the options page. This module is the single place that knows
- * how to interpret them.
+ * Both disposable rules and custom-group rules are plain data objects (see
+ * `src/types`), which means they can be stored in `chrome.storage` and edited
+ * from the options page. This module is the single place that knows how to
+ * interpret them.
  */
 
-import type { CustomGroupRule, LandingPattern } from '../types';
+import type { CustomGroupRule, DisposableRule } from '../types';
 import { parseUrl } from './url';
 
 /**
@@ -27,31 +27,31 @@ function hostnameMatches(
 }
 
 /**
- * Tests one landing-page pattern against a URL.
+ * Tests one disposable rule against a URL.
  *
  * Path constraints are checked in priority order — `pathPrefix`, then
  * `pathExact` — and when neither is given the rule only matches the site root.
  * `urlNotContains` runs last and can veto an otherwise successful match; it is
- * how "the Gmail inbox is a homepage, but an individual thread is not" is
+ * how "the Gmail inbox is disposable, but an individual thread is not" is
  * expressed without any code.
  */
-export function matchesLandingPattern(pattern: LandingPattern, url: string): boolean {
+export function matchesDisposableRule(rule: DisposableRule, url: string): boolean {
   const parsed = parseUrl(url);
   if (!parsed) return false;
-  if (!hostnameMatches(pattern, parsed.hostname)) return false;
+  if (!hostnameMatches(rule, parsed.hostname)) return false;
 
-  if (pattern.urlNotContains?.some((needle) => needle && url.includes(needle))) {
+  if (rule.urlNotContains?.some((needle) => needle && url.includes(needle))) {
     return false;
   }
 
-  if (pattern.pathPrefix) return parsed.pathname.startsWith(pattern.pathPrefix);
-  if (pattern.pathExact?.length) return pattern.pathExact.includes(parsed.pathname);
+  if (rule.pathPrefix) return parsed.pathname.startsWith(rule.pathPrefix);
+  if (rule.pathExact?.length) return rule.pathExact.includes(parsed.pathname);
   return parsed.pathname === '/';
 }
 
-/** True when any pattern considers this URL a homepage. */
-export function isLandingPage(url: string, patterns: readonly LandingPattern[]): boolean {
-  return patterns.some((pattern) => matchesLandingPattern(pattern, url));
+/** True when any rule considers this URL disposable. */
+export function isDisposable(url: string, rules: readonly DisposableRule[]): boolean {
+  return rules.some((rule) => matchesDisposableRule(rule, url));
 }
 
 /** Tests one custom-group rule against a URL. */
@@ -75,17 +75,18 @@ export function findCustomGroup(
 }
 
 /**
- * Hostnames that landing patterns care about. Used to bump those domains'
- * cards toward the top of the dashboard even when the specific tab isn't a
- * homepage (e.g. a GitHub issue still sorts near the GitHub homepage).
+ * Hostnames that disposable rules care about. Used to bump those domains'
+ * cards toward the top of the dashboard even when the specific tab isn't
+ * disposable itself (e.g. a GitHub issue still sorts near the GitHub
+ * homepage).
  */
-export function isLandingDomain(
+export function isDisposableDomain(
   domain: string,
-  patterns: readonly LandingPattern[],
+  rules: readonly DisposableRule[],
 ): boolean {
-  return patterns.some((pattern) => {
-    if (pattern.hostname) return pattern.hostname === domain;
-    if (pattern.hostnameEndsWith) return domain.endsWith(pattern.hostnameEndsWith);
+  return rules.some((rule) => {
+    if (rule.hostname) return rule.hostname === domain;
+    if (rule.hostnameEndsWith) return domain.endsWith(rule.hostnameEndsWith);
     return false;
   });
 }

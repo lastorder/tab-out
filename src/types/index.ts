@@ -16,11 +16,11 @@ export interface TabInfo {
 }
 
 /** How a group of tabs came to exist. */
-export type GroupKind = 'domain' | 'landing' | 'custom';
+export type GroupKind = 'domain' | 'disposable' | 'custom';
 
 /** A rendered card's worth of tabs. */
 export interface TabGroup {
-  /** Hostname, custom-group key, or {@link LANDING_GROUP_KEY}. */
+  /** Hostname, custom-group key, or `DISPOSABLE_GROUP_KEY` (from `core/grouping.ts`). */
   key: string;
   /** Human-facing name. Falls back to a friendly form of `key` when absent. */
   label?: string;
@@ -35,7 +35,10 @@ export interface PinnedSite {
 }
 
 /**
- * A declarative rule describing a "homepage" (landing page).
+ * A declarative rule describing a "disposable" tab — one that's safe to
+ * close because it costs nothing to get back: a site's own homepage
+ * (`github.com/`), or a spent one-off page like a Zoom meeting's post-join
+ * screen.
  *
  * Rules are fully serialisable — no functions — so they can live in
  * `chrome.storage` and be edited from the options page.
@@ -43,7 +46,7 @@ export interface PinnedSite {
  * Matching order: the hostname must match, then the first path constraint
  * present is applied, then `urlNotContains` can veto the match.
  */
-export interface LandingPattern {
+export interface DisposableRule {
   /** Exact hostname match, e.g. `mail.google.com`. */
   hostname?: string;
   /** Suffix hostname match, e.g. `.atlassian.net`. */
@@ -70,8 +73,20 @@ export interface CustomGroupRule {
 /** The complete, user-editable configuration. */
 export interface TabOutSettings {
   version: number;
+  /**
+   * Whether pinned sites are promoted to the front of the dashboard at all.
+   * Off doesn't delete the list — it just stops applying it, so a site with
+   * open tabs groups by hostname like any other, and one with none shows no
+   * placeholder.
+   */
+  pinnedEnabled: boolean;
   pinnedSites: PinnedSite[];
-  landingPatterns: LandingPattern[];
+  /**
+   * Whether disposable rules are applied at all. Off doesn't delete the
+   * rules — it just stops applying them, so every tab groups by hostname.
+   */
+  disposableEnabled: boolean;
+  disposableRules: DisposableRule[];
   customGroups: CustomGroupRule[];
   /** How many recently-closed tabs to remember before the oldest are dropped. */
   maxHistoryItems: number;

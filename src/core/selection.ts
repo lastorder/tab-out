@@ -43,7 +43,7 @@ export function selectTabIdsByHostname(
 /**
  * Selects tabs by exact URL.
  *
- * Used for the Homepages card and custom groups: closing "Gmail inbox" must
+ * Used for the Disposable card and custom groups: closing "Gmail inbox" must
  * not also close the email threads you have open on the same hostname.
  */
 export function selectTabIdsByExactUrl(

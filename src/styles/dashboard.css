@@ -1322,7 +1322,14 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
    reads as the same product, not a bolted-on feature.
    ============================================================ */
 
-/* Small unread-style count badge on the header History button. */
+/*
+ * Small unread-style count badge on the header History button.
+ *
+ * Deliberately understated — it's a passive count, not an alert, so it
+ * shouldn't compete with the amber/rose accents used for things that need
+ * attention (duplicates, "close all"). A neutral warm-gray chip with muted
+ * text reads as "here's a number" rather than "look here".
+ */
 .icon-btn-badge {
   position: absolute;
   top: -4px;
@@ -1331,10 +1338,10 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--accent-amber);
-  color: #fff;
+  background: var(--warm-gray);
+  color: var(--muted);
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 16px;
   text-align: center;
 }

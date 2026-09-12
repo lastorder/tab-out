@@ -9,7 +9,7 @@
 import type { BrowserTabs } from '../platform/browser';
 import type { PinnedSite, TabGroup } from '../types';
 import { selectDuplicateTabIds } from '../core/duplicates';
-import { LANDING_GROUP_KEY, pinnedInsertIndex } from '../core/grouping';
+import { DISPOSABLE_GROUP_KEY, pinnedInsertIndex } from '../core/grouping';
 import { findDashboardTabNeedingMove } from '../core/dashboard';
 import {
   findFocusTarget,
@@ -38,14 +38,14 @@ export class TabActions {
   /**
    * Closes an entire group.
    *
-   * Homepages and custom groups match by exact URL, because their keys are not
-   * real hostnames and a hostname sweep would take unrelated tabs with it.
+   * Disposable and custom groups match by exact URL, because their keys are
+   * not real hostnames and a hostname sweep would take unrelated tabs with it.
    * Plain domain cards match by hostname, which is the whole point of the card.
    */
   async closeGroup(group: TabGroup): Promise<number> {
     const urls = group.tabs.map((tab) => tab.url);
     const tabs = await this.#browser.queryAll();
-    const useExact = group.kind !== 'domain' || group.key === LANDING_GROUP_KEY;
+    const useExact = group.kind !== 'domain' || group.key === DISPOSABLE_GROUP_KEY;
     const ids = useExact
       ? selectTabIdsByExactUrl(tabs, urls)
       : selectTabIdsByHostname(tabs, urls);
@@ -59,6 +59,15 @@ export class TabActions {
     const ids = tabs.filter((tab) => !isInternalUrl(tab.url)).map((tab) => tab.id);
     await this.#browser.close(ids);
     return ids.length;
+  }
+
+  /**
+   * Closes an already-computed set of tab ids — used by "Tidy up", whose
+   * selection logic lives in `core/tidy.ts` since it's a pure decision, not
+   * a browser effect.
+   */
+  async closeTabs(tabIds: readonly number[]): Promise<void> {
+    await this.#browser.close(tabIds);
   }
 
   /** Closes duplicate copies of the given URLs, keeping one of each by default. */

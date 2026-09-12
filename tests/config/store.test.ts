@@ -39,13 +39,13 @@ describe('SettingsStore', () => {
     await store.save(
       emptySettings({
         pinnedSites: [{ url: 'https://a.com/' }],
-        landingPatterns: [{ hostname: 'x.com' }],
+        disposableRules: [{ hostname: 'x.com' }],
       }),
     );
 
     const patched = await store.patch({ pinnedSites: [{ url: 'https://b.com/' }] });
     expect(patched.pinnedSites).toEqual([{ url: 'https://b.com/' }]);
-    expect(patched.landingPatterns).toEqual([{ hostname: 'x.com' }]);
+    expect(patched.disposableRules).toEqual([{ hostname: 'x.com' }]);
   });
 
   it('restores defaults on reset', async () => {

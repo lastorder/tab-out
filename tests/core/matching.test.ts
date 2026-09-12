@@ -1,23 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { findCustomGroup, isLandingDomain, isLandingPage, matchesLandingPattern } from '@/core/matching';
-import { DEFAULT_LANDING_PATTERNS } from '@/config/defaults';
+import { findCustomGroup, isDisposable, isDisposableDomain, matchesDisposableRule } from '@/core/matching';
+import { DEFAULT_DISPOSABLE_RULES } from '@/config/defaults';
 
-describe('matchesLandingPattern', () => {
+describe('matchesDisposableRule', () => {
   it('matches only the site root when no path constraint is given', () => {
     const rule = { hostname: 'github.com' };
-    expect(matchesLandingPattern(rule, 'https://github.com/')).toBe(true);
-    expect(matchesLandingPattern(rule, 'https://github.com/acme/app')).toBe(false);
+    expect(matchesDisposableRule(rule, 'https://github.com/')).toBe(true);
+    expect(matchesDisposableRule(rule, 'https://github.com/acme/app')).toBe(false);
   });
 
   it('supports exact paths, path prefixes, and subdomain suffixes', () => {
     expect(
-      matchesLandingPattern({ hostname: 'x.com', pathExact: ['/home'] }, 'https://x.com/home'),
+      matchesDisposableRule({ hostname: 'x.com', pathExact: ['/home'] }, 'https://x.com/home'),
     ).toBe(true);
     expect(
-      matchesLandingPattern({ hostname: 'e.com', pathPrefix: '/docs' }, 'https://e.com/docs/intro'),
+      matchesDisposableRule({ hostname: 'e.com', pathPrefix: '/docs' }, 'https://e.com/docs/intro'),
     ).toBe(true);
     expect(
-      matchesLandingPattern(
+      matchesDisposableRule(
         { hostnameEndsWith: '.atlassian.net', pathPrefix: '/' },
         'https://acme.atlassian.net/jira',
       ),
@@ -25,33 +25,38 @@ describe('matchesLandingPattern', () => {
   });
 
   it('lets urlNotContains veto an otherwise matching URL', () => {
-    // This is what makes "the Gmail inbox is a homepage, an email isn't" work
+    // This is what makes "the Gmail inbox is disposable, an email isn't" work
     // as data rather than code.
     const rule = { hostname: 'mail.google.com', pathPrefix: '/', urlNotContains: ['#inbox/'] };
-    expect(matchesLandingPattern(rule, 'https://mail.google.com/mail/u/0/#inbox')).toBe(true);
-    expect(matchesLandingPattern(rule, 'https://mail.google.com/mail/u/0/#inbox/AbC123')).toBe(false);
+    expect(matchesDisposableRule(rule, 'https://mail.google.com/mail/u/0/#inbox')).toBe(true);
+    expect(matchesDisposableRule(rule, 'https://mail.google.com/mail/u/0/#inbox/AbC123')).toBe(false);
   });
 
   it('never matches a rule with no hostname constraint', () => {
     // A half-filled options form must not capture every tab on the internet.
-    expect(matchesLandingPattern({ pathPrefix: '/' }, 'https://anything.com/')).toBe(false);
+    expect(matchesDisposableRule({ pathPrefix: '/' }, 'https://anything.com/')).toBe(false);
   });
 
   it('returns false for malformed URLs', () => {
-    expect(matchesLandingPattern({ hostname: 'x.com' }, 'nonsense')).toBe(false);
+    expect(matchesDisposableRule({ hostname: 'x.com' }, 'nonsense')).toBe(false);
   });
 });
 
-describe('isLandingPage with the shipped defaults', () => {
+describe('isDisposable with the shipped defaults', () => {
   it.each([
     ['https://mail.google.com/mail/u/0/#inbox', true],
     ['https://mail.google.com/mail/u/0/#inbox/FMfcgz123', false],
     ['https://x.com/home', true],
+    ['https://www.linkedin.com/feed/', true],
     ['https://github.com/', true],
     ['https://github.com/acme/app/pull/1', false],
+    // The Zoom rule matches the post-join launcher page (the desktop app
+    // handles the actual call), not the whole zoom.us domain.
+    ['https://thoughtworks.zoom.us/j/95180550147?pwd=abc#success', true],
+    ['https://thoughtworks.zoom.us/profile', false],
     ['https://example.com/', false],
   ])('%s → %s', (url, expected) => {
-    expect(isLandingPage(url, DEFAULT_LANDING_PATTERNS)).toBe(expected);
+    expect(isDisposable(url, DEFAULT_DISPOSABLE_RULES)).toBe(expected);
   });
 });
 
@@ -68,10 +73,10 @@ describe('findCustomGroup', () => {
   });
 });
 
-describe('isLandingDomain', () => {
+describe('isDisposableDomain', () => {
   it('recognises hostnames and suffixes mentioned by any rule', () => {
-    expect(isLandingDomain('github.com', DEFAULT_LANDING_PATTERNS)).toBe(true);
-    expect(isLandingDomain('example.com', DEFAULT_LANDING_PATTERNS)).toBe(false);
-    expect(isLandingDomain('acme.atlassian.net', [{ hostnameEndsWith: '.atlassian.net' }])).toBe(true);
+    expect(isDisposableDomain('github.com', DEFAULT_DISPOSABLE_RULES)).toBe(true);
+    expect(isDisposableDomain('example.com', DEFAULT_DISPOSABLE_RULES)).toBe(false);
+    expect(isDisposableDomain('acme.atlassian.net', [{ hostnameEndsWith: '.atlassian.net' }])).toBe(true);
   });
 });

@@ -33,10 +33,18 @@
        ================================================================ -->
   <section class="panel" id="pinnedPanel">
     <div class="panel-header">
-      <h2>Pinned sites</h2>
+      <div class="panel-title-row">
+        <h2>Pinned sites</h2>
+        <label class="checkbox-field panel-toggle">
+          <input type="checkbox" id="pinnedEnabled">
+          <span>Enabled</span>
+        </label>
+      </div>
       <p>
         Always shown first on the dashboard. If a site has open tabs you get its
-        normal card; if not, you get a click-to-open placeholder.
+        normal card; if not, you get a click-to-open placeholder. Turning this
+        off stops applying the list without deleting it &mdash; sites group by
+        hostname like any other tab instead.
       </p>
     </div>
     <div class="rows" id="pinnedRows"></div>
@@ -44,19 +52,32 @@
   </section>
 
   <!-- ================================================================
-       HOMEPAGE RULES
+       DISPOSABLE TABS
        ================================================================ -->
-  <section class="panel" id="landingPanel">
+  <section class="panel" id="disposablePanel">
     <div class="panel-header">
-      <h2>Homepage rules</h2>
+      <div class="panel-title-row">
+        <h2>Disposable tabs</h2>
+        <label class="checkbox-field panel-toggle">
+          <input type="checkbox" id="disposableEnabled">
+          <span>Enabled</span>
+        </label>
+      </div>
       <p>
-        URLs matching these rules are collected into one <strong>Homepages</strong> card,
-        so you can clear your Gmail inbox, X feed and YouTube front page in a single click
-        without touching the content tabs on those same sites.
+        Tabs matching these rules are safe to close, because reopening them costs
+        nothing &mdash; either a site's own homepage (Gmail inbox, X feed, GitHub
+        front page), or a spent one-off page like the screen a Zoom meeting leaves
+        behind once the call has already opened in the app. They're collected into
+        one <strong>Disposable</strong> card, and count toward the dashboard's
+        "Tidy up" button. Turning this off stops applying the rules without
+        deleting them.
       </p>
     </div>
-    <div class="rows" id="landingRows"></div>
-    <button class="btn btn-add" data-action="add-landing">+ Add homepage rule</button>
+    <div class="rows" id="disposableRows"></div>
+    <div class="panel-actions">
+      <button class="btn btn-add" data-action="add-disposable">+ Add disposable rule</button>
+      <button class="btn btn-ghost" data-action="add-suggested-disposable">+ Add suggested rules</button>
+    </div>
   </section>
 
   <!-- ================================================================

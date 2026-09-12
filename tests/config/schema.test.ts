@@ -14,9 +14,11 @@ describe('normalizeSettings', () => {
 
   it('round-trips valid settings unchanged', () => {
     const input = {
-      version: 1,
+      version: 2,
+      pinnedEnabled: false,
       pinnedSites: [{ url: 'https://example.com/', label: 'Example' }],
-      landingPatterns: [{ hostname: 'x.com', pathExact: ['/home'] }],
+      disposableEnabled: false,
+      disposableRules: [{ hostname: 'x.com', pathExact: ['/home'] }],
       customGroups: [{ groupKey: 'k', groupLabel: 'K', hostname: 'a.com' }],
       maxHistoryItems: 250,
       autoSortTabs: false,
@@ -31,9 +33,9 @@ describe('normalizeSettings', () => {
   });
 
   it('substitutes defaults for a missing section, but honours an explicitly empty one', () => {
-    const { settings } = normalizeSettings({ pinnedSites: [], landingPatterns: [] });
+    const { settings } = normalizeSettings({ pinnedSites: [], disposableRules: [] });
     expect(settings.pinnedSites).toEqual([]);
-    expect(settings.landingPatterns).toEqual([]);
+    expect(settings.disposableRules).toEqual([]);
     expect(settings.customGroups).toEqual(createDefaultSettings().customGroups);
   });
 
@@ -56,19 +58,19 @@ describe('normalizeSettings', () => {
   });
 
   describe('rules', () => {
-    it('requires a hostname constraint on landing patterns', () => {
-      const { settings, issues } = normalizeSettings({ landingPatterns: [{ pathPrefix: '/' }] });
-      expect(settings.landingPatterns).toEqual([]);
+    it('requires a hostname constraint on disposable rules', () => {
+      const { settings, issues } = normalizeSettings({ disposableRules: [{ pathPrefix: '/' }] });
+      expect(settings.disposableRules).toEqual([]);
       expect(issues[0]!.message).toMatch(/hostname/);
     });
 
     it('repairs pasted schemes and missing leading slashes', () => {
       const { settings } = normalizeSettings({
-        landingPatterns: [
+        disposableRules: [
           { hostname: 'https://x.com', pathPrefix: 'home', pathExact: ['feed'], urlNotContains: ['', ' ', '#inbox/'] },
         ],
       });
-      expect(settings.landingPatterns[0]).toEqual({
+      expect(settings.disposableRules[0]).toEqual({
         hostname: 'x.com',
         pathPrefix: '/home',
         pathExact: ['/feed'],
@@ -101,17 +103,75 @@ describe('normalizeSettings', () => {
       expect(normalizeSettings({ maxHistoryItems: 5000 }).settings.maxHistoryItems).toBe(1000);
     });
 
-    it('defaults autoSortTabs on, and both scalars report bad input', () => {
-      expect(normalizeSettings({}).settings.autoSortTabs).toBe(true);
+    it('defaults every boolean on, and each reports bad input independently', () => {
+      expect(normalizeSettings({}).settings).toMatchObject({
+        autoSortTabs: true,
+        pinnedEnabled: true,
+        disposableEnabled: true,
+      });
       expect(normalizeSettings({ autoSortTabs: false }).settings.autoSortTabs).toBe(false);
+      expect(normalizeSettings({ pinnedEnabled: false }).settings.pinnedEnabled).toBe(false);
+      expect(normalizeSettings({ disposableEnabled: false }).settings.disposableEnabled).toBe(false);
 
-      const { settings, issues } = normalizeSettings({ maxHistoryItems: 'lots', autoSortTabs: 'yes' });
-      expect(settings).toMatchObject({ maxHistoryItems: 100, autoSortTabs: true });
-      expect(issues.map((i) => i.path).sort()).toEqual(['autoSortTabs', 'maxHistoryItems']);
+      const { settings, issues } = normalizeSettings({
+        maxHistoryItems: 'lots',
+        autoSortTabs: 'yes',
+        pinnedEnabled: 'yes',
+        disposableEnabled: 'yes',
+      });
+      expect(settings).toMatchObject({
+        maxHistoryItems: 100,
+        autoSortTabs: true,
+        pinnedEnabled: true,
+        disposableEnabled: true,
+      });
+      expect(issues.map((i) => i.path).sort()).toEqual([
+        'autoSortTabs',
+        'disposableEnabled',
+        'maxHistoryItems',
+        'pinnedEnabled',
+      ]);
     });
 
     it('reports no issue when a scalar is simply absent', () => {
       expect(normalizeSettings({}).issues).toEqual([]);
+    });
+  });
+
+  describe('upgrading a v1 blob', () => {
+    // The load-bearing case: normalizeSettings runs *before* migrateSettings,
+    // so if it didn't fall back to the old key name here, a real user's
+    // saved rules (or a previously-exported JSON file) would silently be
+    // replaced by the defaults the moment they upgraded.
+    const v1Blob = {
+      version: 1,
+      pinnedSites: [{ url: 'https://a.com/' }],
+      landingPatterns: [{ hostname: 'x.com', pathExact: ['/home'] }],
+      customGroups: [],
+      maxHistoryItems: 250,
+      autoSortTabs: false,
+    };
+
+    it('reads rules from the old "landingPatterns" key', () => {
+      const { settings, issues } = normalizeSettings(v1Blob);
+      expect(settings.disposableRules).toEqual([{ hostname: 'x.com', pathExact: ['/home'] }]);
+      expect(settings.pinnedSites).toEqual([{ url: 'https://a.com/' }]);
+      expect(issues).toEqual([]);
+    });
+
+    it('defaults the two new toggles on, since a v1 blob never had them', () => {
+      expect(normalizeSettings(v1Blob).settings).toMatchObject({
+        pinnedEnabled: true,
+        disposableEnabled: true,
+      });
+    });
+
+    it('prefers the new key when both are somehow present', () => {
+      const { settings } = normalizeSettings({
+        ...v1Blob,
+        disposableRules: [{ hostname: 'new.com' }],
+      });
+      expect(settings.disposableRules).toEqual([{ hostname: 'new.com' }]);
     });
   });
 });
@@ -120,7 +180,7 @@ describe('migrateSettings', () => {
   it('stamps the current version onto older settings, leaving current ones alone', () => {
     const settings = createDefaultSettings();
     expect(migrateSettings(settings)).toBe(settings);
-    expect(migrateSettings({ ...settings, version: 0 }).version).toBe(SETTINGS_VERSION);
+    expect(migrateSettings({ ...settings, version: 1 }).version).toBe(SETTINGS_VERSION);
   });
 });
 

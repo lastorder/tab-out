@@ -80,6 +80,34 @@ body {
   margin-bottom: 6px;
 }
 
+/* Panel title + its "Enabled" checkbox, side by side. */
+.panel-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-title-row h2 {
+  margin-bottom: 0;
+}
+
+.panel-toggle {
+  font-size: 12px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/*
+ * A disabled-but-not-deleted section: rows dim to signal "not applied right
+ * now" without implying the data is gone — it's still fully editable.
+ */
+.panel.panel-off .rows,
+.panel.panel-off .panel-actions,
+.panel.panel-off > .btn-add {
+  opacity: 0.55;
+}
+
 .panel-header p {
   font-size: 12.5px;
   line-height: 1.6;
@@ -91,6 +119,13 @@ body {
 .panel-header strong {
   color: var(--ink);
   font-weight: 500;
+}
+
+/* Two buttons side by side under the Disposable-tabs table. */
+.panel-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 /* ---- Rows ---- */
@@ -114,9 +149,9 @@ body {
 
 .row:hover { border-color: #d8d0c6; }
 
-.row-pinned  { grid-template-columns: 1.4fr 1fr auto; }
-.row-landing { grid-template-columns: 1fr 0.8fr 1fr 1.1fr auto; }
-.row-custom  { grid-template-columns: 0.8fr 1fr 1fr 0.7fr auto; }
+.row-pinned     { grid-template-columns: 1.4fr 1fr auto; }
+.row-disposable { grid-template-columns: 1fr 0.8fr 1fr 1.1fr auto; }
+.row-custom     { grid-template-columns: 0.8fr 1fr 1fr 0.7fr auto; }
 
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 
@@ -315,7 +350,7 @@ body {
 /* ---- Responsive ---- */
 @media (max-width: 780px) {
   .row-pinned,
-  .row-landing,
+  .row-disposable,
   .row-custom { grid-template-columns: 1fr; }
 
   .row-controls { justify-content: flex-end; }

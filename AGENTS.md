@@ -19,12 +19,12 @@ Before doing anything technical, tell the user what they're about to get:
 >
 > Here's what makes it great:
 > - **See all your open tabs at a glance** grouped by domain on a grid
-> - **Homepages group** pulls Gmail, X, LinkedIn, YouTube, GitHub homepages into one card for easy cleanup
+> - **Disposable tabs group** collects tabs that are safe to close — a site's own homepage (Gmail, X, GitHub) and spent one-off pages like a Zoom meeting's post-join screen — into one card, with a "Tidy up" button for closing them (plus duplicates and already-saved tabs) in one click
 > - **Close tabs with style** satisfying swoosh sound + confetti burst
 > - **Duplicate detection** flags when you have the same page open twice
 > - **Click any tab title to jump to it** even across different Chrome windows
 > - **Save for later** bookmark individual tabs to a checklist before closing them
-> - **Fully configurable** a settings page for pinned sites, homepage rules and custom groups
+> - **Fully configurable** a settings page for pinned sites, disposable rules and custom groups — pinned sites and disposable rules can each be switched off entirely with one checkbox
 > - **100% local** no server, no accounts, no data sent anywhere
 >
 > It's a Chrome extension. Setup takes about 2 minutes.
@@ -99,15 +99,16 @@ Once the extension is loaded:
 >
 > Here's how it works:
 > 1. **Your open tabs are grouped by domain** in a grid layout.
-> 2. **Homepages** (Gmail inbox, X home, YouTube, etc.) are in their own group at the top.
+> 2. **Disposable tabs** (Gmail inbox, X home, YouTube, a spent Zoom meeting page, etc.) are in their own group at the top — safe to close because reopening them costs nothing.
 > 3. **Click any tab title** to jump directly to that tab, even in another window.
 > 4. **Click the X** next to any tab to close just that one (with swoosh + confetti).
 > 5. **Click "Close all N tabs"** on a group to close the whole thing.
 > 6. **Duplicate tabs** are flagged with an amber "(2x)" badge. Click "Close duplicates" to keep one copy.
 > 7. **Save a tab for later** by clicking the bookmark icon before closing it. Saved tabs appear in the sidebar.
-> 8. **Only one Tab Out page stays open** — opening a new one automatically closes the others, and it always sits on the rightmost tab, so anything you open next appears to its left.
-> 9. **History** — click the clock icon to see every tab you've recently closed, however you closed it, and reopen one with a click. It updates live — close a tab and it shows up immediately, no refresh needed — and a reopened tab drops off the list immediately too.
-> 10. **Your tab bar quietly reorders itself** to match the dashboard — this is on by default; turn it off in Settings for a manual "Sort tabs" banner instead.
+> 8. **"Tidy up"** appears next to "Close all" whenever there's something safe to close in one click — duplicates, disposable tabs, or tabs already on the saved-for-later list.
+> 9. **Only one Tab Out page stays open** — opening a new one automatically closes the others, and it always sits on the rightmost tab, so anything you open next appears to its left.
+> 10. **History** — click the clock icon to see every tab you've recently closed, however you closed it, and reopen one with a click. It updates live — close a tab and it shows up immediately, no refresh needed — and a reopened tab drops off the list immediately too.
+> 11. **Your tab bar quietly reorders itself** to match the dashboard — this is on by default; turn it off in Settings for a manual "Sort tabs" banner instead.
 
 ## Step 4 — Point them at the settings page
 
@@ -115,8 +116,8 @@ Most people miss this, so mention it explicitly:
 
 > Click the **gear icon** in the top-right of the dashboard (or right-click the extension icon → Options) to configure:
 >
-> - **Pinned sites** — the sites that always sit at the top. Sites with no open tabs show as click-to-open placeholders.
-> - **Homepage rules** — which URLs count as a "homepage" and get collected into the Homepages card.
+> - **Pinned sites** — the sites that always sit at the top. Sites with no open tabs show as click-to-open placeholders. Has its own on/off switch.
+> - **Disposable tabs** — which tabs are safe to close and get collected into the shared Disposable card: a site's own homepage, or a spent one-off page like Zoom's post-join screen. Also has its own on/off switch.
 > - **Custom groups** — merge several hostnames into one card, or split one site into separate cards by path.
 > - **Tab sorting** — turn auto-sort off if you'd rather sort manually via a banner.
 > - **History** — how many recently closed tabs to remember (default 100).
@@ -125,9 +126,11 @@ Most people miss this, so mention it explicitly:
 
 Rule syntax worth explaining if they ask:
 
-- Hostname `x.com` matches exactly; a **leading dot** like `.atlassian.net` matches any subdomain.
+- Hostname `x.com` matches exactly; a **leading dot** like `.zoom.us` matches any subdomain.
 - **Path starts with** `/` matches every path on that host.
-- **Except URLs containing** vetoes a match — it's how the Gmail inbox counts as a homepage while an individual email thread doesn't.
+- **Except URLs containing** vetoes a match — it's how the Gmail inbox is disposable while an individual email thread isn't.
+
+If they had homepage rules saved from an older version, mention that those migrated automatically — nothing to redo.
 
 ## Updating
 
@@ -201,19 +204,21 @@ Consequences you must respect:
 
 - **Escape everything interpolated into HTML.** Page titles are attacker-controlled — any site can set its own `<title>`. Use `escapeHtml()` from `ui/html.ts`, in element content and attribute values alike. Tests assert this; don't delete them.
 - **No inline event handlers, ever.** Manifest V3's CSP blocks `onclick="…"` and `onerror="…"`. Use `data-action` + delegation. The favicon fallback lives in `ui/favicon.ts` for exactly this reason.
-- **Settings must stay serialisable.** No functions in settings objects — they have to survive `chrome.storage`. That's why homepage rules are declarative data (`urlNotContains`) rather than predicates.
+- **Settings must stay serialisable.** No functions in settings objects — they have to survive `chrome.storage`. That's why disposable rules are declarative data (`urlNotContains`) rather than predicates.
 - **`normalizeSettings()` must never throw.** It repairs bad input and reports issues. Corrupt storage must never break the new tab page.
 - **Keep defaults in normalised form.** `normalizeSettings(defaults)` must equal `defaults` — a test guards this.
 - **Group cards are addressed by index** via `data-group-index`, not by a slugified name. Don't reintroduce string-derived DOM ids; they collide.
-- **Closing by hostname vs exact URL is a real distinction.** Domain cards close by hostname; Homepages and custom groups close by exact URL so they don't take unrelated tabs with them. See `TabActions.closeGroup`.
+- **Closing by hostname vs exact URL is a real distinction.** Domain cards close by hostname; Disposable and custom groups close by exact URL so they don't take unrelated tabs with them. See `TabActions.closeGroup`.
 - **History is recorded in the background worker, not the dashboard.** `chrome.tabs.onRemoved` doesn't include the tab's URL, so `background/main.ts` keeps a `TabSnapshotCache` (`chrome.storage.session`) updated on every create/update, and consumes it on removal. If you add a way to close tabs that bypasses `chrome.tabs.remove`, history recording still works — it listens at the browser level, not through `TabActions`.
 - **The dashboard stays pinned to the rightmost tab.** `background/main.ts` calls `TabActions.moveDashboardToEnd` on every `chrome.tabs.onCreated`, and `newtab/main.ts` calls it once at boot. Both share `dashboardUrls()` from `core/dashboard.ts` — don't redefine "what counts as a dashboard tab" anywhere else.
 - **Storage-backed panels should react to `onChanged`, not just to tab events.** `TabHistoryService.onChanged` (mirroring `SettingsStore.onChanged`) is what makes the History panel update the instant the background worker records a closure, instead of waiting for the next unrelated repaint or a manual refresh. If you add another background-written, dashboard-displayed list, wire it the same way rather than relying on `RenderScheduler`.
 - **Don't derive live state from `Dashboard`'s last render model.** `#model` is a snapshot from the previous full render, and the moments you most want to repaint (a tab just closed) are exactly when it is stale. `renderHistoryPanel` queries open tabs live for this reason — reading `#model.realTabs` made a just-closed tab still look "open", which filtered its new history entry straight back out until the user refreshed.
 - **`RenderScheduler.suppress()` delays repaints; it must never drop them.** The close handlers mutate the DOM directly for instant feedback, but only a real render recomputes derived state — e.g. a pinned site whose last tab closed has to return as a click-to-open placeholder instead of vanishing. `suppress()` therefore queues a catch-up render; if you add a new suppressed action, don't bypass it.
-- **A settings field that isn't a row table (a number, a checkbox) lives directly on `DraftState`, not inside `pinned`/`landing`/`custom`.** See `maxHistoryItems` (string, parsed on save) and `autoSortTabs` (boolean, no parsing needed) for the pattern: add the field to `DraftState`, copy it in `settingsToDraft`/`draftToSettings`, validate it in `config/schema.ts` with a `normalize*` function that never throws, and give it its own `if (input.id === '…')` branch in `options/main.ts`'s input listener — it does not go through `mutateSection`.
+- **A settings field that isn't a row table (a number, a checkbox) lives directly on `DraftState`, not inside `pinned`/`disposable`/`custom`.** See `maxHistoryItems` (string, parsed on save) and `autoSortTabs` (boolean, no parsing needed) for the pattern: add the field to `DraftState`, copy it in `settingsToDraft`/`draftToSettings`, validate it in `config/schema.ts` with a `normalize*` function that never throws, and give it its own `if (input.id === '…')` branch in `options/main.ts`'s input listener — it does not go through `mutateSection`.
 - **Never render a user-controlled URL as a plain `<a href>`.** Chrome silently blocks top-level navigation to `file://` from an extension page, so a saved or historical `file://` tab could never be reopened by clicking a link. Every reopen path goes through `TabActions.openOrFocusTab()` (`chrome.tabs.create`/`chrome.tabs.update` under the hood) via a `data-action="open-saved"` / `"reopen-history"` button instead. If you add another place that reopens a stored URL, use this method, not an anchor tag.
 - **`isInternalUrl()` excludes as little as it can get away with.** Browser system pages (`chrome://extensions`, `chrome://settings`, `edge://...`, `brave://...`) are real tabs the user manages on purpose, so they group, close and get recorded into history like any other page. The only things actually excluded are `chrome://newtab/` (the dashboard itself, in disguise), `chrome-extension://` (any extension's UI), `about:` (a loading placeholder), and `devtools://`. Don't broaden this back to a blanket `chrome://` prefix match.
+- **A renamed stored field needs a legacy-key fallback in `normalizeSettings`, not just in `migrateSettings`.** `SettingsStore.load()` calls `normalizeSettings(raw)` *before* `migrateSettings(settings)`. When `landingPatterns` became `disposableRules`, a naive rename would have made `normalizeSettings` see the old key as simply absent and silently substitute the defaults — destroying every real user's saved rules on their first load after upgrading. The fix reads `raw['disposableRules'] ?? raw['landingPatterns']` inside `normalizeSettings` itself; `migrateSettings` only stamps the version number. Any future field rename needs the same shape of fix, in the same place.
+- **A pure decision that both a button's visibility and its label depend on belongs in `core/`, not in the renderer.** `core/tidy.ts`'s `selectTidyTabIds()` decides *which* tabs "Tidy up" would close and *why* (as a `{ disposable, saved, duplicates }` breakdown that always sums to the total); `newtab/dashboard.ts` only turns that into HTML and a tooltip string. This is what makes "does the button appear, and does its count match reality" testable without a DOM.
 
 ## Testing
 
@@ -239,7 +244,7 @@ adding one, ask what bug it would catch.
 - Language semantics (`Array.filter` works).
 
 Prefer a few `it.each` tables over many near-identical cases, and assert on
-behaviour ("closing Homepages spares the email you're reading") rather than on
+behaviour ("closing Disposable spares the email you're reading") rather than on
 internals.
 
 ## Storage layout

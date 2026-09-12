@@ -6,10 +6,10 @@
  * only affects new installs and anyone who hits "Reset to defaults".
  */
 
-import type { CustomGroupRule, LandingPattern, PinnedSite, TabOutSettings } from '../types';
+import type { CustomGroupRule, DisposableRule, PinnedSite, TabOutSettings } from '../types';
 
 /** Bumped whenever the stored shape changes; drives migrations. */
-export const SETTINGS_VERSION = 1;
+export const SETTINGS_VERSION = 2;
 
 /**
  * Sites always shown at the front of the dashboard.
@@ -24,26 +24,44 @@ export const DEFAULT_PINNED_SITES: readonly PinnedSite[] = Object.freeze([
   { url: 'https://chat.google.com/', label: 'Google Chat' },
 ]);
 
+/** Whether pinned sites are applied by default. */
+export const DEFAULT_PINNED_ENABLED = true;
+
 /**
- * Rules describing which URLs count as a "homepage" and therefore belong in
- * the shared Homepages card.
+ * Rules describing which tabs are "disposable" — safe to close because
+ * reopening them costs nothing — and therefore belong in the shared
+ * Disposable card. Two shapes of tab qualify:
+ *
+ *   - a site's own homepage (`github.com/`, `x.com/home`) — closing it
+ *     never loses anything, since it's not "content" you were reading
+ *   - a spent one-off page, like the screen Zoom leaves behind after a
+ *     meeting has already opened in the desktop app
  *
  * Note the Gmail rule: it matches every Gmail path (`pathPrefix: '/'`) but is
  * vetoed for URLs containing a thread fragment, so reading an email keeps its
- * own card. This replaces what used to be a hard-coded predicate function and
- * is why the rule format is declarative.
+ * own card. This is why the rule format is declarative rather than a
+ * hard-coded predicate function.
+ *
+ * Google Meet and Microsoft Teams meeting URLs are deliberately **not**
+ * included here: unlike Zoom's post-join page, the call itself runs inside
+ * the tab, so auto-closing it would end an active meeting. Add rules for
+ * them yourself only if that's genuinely safe for how you use them.
  */
-export const DEFAULT_LANDING_PATTERNS: readonly LandingPattern[] = Object.freeze([
+export const DEFAULT_DISPOSABLE_RULES: readonly DisposableRule[] = Object.freeze([
   {
     hostname: 'mail.google.com',
     pathPrefix: '/',
     urlNotContains: ['#inbox/', '#sent/', '#search/'],
   },
   { hostname: 'x.com', pathExact: ['/home'] },
-  { hostname: 'www.linkedin.com', pathExact: ['/'] },
+  { hostname: 'www.linkedin.com', pathExact: ['/', '/feed/'] },
   { hostname: 'github.com', pathExact: ['/'] },
   { hostname: 'www.youtube.com', pathExact: ['/'] },
+  { hostnameEndsWith: '.zoom.us', pathPrefix: '/j/' },
 ]);
+
+/** Whether disposable rules are applied by default. */
+export const DEFAULT_DISPOSABLE_ENABLED = true;
 
 /** Rules that merge or split tabs into custom cards. Empty by default. */
 export const DEFAULT_CUSTOM_GROUPS: readonly CustomGroupRule[] = Object.freeze([]);
@@ -63,8 +81,10 @@ export const DEFAULT_AUTO_SORT_TABS = true;
 export function createDefaultSettings(): TabOutSettings {
   return {
     version: SETTINGS_VERSION,
+    pinnedEnabled: DEFAULT_PINNED_ENABLED,
     pinnedSites: DEFAULT_PINNED_SITES.map((site) => ({ ...site })),
-    landingPatterns: DEFAULT_LANDING_PATTERNS.map((pattern) => ({ ...pattern })),
+    disposableEnabled: DEFAULT_DISPOSABLE_ENABLED,
+    disposableRules: DEFAULT_DISPOSABLE_RULES.map((rule) => ({ ...rule })),
     customGroups: DEFAULT_CUSTOM_GROUPS.map((rule) => ({ ...rule })),
     maxHistoryItems: DEFAULT_MAX_HISTORY_ITEMS,
     autoSortTabs: DEFAULT_AUTO_SORT_TABS,

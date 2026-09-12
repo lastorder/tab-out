@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   addRow,
+  addSuggestedDisposableRules,
   draftToSettings,
-  EMPTY_LANDING_ROW,
+  EMPTY_DISPOSABLE_ROW,
   EMPTY_PINNED_ROW,
   hostnameFromField,
   hostnameToField,
@@ -11,9 +12,17 @@ import {
   settingsToDraft,
   splitList,
 } from '@/options/draft';
-import { createDefaultSettings } from '@/config/defaults';
+import { createDefaultSettings, DEFAULT_DISPOSABLE_RULES } from '@/config/defaults';
 
-const blankDraft = { pinned: [], landing: [], custom: [], maxHistoryItems: '100', autoSortTabs: true };
+const blankDraft = {
+  pinnedEnabled: true,
+  pinned: [],
+  disposableEnabled: true,
+  disposable: [],
+  custom: [],
+  maxHistoryItems: '100',
+  autoSortTabs: true,
+};
 
 describe('hostname field conversion', () => {
   it('uses a leading dot to mean "any subdomain", in both directions', () => {
@@ -46,13 +55,15 @@ describe('draft round-trip', () => {
     expect(draftToSettings(settingsToDraft(settings)).settings).toEqual(settings);
   });
 
-  it('flattens settings into all-string form rows', () => {
+  it('flattens settings into all-string form rows, including the two enable toggles', () => {
     const draft = settingsToDraft(createDefaultSettings());
+    expect(draft.pinnedEnabled).toBe(true);
+    expect(draft.disposableEnabled).toBe(true);
     expect(draft.pinned[0]).toEqual({
       url: 'https://calendar.google.com/',
       label: 'Google Calendar',
     });
-    expect(draft.landing[0]).toEqual({
+    expect(draft.disposable[0]).toEqual({
       hostname: 'mail.google.com',
       pathPrefix: '/',
       pathExact: '',
@@ -65,7 +76,7 @@ describe('draft round-trip', () => {
   it('drops entirely blank rows silently — they are just unfilled "add" rows', () => {
     const draft = settingsToDraft(createDefaultSettings());
     draft.pinned.push({ ...EMPTY_PINNED_ROW });
-    draft.landing.push({ ...EMPTY_LANDING_ROW });
+    draft.disposable.push({ ...EMPTY_DISPOSABLE_ROW });
 
     const { settings, issues } = draftToSettings(draft);
     expect(settings.pinnedSites).toHaveLength(3);
@@ -96,14 +107,40 @@ describe('draft round-trip', () => {
       pathPrefix: '/jira',
     });
 
-    const landing = draftToSettings({
+    const disposable = draftToSettings({
       ...blankDraft,
-      landing: [{ hostname: 'x.com', pathPrefix: '', pathExact: '/home', urlNotContains: '' }],
+      disposable: [{ hostname: 'x.com', pathPrefix: '', pathExact: '/home', urlNotContains: '' }],
     });
-    expect(landing.settings.landingPatterns[0]).toEqual({
+    expect(disposable.settings.disposableRules[0]).toEqual({
       hostname: 'x.com',
       pathExact: ['/home'],
     });
+  });
+
+  it('carries the two enable toggles through to settings', () => {
+    const off = draftToSettings({ ...blankDraft, pinnedEnabled: false, disposableEnabled: false });
+    expect(off.settings.pinnedEnabled).toBe(false);
+    expect(off.settings.disposableEnabled).toBe(false);
+  });
+});
+
+describe('addSuggestedDisposableRules', () => {
+  it('appends a suggestion not already present, as its row form', () => {
+    const result = addSuggestedDisposableRules([], [{ hostname: 'github.com', pathExact: ['/'] }]);
+    expect(result).toEqual([{ hostname: 'github.com', pathPrefix: '', pathExact: '/', urlNotContains: '' }]);
+  });
+
+  it('never adds a rule already present, and never touches existing rows', () => {
+    const existing = [{ hostname: 'github.com', pathPrefix: '', pathExact: '/', urlNotContains: '' }];
+    const result = addSuggestedDisposableRules(existing, [{ hostname: 'github.com', pathExact: ['/'] }]);
+    expect(result).toEqual(existing);
+    expect(result).not.toBe(existing);
+  });
+
+  it('adding every shipped default twice in a row is idempotent', () => {
+    const once = addSuggestedDisposableRules([], DEFAULT_DISPOSABLE_RULES);
+    const twice = addSuggestedDisposableRules(once, DEFAULT_DISPOSABLE_RULES);
+    expect(twice).toEqual(once);
   });
 });
 

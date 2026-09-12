@@ -72,12 +72,16 @@ Manifest V3（简称 MV3）是 Chrome 当前的插件规范。相比老的 V2，
 Tab Out 把 Chrome 的新标签页替换成一个"标签页仪表盘"：
 
 - 把你打开的所有标签按**域名**分组，显示成卡片网格
-- 把各种"首页"（Gmail 收件箱、X 首页、YouTube 首页……）收进一张 **Homepages** 卡片，方便一键清理
+- 把"关掉也不心疼"的标签收进一张 **Disposable（可丢弃）** 卡片——既包括各种"首页"
+  （Gmail 收件箱、X 首页、GitHub 首页……），也包括像 Zoom 会议"进入会议室"之后
+  留下的那个临时页面这种一次性页面，方便一键清理
+- **Tidy up** 按钮：把"重复标签 + 可丢弃标签 + 已经存进稍后阅读的标签"一次性全部关掉
 - 检测**重复标签**（同一个 URL 开了多次）
 - 点击标题可以**跨窗口跳转**到那个标签
 - 关闭标签时有**音效 + 五彩纸屑**
 - 可以把标签**存进"稍后阅读"清单**再关掉
-- 提供**设置页**，置顶站点 / 首页规则 / 自定义分组都可以自己配
+- 提供**设置页**，置顶站点 / 可丢弃规则 / 自定义分组都可以自己配，置顶站点和可丢弃
+  规则还各自带一个总开关，可以整体关闭而不必删除已经配置的内容
 
 ### 2.2 文件结构
 
@@ -89,7 +93,8 @@ tab-out/
 │   │   └── index.ts          ← 全项目共享的类型定义
 │   ├── core/                 ← 【纯逻辑层】不碰 chrome.*，不碰 DOM
 │   │   ├── grouping.ts       ← 核心算法：标签 + 设置 → 卡片列表
-│   │   ├── matching.ts       ← 首页规则 / 自定义分组规则的匹配
+│   │   ├── matching.ts       ← 可丢弃规则 / 自定义分组规则的匹配
+│   │   ├── tidy.ts           ← "Tidy up" 该关哪些标签、原因是什么
 │   │   ├── selection.ts      ← 决定"某个操作作用于哪些标签"
 │   │   ├── title.ts          ← 标题清洗
 │   │   ├── domain.ts         ← 域名 → 友好品牌名
@@ -135,7 +140,7 @@ tab-out/
 │   │   ├── dashboard.css
 │   │   └── options.css
 │   └── icons/
-├── tests/                    ← 单元测试（26 个文件，271 个用例）
+├── tests/                    ← 单元测试（27 个文件，302 个用例）
 │   ├── helpers/              ← 测试替身：假浏览器、数据工厂
 │   ├── core/ config/ services/ ui/ options/ newtab/ background/
 │   └── setup.ts
@@ -157,10 +162,10 @@ v1 的卖点之一是"**没有 package.json，没有构建步骤，写完直接�
 
 | v1 的痛点 | v2 的解法 |
 |-----------|-----------|
-| 改一个函数不知道会不会影响别处 | TypeScript 静态类型 + 271 个单元测试 |
+| 改一个函数不知道会不会影响别处 | TypeScript 静态类型 + 302 个单元测试 |
 | 想加功能得在 1700 行里找位置 | 按职责分成 34 个模块 |
 | 逻辑和 `chrome.*` 调用混在一起，没法测试 | `platform/` 接缝层，测试注入假对象 |
-| 首页规则是硬编码的 JS 函数，用户改不了 | 改成可序列化的声明式数据 + 设置页 |
+| 首页规则是硬编码的 JS 函数，用户改不了 | 改成可序列化的声明式"可丢弃规则" + 设置页 |
 
 **付出的代价**是诚实的：用户现在需要 `npm install && npm run build`，安装时要选 `dist/` 而不是仓库根目录。README 和 AGENTS.md 都把这一点写在了最显眼的位置。
 
@@ -208,9 +213,9 @@ v1 的卖点之一是"**没有 package.json，没有构建步骤，写完直接�
 // 不需要启动 Chrome，不需要 mock 任何全局变量
 const groups = groupTabs(
   [{ id: 1, url: 'https://github.com/', title: '', windowId: 1, active: false, index: 0 }],
-  { landingPatterns: [...], customGroups: [] },
+  { disposableEnabled: true, disposableRules: [...], customGroups: [] },
 );
-expect(groups[0].key).toBe('__landing-pages__');
+expect(groups[0].key).toBe('__disposable__');
 ```
 
 **② 涉及浏览器的逻辑，靠"假浏览器"测试**
@@ -504,21 +509,23 @@ const LANDING_PAGE_PATTERNS = [
 }
 ```
 
-同样表达了"Gmail 收件箱算首页，但具体某封邮件不算"，而且**可序列化、可编辑、可导出**。
+同样表达了"Gmail 收件箱可以丢弃，但具体某封邮件不行"，而且**可序列化、可编辑、可导出**。
+
+> **2026 年更名**：这类规则原来叫 `LandingPattern`（"首页规则"），只覆盖"某个网站自己的首页"这一种情形。后来发现同样的匹配引擎完全可以覆盖另一类"关了也不心疼"的标签——比如 Zoom 会议链接点进去、桌面客户端接管通话之后，浏览器里留下的那个"已加入会议"页面——于是把整个概念重新命名为 `DisposableRule`（可丢弃规则），存储字段从 `landingPatterns` 改成 `disposableRules`。规则本身的匹配逻辑**完全没变**，变的只是名字和它所代表的含义范围。
 
 匹配规则的优先级设计得很小心：
 
 ```ts
-export function matchesLandingPattern(pattern: LandingPattern, url: string): boolean {
+export function matchesDisposableRule(rule: DisposableRule, url: string): boolean {
   const parsed = parseUrl(url);
   if (!parsed) return false;
-  if (!hostnameMatches(pattern, parsed.hostname)) return false;
+  if (!hostnameMatches(rule, parsed.hostname)) return false;
 
   // 否决优先：urlNotContains 可以推翻一个本来成立的匹配
-  if (pattern.urlNotContains?.some(n => n && url.includes(n))) return false;
+  if (rule.urlNotContains?.some(n => n && url.includes(n))) return false;
 
-  if (pattern.pathPrefix)       return parsed.pathname.startsWith(pattern.pathPrefix);
-  if (pattern.pathExact?.length) return pattern.pathExact.includes(parsed.pathname);
+  if (rule.pathPrefix)       return parsed.pathname.startsWith(rule.pathPrefix);
+  if (rule.pathExact?.length) return rule.pathExact.includes(parsed.pathname);
   return parsed.pathname === '/';   // 都没配 → 只匹配站点根路径
 }
 ```
@@ -535,6 +542,14 @@ function hostnameMatches(rule, hostname): boolean {
 
 为什么返回 `false` 而不是 `true`？因为用户在设置页里填到一半的规则不应该**把全互联网的标签都吞进去**。出错时要往"什么都不做"的方向倒。
 
+**默认规则里，Zoom 和 Google Meet / Microsoft Teams 待遇不同：**
+
+```ts
+{ hostnameEndsWith: '.zoom.us', pathPrefix: '/j/' },   // 默认收录
+```
+
+Zoom 会议真正的音视频是桌面客户端在跑的，浏览器那个 `/j/xxxxx` 页面只是"进入会议室"的启动器，会议结束后它就是个空壳标签——关掉它绝对安全。但 Google Meet / Teams 的通话是**在标签页里面**跑的，自动关掉这个标签会直接把人从会议里踢出去。所以默认规则**故意不包含** Meet / Teams：一个功能如果连"安全"都做不到保证，就不该是默认行为。想用的话可以在设置页里自己加。
+
 ### 6.5 `grouping.ts` — 核心分组算法
 
 这是整个仪表盘的心脏：`标签 + 设置 → 有序的卡片列表`。
@@ -543,38 +558,42 @@ function hostnameMatches(rule, hostname): boolean {
 
 ```ts
 for (const tab of tabs) {
-  if (isLandingPage(tab.url, landingPatterns)) { landingTabs.push(tab); continue; }  // ① 首页规则最高
+  if (disposableEnabled && isDisposable(tab.url, disposableRules)) {
+    disposableTabs.push(tab); continue;     // ① 可丢弃规则最高（可以整体关闭）
+  }
   const rule = findCustomGroup(tab.url, customGroups);
   if (rule) { ensureGroup(rule.groupKey, 'custom', rule.groupLabel).tabs.push(tab); continue; } // ② 自定义分组
   ensureGroup(groupKeyOf(tab.url), 'domain').tabs.push(tab);                          // ③ 按域名
 }
 ```
 
-**为什么首页规则优先级最高？** 这样"GitHub 首页"进 Homepages 卡片，而"GitHub 的某个 PR"留在自己的 GitHub 卡片里。于是"清空所有首页"这个动作不会误伤你正在看的 PR。
+**为什么可丢弃规则优先级最高？** 这样"GitHub 首页"进 Disposable 卡片，而"GitHub 的某个 PR"留在自己的 GitHub 卡片里。于是"清空 Disposable"这个动作不会误伤你正在看的 PR。
+
+`disposableEnabled` 这个开关本身也在这一步生效：关掉它以后，第①条判断整体跳过，所有标签退回到按域名/自定义分组分桶——**规则本身不会被清空或修改**，只是暂停应用而已。`pinnedEnabled` 同理，控制的是第三步是否执行。
 
 **第二步：排序**
 
 ```
-Homepages 卡片  →  首页规则提到过的域名  →  标签数多的  →  key 字母序
+Disposable 卡片  →  可丢弃规则提到过的域名  →  标签数多的  →  key 字母序
 ```
 
 最后那条"key 字母序"看似多余，实则重要：**它保证了标签数相同的两张卡片每次渲染的相对位置一致**，页面不会莫名其妙地跳来跳去。
 
-**第三步：置顶站点**（`applyPinnedSites`）
+**第三步：置顶站点**（`applyPinnedSites`，仅当 `pinnedEnabled` 为真时执行）
 
 这一步逻辑最绕，三种情况：
 
 1. 已经有该域名的卡片 → 提到最前面
-2. 没有卡片，但有该域名的标签（可能正躺在 Homepages 卡片里）→ **把这些标签"抢"过来**建一张新卡片，并从原来的组里移除，避免同一个标签被渲染两次
+2. 没有卡片，但有该域名的标签（可能正躺在 Disposable 卡片里）→ **把这些标签"抢"过来**建一张新卡片，并从原来的组里移除，避免同一个标签被渲染两次
 3. 一个标签都没有 → 渲染一张灰色的"点击打开"占位卡片
 
 第 2 种情况的"抢标签"是关键，对应的测试非常明确：
 
 ```ts
-it('reclaims a pinned site's tabs from the Homepages group, without duplicating them', () => {
-  // github.com 被置顶，它的首页标签要从 Homepages 移到自己的卡片
+it('reclaims a pinned site's tabs from Disposable, without duplicating them', () => {
+  // github.com 被置顶，它的可丢弃标签要从 Disposable 移到自己的卡片
   expect(orderedGroups[0].tabs.map(t => t.id)).toEqual([10]);   // 新卡片拿到了
-  expect(orderedGroups[1].tabs.map(t => t.id)).toEqual([11]);   // Homepages 只剩没被抢的
+  expect(orderedGroups[1].tabs.map(t => t.id)).toEqual([11]);   // Disposable 只剩没被抢的
 });
 ```
 
@@ -588,7 +607,7 @@ it('does not mutate the groups it was given', () => { ... });
 
 ### 6.6 `selection.ts` — 决定"关哪些标签"
 
-这是**风险最高**的代码：算错了就是误删用户的标签页。所以它被单独抽出来做成纯函数，配了 17 个测试。
+这是**风险最高**的代码：算错了就是误删用户的标签页。所以它被单独抽出来做成纯函数，配了专门的测试。
 
 **按域名关闭 vs 按精确 URL 关闭——这个区分是真实需求：**
 
@@ -598,7 +617,7 @@ selectTabIdsByExactUrl(tabs, urls)   // 只关掉 URL 完全一样的
 ```
 
 - 点"GitHub"卡片上的"关闭全部"→ 就该把所有 GitHub 标签都关掉（**按域名**）
-- 点"Homepages"卡片上的"关闭全部"→ 只能关掉那几个首页，**不能**把你正在读的邮件一起关了（**按精确 URL**）
+- 点"Disposable"卡片上的"关闭全部"→ 只能关掉那几个可丢弃标签，**不能**把你正在读的邮件一起关了（**按精确 URL**）
 
 **跳转目标的选择也有讲究：**
 
@@ -607,6 +626,52 @@ return matches.find(tab => tab.windowId !== currentWindowId) ?? matches[0];
 ```
 
 同一个 URL 开了多个时，**优先选不在当前窗口的那个**。否则点了半天没反应，用户会以为功能坏了。
+
+### 6.7 `tidy.ts` — "Tidy up" 该关哪些标签，以及为什么
+
+"Tidy up" 按钮做的事：**一次性关掉所有关了也不心疼的标签**——具体是三类里的任意一种：
+
+1. **可丢弃**——匹配一条启用中的可丢弃规则（见 6.4）
+2. **已经存过**——这个 URL 已经在"稍后阅读"的活跃清单里，当前标签是多余的
+3. **重复**——同一个 URL 开了不止一份，多出来的那些
+
+```ts
+export function selectTidyTabIds(realTabs, options): TidySelection {
+  const breakdown = { disposable: 0, saved: 0, duplicates: 0 };
+
+  // 第一步：可丢弃 / 已存过 —— 全部关掉，没有"留一份"这回事
+  const wholesaleIds = new Set<number>();
+  for (const tab of realTabs) {
+    if (options.disposableEnabled && isDisposable(tab.url, options.disposableRules)) {
+      wholesaleIds.add(tab.id); breakdown.disposable++;
+    } else if (options.savedUrls.has(tab.url)) {
+      wholesaleIds.add(tab.id); breakdown.saved++;
+    }
+  }
+
+  // 第二步：只在"剩下的标签"里找重复 —— 已经被第一步认领的标签不会被二次计入
+  const remaining = realTabs.filter(tab => !wholesaleIds.has(tab.id));
+  const { duplicateUrls } = analyzeDuplicates(remaining);
+  const duplicateIds = selectDuplicateTabIds(remaining, duplicateUrls, true);
+  breakdown.duplicates = duplicateIds.length;
+
+  return { tabIds: [...wholesaleIds, ...duplicateIds], breakdown };
+}
+```
+
+**这里最容易出错、也最值得写测试守住的一点**：一个标签可能同时满足好几个条件——比如 `github.com/` 既是可丢弃规则匹配的域名，又恰好开了两份。如果三个判断互不知道对方的存在，这个标签就会被数两次，`breakdown.disposable + breakdown.saved + breakdown.duplicates` 也就不再等于关闭的标签总数，toast 里报的数字就会跟实际不一致。
+
+解法是**给每个标签恰好一个理由，按优先级排列**：先看是不是可丢弃或已存过（`wholesaleIds`），是的话直接归类，不再进入第二步的"找重复"逻辑；重复判断只在**剩下的**标签里进行。这样 `breakdown` 三项加起来永远等于 `tabIds.length`，测试里也专门断言了这一点：
+
+```ts
+it('attributes each tab to exactly one reason, so the breakdown sums to the total closed', () => {
+  // github.com/ 既可丢弃又重复，必须只算一次（可丢弃），不能算两次
+  const total = breakdown.disposable + breakdown.saved + breakdown.duplicates;
+  expect(tabIds).toHaveLength(total);
+});
+```
+
+按钮本身（`newtab/dashboard.ts`）只做两件轻量的事：调用 `selectTidyTabIds` 拿到结果，然后决定"要不要显示这个按钮"（`tabIds.length > 0`）和"提示文案怎么写"（`describeTidyBreakdown()` 把 `breakdown` 拼成"3 个可丢弃标签、2 个重复"这样的句子，同一段文案同时用在按钮的 `title` 提示和点击后的 toast 里）。**决策在 `core/`，展示在 `newtab/`**——这条分层规则在这里体现得很直接。
 
 ---
 
@@ -701,14 +766,18 @@ v2 最大的用户可见改进：**把硬编码的配置变成了一个设置页
 
 ```ts
 export interface TabOutSettings {
-  version: number;                      // 为将来的数据迁移预留
-  pinnedSites: PinnedSite[];            // 置顶站点
-  landingPatterns: LandingPattern[];    // 首页识别规则
-  customGroups: CustomGroupRule[];      // 自定义分组规则
+  version: number;                       // 为将来的数据迁移预留（当前 = 2）
+  pinnedEnabled: boolean;                // 置顶站点这一整块是否生效
+  pinnedSites: PinnedSite[];             // 置顶站点
+  disposableEnabled: boolean;            // 可丢弃规则这一整块是否生效
+  disposableRules: DisposableRule[];     // 可丢弃标签识别规则
+  customGroups: CustomGroupRule[];       // 自定义分组规则
 }
 ```
 
-**铁律：设置里不允许出现函数。** 它必须能被 `chrome.storage` 序列化。这也是 [6.4](#64-matchingts--声明式规则引擎) 把首页规则改成声明式数据的根本原因。
+两个 `Enabled` 开关是"整体开关，不是删除"：关掉之后规则原样留在存储里，只是分组算法暂停应用它们（见 6.5 节）。
+
+**铁律：设置里不允许出现函数。** 它必须能被 `chrome.storage` 序列化。这也是 [6.4](#64-matchingts--声明式规则引擎) 把可丢弃规则改成声明式数据的根本原因。
 
 ### 8.2 `schema.ts` — 一个永不抛异常的校验器
 
@@ -728,11 +797,29 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
   const defaults = createDefaultSettings();
   if (!isObject(raw)) return { settings: defaults, issues };   // 完全无法识别 → 用默认值
   // ... 逐条校验，坏的丢掉并记入 issues
-  return { settings: { version, pinnedSites, landingPatterns, customGroups }, issues };
+  return { settings: { version, pinnedEnabled, pinnedSites, disposableEnabled, disposableRules, customGroups, ... }, issues };
 }
 ```
 
 **为什么这么严格？** 因为这是**新标签页**。如果存储里有一条坏数据就让页面白屏，用户每按一次 `Cmd+T` 都会崩——而且他很难自己修好。**宁可降级，不可崩溃。**
+
+#### 8.2.1 一次"改名"引出的迁移坑
+
+`disposableRules` 这个字段名，前身叫 `landingPatterns`。听起来只是个重命名，但踩了一个容易被忽略的坑：
+
+`SettingsStore.load()` 的调用顺序是先 `normalizeSettings(raw)`，再 `migrateSettings(settings)`。如果只在 `migrateSettings` 里做"把旧字段名搬到新字段名"，那么 `normalizeSettings` 会先一步把 `raw['disposableRules']` 判定为"缺失"，直接拿默认值顶上——用户存了几个月的规则就这样在升级的一瞬间被默认值悄悄覆盖了。
+
+修法是把兼容逻辑往前挪一层，直接写进 `normalizeSettings` 里：
+
+```ts
+const rawDisposableRules = Array.isArray(raw['disposableRules'])
+  ? raw['disposableRules']
+  : Array.isArray(raw['landingPatterns'])   // 兼容旧版本存的字段名
+    ? raw['landingPatterns']
+    : null;
+```
+
+`migrateSettings` 因此变得很轻——它只负责把 `version` 戳成最新值，真正的兼容工作在 `normalizeSettings` 里就已经做完了。**结论：字段改名不能只在"迁移函数"里处理，要看清楚校验和迁移谁先跑。**
 
 它做的修复包括：
 
@@ -785,8 +872,8 @@ async closeGroup(group: TabGroup): Promise<number> {
   const urls = group.tabs.map(t => t.url);
   const tabs = await this.#browser.queryAll();
 
-  // 关键判断：域名卡片按 hostname 关，Homepages/自定义分组按精确 URL 关
-  const useExact = group.kind !== 'domain' || group.key === LANDING_GROUP_KEY;
+  // 关键判断：域名卡片按 hostname 关，Disposable/自定义分组按精确 URL 关
+  const useExact = group.kind !== 'domain' || group.key === DISPOSABLE_GROUP_KEY;
   const ids = useExact ? selectTabIdsByExactUrl(tabs, urls)
                        : selectTabIdsByHostname(tabs, urls);
   await this.#browser.close(ids);
@@ -1075,11 +1162,15 @@ export type DashboardAction =
 
 ```ts
 export interface DraftState {
-  pinned:  PinnedRow[];    // { url, label }
-  landing: LandingRow[];   // { hostname, pathPrefix, pathExact, urlNotContains }
-  custom:  CustomRow[];    // { groupKey, groupLabel, hostname, pathPrefix }
+  pinnedEnabled: boolean;      // 置顶站点总开关
+  pinned:  PinnedRow[];        // { url, label }
+  disposableEnabled: boolean;  // 可丢弃规则总开关
+  disposable: DisposableRow[]; // { hostname, pathPrefix, pathExact, urlNotContains }
+  custom:  CustomRow[];        // { groupKey, groupLabel, hostname, pathPrefix }
 }
 ```
+
+两个 `Enabled` 字段不是表格行，跟 `maxHistoryItems` / `autoSortTabs` 走的是同一套模式：直接挂在 `DraftState` 上，在 `options/main.ts` 的 input 监听器里单独判断 `input.id`，不经过表格行的增删改逻辑。
 
 理由：
 
@@ -1111,7 +1202,7 @@ document.addEventListener('input', (event) => {
 
 ### 12.1 规模
 
-**26 个测试文件，271 个用例**，用 [Vitest](https://vitest.dev) 运行，全套跑完约 0.8 秒。
+**27 个测试文件，302 个用例**，用 [Vitest](https://vitest.dev) 运行，全套跑完约 0.8 秒。
 
 ```bash
 npm test              # 跑一次
@@ -1125,8 +1216,8 @@ npm run test:coverage # 覆盖率报告
 |----|-----------|------|
 | `core/` | **99.8%** | 核心算法，风险最高，覆盖最全 |
 | `services/` | 97.9% | 用假浏览器端到端验证 |
-| `options/` | 97.9% | 草稿模型 + 表单渲染 |
-| `config/` | 97.7% | 校验器的各种坏输入 |
+| `options/` | 98.0% | 草稿模型 + 表单渲染 |
+| `config/` | 97.9% | 校验器的各种坏输入 |
 | `ui/render/` | **100%** | 纯函数，含 XSS 断言 |
 | `background/` | 100% | 角标阈值 + 历史记录 |
 | `platform/` | 低 | **刻意的**——它就是 `chrome.*` 的转发层，没有逻辑可测 |
@@ -1257,12 +1348,12 @@ npm run build
 | 决策 | 理由 |
 |------|------|
 | **决策纯化，副作用注入** | 让 90% 的逻辑可以用普通对象测试，不需要浏览器 |
-| **首页规则改成声明式数据** | 函数没法序列化，也就没法做设置页。数据可以存、可以编辑、可以导出 |
+| **可丢弃规则改成声明式数据** | 函数没法序列化，也就没法做设置页。数据可以存、可以编辑、可以导出 |
 | **设置存 `sync`，稍后阅读存 `local`** | 设置小且值得跨设备同步；清单可能很大，会撞 `sync` 配额 |
 | **校验器永不抛异常** | 这是新标签页。一条坏数据就白屏的话，用户每次开新标签都会崩 |
 | **单例仪表盘取代 "Close extras"** | 能自动做对的事，不要做成需要用户决策的 UI |
 | **卡片按 index 定位** | 字符串 slug 会冲突（`Work-Jira` 和 `work.jira`），会关错卡片 |
-| **按域名关 vs 按精确 URL 关** | 关 GitHub 卡片该带走所有 GitHub 标签；关 Homepages 不能带走你在读的邮件 |
+| **按域名关 vs 按精确 URL 关** | 关 GitHub 卡片该带走所有 GitHub 标签；关 Disposable 不能带走你在读的邮件 |
 | **规则缺 hostname 时永不匹配** | 用户填到一半的规则不应该吞掉全互联网的标签 |
 | **删掉 `activeTab` 权限** | 从未使用。权限最小化降低用户的信任成本 |
 | **所有插值都转义** | 任何网站都能自定义 `<title>`，这是真实攻击面 |
@@ -1326,15 +1417,16 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 
 | 模块 | 行数 | 职责 |
 |------|-----:|------|
-| `types/index.ts` | 119 | 全项目共享类型 |
+| `types/index.ts` | 134 | 全项目共享类型 |
 | **core/** | | **纯逻辑，无依赖** |
-| `core/grouping.ts` | 212 | 分组 + 排序 + 置顶站点，仪表盘核心算法 |
+| `core/grouping.ts` | 223 | 分组 + 排序 + 置顶站点，仪表盘核心算法 |
 | `core/title.ts` | 178 | 标题清洗流水线 |
 | `core/selection.ts` | 125 | 决定操作作用于哪些标签（风险最高） |
-| `core/matching.ts` | 91 | 声明式规则匹配 |
+| `core/matching.ts` | 92 | 声明式规则匹配 |
+| `core/url.ts` | 84 | 永不抛异常的 URL 工具 |
+| `core/friendly-domains.ts` | 87 | 域名 → 品牌名映射表（纯数据） |
 | `core/duplicates.ts` | 85 | 重复检测与去重选择 |
-| `core/friendly-domains.ts` | 76 | 域名 → 品牌名映射表（纯数据） |
-| `core/url.ts` | 71 | 永不抛异常的 URL 工具 |
+| `core/tidy.ts` | 76 | "Tidy up" 该关哪些标签、原因是什么 |
 | `core/history.ts` | 53 | 关闭历史的去重、排序、裁剪 |
 | `core/time.ts` | 50 | 相对时间、问候语 |
 | `core/dashboard.ts` | 48 | 识别与定位 Tab Out 自己的标签页 |
@@ -1343,11 +1435,11 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 | `platform/browser.ts` | 107 | `BrowserTabs` 接口 + Chrome 实现 |
 | `platform/storage.ts` | 74 | `KeyValueStore` 接口 + Chrome/内存实现 |
 | **config/** | | **设置系统** |
-| `config/schema.ts` | 296 | 校验与规范化（永不抛异常） |
-| `config/defaults.ts` | 72 | 默认设置 |
+| `config/schema.ts` | 351 | 校验与规范化（永不抛异常，含 v1→v2 字段兼容） |
+| `config/defaults.ts` | 92 | 默认设置 |
 | `config/store.ts` | 69 | 读写 `chrome.storage.sync` |
 | **services/** | | **业务编排** |
-| `services/tab-actions.ts` | 174 | 所有对浏览器的写操作 |
+| `services/tab-actions.ts` | 191 | 所有对浏览器的写操作 |
 | `services/saved-tabs.ts` | 122 | 稍后阅读清单（软删除） |
 | `services/tab-history.ts` | 121 | 关闭历史的读写 |
 | `services/tab-snapshot-cache.ts` | 67 | tab id → 最后已知信息（session 存储） |
@@ -1355,19 +1447,19 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 | `ui/render/cards.ts` | 189 | 分组卡片、占位卡片与页面小标签 |
 | `ui/effects.ts` | 154 | 音效、纸屑、淡出动画 |
 | `ui/render/history.ts` | 63 | 历史面板列表 |
-| `ui/render/saved.ts` | 56 | 稍后阅读侧栏 |
+| `ui/render/saved.ts` | 62 | 稍后阅读侧栏 |
 | `ui/html.ts` | 33 | HTML 转义（安全关键） |
 | `ui/favicon.ts` | 23 | 图标加载失败兜底 |
 | `ui/toast.ts` | 23 | 浮动提示 |
 | `ui/icons.ts` | 20 | 内联 SVG |
 | **入口** | | |
-| `newtab/controller.ts` | 405 | 事件委托，所有交互 |
-| `newtab/dashboard.ts` | 286 | 渲染循环与状态 |
-| `newtab/main.ts` | 58 | 组装根 |
-| `options/main.ts` | 280 | 设置页事件、保存、导入导出 |
-| `options/draft.ts` | 215 | 表单草稿模型（纯函数） |
+| `newtab/controller.ts` | 464 | 事件委托，所有交互（含 Tidy up） |
+| `newtab/dashboard.ts` | 366 | 渲染循环与状态（含 Tidy 按钮的计算与局部刷新） |
+| `options/draft.ts` | 246 | 表单草稿模型（纯函数） |
+| `options/main.ts` | 313 | 设置页事件、保存、导入导出 |
 | `options/render.ts` | 123 | 表单渲染（数据驱动） |
 | `background/main.ts` | 145 | Service Worker 事件接线 |
+| `newtab/main.ts` | 58 | 组装根 |
 | `background/history-recorder.ts` | 55 | 关闭标签的记录逻辑 |
 | `background/badge.ts` | 35 | 角标计算（纯函数） |
 
@@ -1375,26 +1467,26 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 
 | 文件 | 行数 | 职责 |
 |------|-----:|------|
-| `tests/**` | ~2840 | 26 个测试文件，271 个用例 |
-| `styles/dashboard.css` | 1297 | 仪表盘视觉体系 |
-| `styles/options.css` | 281 | 设置页样式 |
-| `newtab/index.html` | 131 | 仪表盘骨架 |
+| `tests/**` | ~3180 | 27 个测试文件，302 个用例 |
+| `styles/dashboard.css` | 1578 | 仪表盘视觉体系 |
+| `styles/options.css` | 358 | 设置页样式 |
+| `newtab/index.html` | 162 | 仪表盘骨架 |
 | `options/options.html` | 94 | 设置页骨架 |
 | `scripts/build.mjs` | ~115 | esbuild 构建管线 |
 | `manifest.json` | 25 | 插件配置 |
 
 ### 规模小结
 
-- **源代码**：约 4410 行 TypeScript + 1580 行 CSS + 225 行 HTML
-- **测试代码**：约 2840 行，271 个用例
-- **构建产物**：约 120 KB，零运行时依赖
-- **测试/源码比**：约 0.64 —— 测试只覆盖真正会出错的地方，不追求行数
+- **源代码**：约 4840 行 TypeScript + 1936 行 CSS + 313 行 HTML
+- **测试代码**：约 3180 行，302 个用例
+- **构建产物**：约 130 KB，零运行时依赖
+- **测试/源码比**：约 0.66 —— 测试只覆盖真正会出错的地方，不追求行数
 
 ---
 
 ## 结语
 
-v1 用 1738 行的单文件证明了"**想法是对的**"；v2 用分层架构和 271 个测试让它"**可以继续长大**"。
+v1 用 1738 行的单文件证明了"**想法是对的**"；v2 用分层架构和 302 个测试让它"**可以继续长大**"。
 
 如果你只想从这份文档带走一句话，那就是：
 

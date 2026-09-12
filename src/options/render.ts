@@ -38,10 +38,10 @@ const SECTIONS: Record<SectionName, SectionSpec> = {
       { field: 'label', label: 'Label (optional)', placeholder: 'Gmail' },
     ],
   },
-  landing: {
-    empty: 'No homepage rules — the Homepages card will stay empty.',
+  disposable: {
+    empty: 'No disposable rules — the Disposable card will stay empty.',
     fields: [
-      { field: 'hostname', label: 'Hostname', placeholder: 'x.com or .atlassian.net' },
+      { field: 'hostname', label: 'Hostname', placeholder: 'x.com or .zoom.us' },
       { field: 'pathPrefix', label: 'Path starts with', placeholder: '/' },
       { field: 'pathExact', label: 'Exact paths', placeholder: '/home, /feed' },
       { field: 'urlNotContains', label: 'Except URLs containing', placeholder: '#inbox/, #sent/' },

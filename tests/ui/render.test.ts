@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { groupTitle, renderEmptyState, renderEntries, VISIBLE_CHIP_LIMIT } from '@/ui/render/cards';
 import { renderArchiveList, renderSavedItem } from '@/ui/render/saved';
-import { LANDING_GROUP_KEY } from '@/core/grouping';
+import { DISPOSABLE_GROUP_KEY } from '@/core/grouping';
 import type { TabGroup } from '@/types';
 import { resetTabIds, tab } from '../helpers/factories';
 
@@ -19,7 +19,7 @@ const card = (g: TabGroup = group()) => renderEntries([{ type: 'group', group: g
 describe('groupTitle', () => {
   it('uses the explicit label, else the friendly brand name', () => {
     expect(groupTitle(group())).toBe('GitHub');
-    expect(groupTitle({ key: LANDING_GROUP_KEY, kind: 'landing', tabs: [] })).toBe('Homepages');
+    expect(groupTitle({ key: DISPOSABLE_GROUP_KEY, kind: 'disposable', tabs: [] })).toBe('Disposable');
     expect(groupTitle({ key: 'work', label: 'Work', kind: 'custom', tabs: [] })).toBe('Work');
   });
 });

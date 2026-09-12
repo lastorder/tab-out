@@ -9,14 +9,15 @@
 import type { DraftRow, DraftState, SectionName } from './draft';
 import { SettingsStore } from '../config/store';
 import { createChromeStore } from '../platform/storage';
-import { createDefaultSettings } from '../config/defaults';
+import { createDefaultSettings, DEFAULT_DISPOSABLE_RULES } from '../config/defaults';
 import { parseSettingsJson, stringifySettings } from '../config/schema';
 import { TabHistoryService } from '../services/tab-history';
 import {
   addRow,
+  addSuggestedDisposableRules,
   draftToSettings,
   EMPTY_CUSTOM_ROW,
-  EMPTY_LANDING_ROW,
+  EMPTY_DISPOSABLE_ROW,
   EMPTY_PINNED_ROW,
   moveRow,
   removeRow,
@@ -30,9 +31,15 @@ const historyService = new TabHistoryService(createChromeStore('local'));
 /** Container element for each table. */
 const CONTAINERS: Record<SectionName, string> = {
   pinned: 'pinnedRows',
-  landing: 'landingRows',
+  disposable: 'disposableRows',
   custom: 'customRows',
 };
+
+/** Panel element id + the draft field that enables it, for the dimming effect. */
+const TOGGLEABLE_PANELS: readonly { panelId: string; field: 'pinnedEnabled' | 'disposableEnabled' }[] = [
+  { panelId: 'pinnedPanel', field: 'pinnedEnabled' },
+  { panelId: 'disposablePanel', field: 'disposableEnabled' },
+];
 
 let draft: DraftState = settingsToDraft(createDefaultSettings());
 /** The last saved state, used by Revert and the dirty indicator. */
@@ -61,6 +68,16 @@ function render(): void {
   const autoSortInput = byId<HTMLInputElement>('autoSortTabs');
   if (autoSortInput && autoSortInput.checked !== draft.autoSortTabs) {
     autoSortInput.checked = draft.autoSortTabs;
+  }
+
+  // The two "apply this section at all" toggles: sync the checkbox, and dim
+  // the rows underneath (still editable — turning it off doesn't lock the
+  // list, just stops applying it).
+  for (const { panelId, field } of TOGGLEABLE_PANELS) {
+    const enabled = draft[field];
+    const checkbox = byId<HTMLInputElement>(field);
+    if (checkbox && checkbox.checked !== enabled) checkbox.checked = enabled;
+    byId(panelId)?.classList.toggle('panel-off', !enabled);
   }
 
   updateStatus();
@@ -124,10 +141,20 @@ document.addEventListener('input', (event) => {
     return;
   }
 
-  // Likewise the auto-sort checkbox — a plain boolean, not a row table.
+  // Plain booleans, not row tables.
   if (input.id === 'autoSortTabs') {
     draft = { ...draft, autoSortTabs: input.checked };
     updateStatus();
+    return;
+  }
+  if (input.id === 'pinnedEnabled') {
+    draft = { ...draft, pinnedEnabled: input.checked };
+    render();
+    return;
+  }
+  if (input.id === 'disposableEnabled') {
+    draft = { ...draft, disposableEnabled: input.checked };
+    render();
     return;
   }
 
@@ -159,8 +186,14 @@ document.addEventListener('click', (event) => {
     case 'add-pinned':
       draft = { ...draft, pinned: addRow(draft.pinned, { ...EMPTY_PINNED_ROW }) };
       break;
-    case 'add-landing':
-      draft = { ...draft, landing: addRow(draft.landing, { ...EMPTY_LANDING_ROW }) };
+    case 'add-disposable':
+      draft = { ...draft, disposable: addRow(draft.disposable, { ...EMPTY_DISPOSABLE_ROW }) };
+      break;
+    case 'add-suggested-disposable':
+      draft = {
+        ...draft,
+        disposable: addSuggestedDisposableRules(draft.disposable, DEFAULT_DISPOSABLE_RULES),
+      };
       break;
     case 'add-custom':
       draft = { ...draft, custom: addRow(draft.custom, { ...EMPTY_CUSTOM_ROW }) };

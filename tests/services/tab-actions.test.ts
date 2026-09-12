@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { TabActions } from '@/services/tab-actions';
-import { LANDING_GROUP_KEY } from '@/core/grouping';
+import { DISPOSABLE_GROUP_KEY } from '@/core/grouping';
 import { createFakeBrowser } from '../helpers/fake-browser';
 import { resetTabIds, tab } from '../helpers/factories';
 
@@ -27,14 +27,14 @@ describe('TabActions.closeGroup', () => {
     expect(browser.tabs.map((t) => t.id)).toEqual([3]);
   });
 
-  it('closes Homepages by exact URL, sparing content tabs on the same host', async () => {
+  it('closes Disposable by exact URL, sparing content tabs on the same host', async () => {
     const inbox = tab('https://mail.google.com/mail/u/0/#inbox', { id: 1 });
     const thread = tab('https://mail.google.com/mail/u/0/#inbox/abc', { id: 2 });
     const browser = createFakeBrowser([inbox, thread]);
 
     await new TabActions(browser).closeGroup({
-      key: LANDING_GROUP_KEY,
-      kind: 'landing',
+      key: DISPOSABLE_GROUP_KEY,
+      kind: 'disposable',
       tabs: [inbox],
     });
 
@@ -164,6 +164,18 @@ describe('TabActions.sortTabs', () => {
       { tabId: 3, index: 1 },
       { tabId: 9, index: 2 },
     ]);
+  });
+});
+
+describe('TabActions.closeTabs', () => {
+  it('closes exactly the given ids — the effect side of "Tidy up", whose selection logic is pure', async () => {
+    const browser = createFakeBrowser([
+      tab('https://a.com/', { id: 1 }),
+      tab('https://b.com/', { id: 2 }),
+      tab('https://c.com/', { id: 3 }),
+    ]);
+    await new TabActions(browser).closeTabs([1, 3]);
+    expect(browser.tabs.map((t) => t.id)).toEqual([2]);
   });
 });
 

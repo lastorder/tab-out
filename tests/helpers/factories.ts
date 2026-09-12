@@ -47,9 +47,11 @@ export function historyEntry(
 /** Settings with everything empty — the neutral baseline for grouping tests. */
 export function emptySettings(overrides: Partial<TabOutSettings> = {}): TabOutSettings {
   return {
-    version: 1,
+    version: 2,
+    pinnedEnabled: true,
     pinnedSites: [],
-    landingPatterns: [],
+    disposableEnabled: true,
+    disposableRules: [],
     customGroups: [],
     maxHistoryItems: 100,
     autoSortTabs: true,
