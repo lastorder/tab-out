@@ -64,7 +64,7 @@ function tidyButtonHtml(tidy: TidySelection): string {
   if (tidy.tabIds.length === 0) return '';
   return `<button class="action-btn save-tabs tidy-btn" data-action="tidy-tabs"
         title="${escapeHtml(describeTidyBreakdown(tidy.breakdown))}">
-      Tidy up &middot; ${tidy.tabIds.length}
+      ${ICONS.sparkles}Tidy up &middot; ${tidy.tabIds.length}
     </button>`;
 }
 

@@ -140,7 +140,7 @@ tab-out/
 │   │   ├── dashboard.css
 │   │   └── options.css
 │   └── icons/
-├── tests/                    ← 单元测试（27 个文件，302 个用例）
+├── tests/                    ← 单元测试（27 个文件，309 个用例）
 │   ├── helpers/              ← 测试替身：假浏览器、数据工厂
 │   ├── core/ config/ services/ ui/ options/ newtab/ background/
 │   └── setup.ts
@@ -162,7 +162,7 @@ v1 的卖点之一是"**没有 package.json，没有构建步骤，写完直接�
 
 | v1 的痛点 | v2 的解法 |
 |-----------|-----------|
-| 改一个函数不知道会不会影响别处 | TypeScript 静态类型 + 302 个单元测试 |
+| 改一个函数不知道会不会影响别处 | TypeScript 静态类型 + 309 个单元测试 |
 | 想加功能得在 1700 行里找位置 | 按职责分成 34 个模块 |
 | 逻辑和 `chrome.*` 调用混在一起，没法测试 | `platform/` 接缝层，测试注入假对象 |
 | 首页规则是硬编码的 JS 函数，用户改不了 | 改成可序列化的声明式"可丢弃规则" + 设置页 |
@@ -1165,9 +1165,25 @@ export interface DraftState {
   pinnedEnabled: boolean;      // 置顶站点总开关
   pinned:  PinnedRow[];        // { url, label }
   disposableEnabled: boolean;  // 可丢弃规则总开关
-  disposable: DisposableRow[]; // { hostname, pathPrefix, pathExact, urlNotContains }
+  disposable: DisposableRow[]; // { hostname, pattern }
   custom:  CustomRow[];        // { groupKey, groupLabel, hostname, pathPrefix }
 }
+```
+
+`disposable`这张表原本是 4 个字段（`pathPrefix` / `pathExact` / `urlNotContains` 各占一格），后来收敛成了一个 `pattern` 字段，用逗号分隔的小型通配符语法表达同样的意思：
+
+```
+/j/*        →  前缀匹配（该路径及其下所有路径）    → pathPrefix
+/home       →  精确匹配（只匹配这一个路径）        → pathExact
+!#inbox/    →  否决匹配（URL 包含这段文字就排除）  → urlNotContains
+```
+
+`patternToField()` / `patternFromField()`（`options/draft.ts`）就是这两个方向的转换器，写法跟处理 hostname 的 `hostnameToField()` / `hostnameFromField()` 完全一个思路。**`DisposableRule` 本身（存储形状、`core/matching.ts` 的匹配逻辑）一行都没改**——这只是设置页收集用户输入的方式变了，规则引擎毫不知情。六条默认规则全部可以无损往返，有测试守着这一点：
+
+```ts
+it('is lossless for the shipped defaults', () => {
+  expect(draftToSettings(settingsToDraft(settings)).settings).toEqual(settings);
+});
 ```
 
 两个 `Enabled` 字段不是表格行，跟 `maxHistoryItems` / `autoSortTabs` 走的是同一套模式：直接挂在 `DraftState` 上，在 `options/main.ts` 的 input 监听器里单独判断 `input.id`，不经过表格行的增删改逻辑。
@@ -1202,7 +1218,7 @@ document.addEventListener('input', (event) => {
 
 ### 12.1 规模
 
-**27 个测试文件，302 个用例**，用 [Vitest](https://vitest.dev) 运行，全套跑完约 0.8 秒。
+**27 个测试文件，309 个用例**，用 [Vitest](https://vitest.dev) 运行，全套跑完约 0.8 秒。
 
 ```bash
 npm test              # 跑一次
@@ -1455,9 +1471,9 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 | **入口** | | |
 | `newtab/controller.ts` | 464 | 事件委托，所有交互（含 Tidy up） |
 | `newtab/dashboard.ts` | 366 | 渲染循环与状态（含 Tidy 按钮的计算与局部刷新） |
-| `options/draft.ts` | 246 | 表单草稿模型（纯函数） |
+| `options/draft.ts` | 294 | 表单草稿模型（纯函数） |
 | `options/main.ts` | 313 | 设置页事件、保存、导入导出 |
-| `options/render.ts` | 123 | 表单渲染（数据驱动） |
+| `options/render.ts` | 121 | 表单渲染（数据驱动） |
 | `background/main.ts` | 145 | Service Worker 事件接线 |
 | `newtab/main.ts` | 58 | 组装根 |
 | `background/history-recorder.ts` | 55 | 关闭标签的记录逻辑 |
@@ -1467,9 +1483,9 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 
 | 文件 | 行数 | 职责 |
 |------|-----:|------|
-| `tests/**` | ~3180 | 27 个测试文件，302 个用例 |
+| `tests/**` | ~3242 | 27 个测试文件，309 个用例 |
 | `styles/dashboard.css` | 1578 | 仪表盘视觉体系 |
-| `styles/options.css` | 358 | 设置页样式 |
+| `styles/options.css` | 376 | 设置页样式 |
 | `newtab/index.html` | 162 | 仪表盘骨架 |
 | `options/options.html` | 94 | 设置页骨架 |
 | `scripts/build.mjs` | ~115 | esbuild 构建管线 |
@@ -1477,8 +1493,8 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 
 ### 规模小结
 
-- **源代码**：约 4840 行 TypeScript + 1936 行 CSS + 313 行 HTML
-- **测试代码**：约 3180 行，302 个用例
+- **源代码**：约 4888 行 TypeScript + 1963 行 CSS + 313 行 HTML
+- **测试代码**：约 3242 行，309 个用例
 - **构建产物**：约 130 KB，零运行时依赖
 - **测试/源码比**：约 0.66 —— 测试只覆盖真正会出错的地方，不追求行数
 
@@ -1486,7 +1502,7 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 
 ## 结语
 
-v1 用 1738 行的单文件证明了"**想法是对的**"；v2 用分层架构和 302 个测试让它"**可以继续长大**"。
+v1 用 1738 行的单文件证明了"**想法是对的**"；v2 用分层架构和 309 个测试让它"**可以继续长大**"。
 
 如果你只想从这份文档带走一句话，那就是：
 

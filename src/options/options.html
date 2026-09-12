@@ -72,6 +72,13 @@
         "Tidy up" button. Turning this off stops applying the rules without
         deleting them.
       </p>
+      <p class="pattern-hint">
+        <strong>Path pattern:</strong> <code>/j/*</code> matches that path and
+        everything under it &middot; <code>/home</code> matches only that exact
+        path &middot; <code>!#inbox/</code> excludes any URL containing that text
+        &middot; combine with commas, e.g. <code>/*, !#inbox/</code> &middot;
+        leave blank to match only the site's root.
+      </p>
     </div>
     <div class="rows" id="disposableRows"></div>
     <div class="panel-actions">

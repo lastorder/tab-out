@@ -87,17 +87,17 @@ Both rule types use the same hostname field:
 - `x.com` — matches that hostname exactly
 - `.zoom.us` — a **leading dot** matches any subdomain
 
-Disposable rules then narrow by path:
+Disposable rules (custom groups still use a plain "Path starts with" field) narrow by a single **path pattern**, a comma-separated mix of:
 
-| Field | Meaning |
-|-------|---------|
-| **Path starts with** | Prefix match. Use `/` to match every path on the host. |
-| **Exact paths** | Comma-separated list, e.g. `/home, /feed` |
-| **Except URLs containing** | Comma-separated veto list |
+| Term | Meaning |
+|------|---------|
+| `/j/*` | Prefix match — that path and everything under it |
+| `/home` | Exact match — only that exact path |
+| `!#inbox/` | Veto — excludes any URL containing that text |
 
-That last field is what keeps Gmail useful: the shipped rule matches every `mail.google.com` path *except* URLs containing `#inbox/`, so your inbox is disposable while an individual email thread keeps its own card.
+Blank matches only the site's root. Mix freely, e.g. `/*, !#inbox/, !#sent/` — that's the shipped Gmail rule: every `mail.google.com` path *except* URLs containing an inbox or sent-mail thread fragment, so your inbox is disposable while an individual email thread keeps its own card.
 
-The shipped defaults cover two shapes of "disposable": a site's own homepage (Gmail inbox, X home, GitHub front page, LinkedIn feed), and Zoom's post-join launcher page (`.zoom.us` + path starting with `/j/`) — since the call itself runs in the desktop app, that leftover browser tab is pure clutter. Google Meet and Microsoft Teams are **not** included by default, because their calls run *inside* the tab — auto-closing one would end a live meeting. Add a rule for them yourself only if that's genuinely safe for how you use them.
+The shipped defaults cover two shapes of "disposable": a site's own homepage (Gmail inbox, X home, GitHub front page, LinkedIn feed), and Zoom's post-join launcher page (`.zoom.us` + `/j/*`) — since the call itself runs in the desktop app, that leftover browser tab is pure clutter. Google Meet and Microsoft Teams are **not** included by default, because their calls run *inside* the tab — auto-closing one would end a live meeting. Add a rule for them yourself only if that's genuinely safe for how you use them.
 
 If you're upgrading from an older version with your own homepage rules already saved, they migrate automatically — nothing to re-enter. Click **"+ Add suggested rules"** on the Disposable tabs panel to pick up new or corrected defaults (like the Zoom rule) without touching what you've already configured.
 

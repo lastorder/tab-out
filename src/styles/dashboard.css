@@ -1277,10 +1277,19 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   background: rgba(200, 113, 58, 0.08);
 }
 
-/* ---- "Close all N tabs" in the section header ---- */
-.action-btn.close-all-btn {
+/* ---- "Close all N tabs" and "Tidy up" in the section header ---- */
+.action-btn.close-all-btn,
+.action-btn.tidy-btn {
   font-size: 11px;
   padding: 3px 10px;
+}
+
+/* The two buttons are adjacent in the markup with no whitespace between
+   them (string concatenation, not separate DOM siblings with text nodes),
+   so the gap has to come from CSS rather than relying on collapsed
+   whitespace to render one. */
+.action-btn.tidy-btn {
+  margin-left: 6px;
 }
 
 /* ---- Saved for later ---- */

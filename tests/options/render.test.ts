@@ -26,9 +26,7 @@ describe('renderSection', () => {
   it('renders the disposable rule fields', () => {
     const html = renderSection('disposable', draft);
     expect(html).toContain('data-field="hostname"');
-    expect(html).toContain('data-field="pathPrefix"');
-    expect(html).toContain('data-field="pathExact"');
-    expect(html).toContain('data-field="urlNotContains"');
+    expect(html).toContain('data-field="pattern"');
   });
 
   it('renders custom group fields', () => {

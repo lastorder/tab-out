@@ -127,8 +127,7 @@ Most people miss this, so mention it explicitly:
 Rule syntax worth explaining if they ask:
 
 - Hostname `x.com` matches exactly; a **leading dot** like `.zoom.us` matches any subdomain.
-- **Path starts with** `/` matches every path on that host.
-- **Except URLs containing** vetoes a match — it's how the Gmail inbox is disposable while an individual email thread isn't.
+- Disposable rules narrow by a single **Path pattern** field, comma-separated: `/j/*` (prefix — that path and everything under it), `/home` (exact path only), `!#inbox/` (veto — excludes any URL containing that text). Blank matches only the site root. `/*, !#inbox/, !#sent/` is the shipped Gmail rule.
 
 If they had homepage rules saved from an older version, mention that those migrated automatically — nothing to redo.
 
@@ -219,6 +218,7 @@ Consequences you must respect:
 - **`isInternalUrl()` excludes as little as it can get away with.** Browser system pages (`chrome://extensions`, `chrome://settings`, `edge://...`, `brave://...`) are real tabs the user manages on purpose, so they group, close and get recorded into history like any other page. The only things actually excluded are `chrome://newtab/` (the dashboard itself, in disguise), `chrome-extension://` (any extension's UI), `about:` (a loading placeholder), and `devtools://`. Don't broaden this back to a blanket `chrome://` prefix match.
 - **A renamed stored field needs a legacy-key fallback in `normalizeSettings`, not just in `migrateSettings`.** `SettingsStore.load()` calls `normalizeSettings(raw)` *before* `migrateSettings(settings)`. When `landingPatterns` became `disposableRules`, a naive rename would have made `normalizeSettings` see the old key as simply absent and silently substitute the defaults — destroying every real user's saved rules on their first load after upgrading. The fix reads `raw['disposableRules'] ?? raw['landingPatterns']` inside `normalizeSettings` itself; `migrateSettings` only stamps the version number. Any future field rename needs the same shape of fix, in the same place.
 - **A pure decision that both a button's visibility and its label depend on belongs in `core/`, not in the renderer.** `core/tidy.ts`'s `selectTidyTabIds()` decides *which* tabs "Tidy up" would close and *why* (as a `{ disposable, saved, duplicates }` breakdown that always sums to the total); `newtab/dashboard.ts` only turns that into HTML and a tooltip string. This is what makes "does the button appear, and does its count match reality" testable without a DOM.
+- **The options-page "Path pattern" field is a presentation-layer encoding, not a schema change.** `DisposableRule` still has separate `pathPrefix` / `pathExact` / `urlNotContains` fields in storage and in `core/matching.ts` — nothing there changed. Only `options/draft.ts`'s `patternToField()` / `patternFromField()` collapse those three into one comma-separated field (`/j/*` = prefix, `/home` = exact, `!#inbox/` = veto) for editing, the same way `hostnameToField()` / `hostnameFromField()` already collapse `hostname` / `hostnameEndsWith` into one. If you touch this, keep the round-trip lossless for every shipped default — there's a test for exactly that.
 
 ## Testing
 

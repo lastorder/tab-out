@@ -404,6 +404,27 @@ describe('Dashboard Tidy button', () => {
     expect(sectionCount()).toContain('1 disposable tab');
   });
 
+  it('matches "Close all"\u2019s compact sizing and carries an icon, so the two buttons look like a pair', async () => {
+    const { dashboard } = await buildDashboard([
+      tab('https://a.com/'),
+      tab('https://a.com/'),
+    ]);
+    await dashboard.render();
+
+    const html = sectionCount();
+    // Both buttons must be covered by the same compact-size CSS selector —
+    // see `.action-btn.close-all-btn, .action-btn.tidy-btn` in
+    // styles/dashboard.css. Asserting the class list here is what would have
+    // caught the tidy button rendering at the larger default `.action-btn`
+    // size next to a visually smaller "Close all".
+    expect(html).toMatch(/class="action-btn close-tabs close-all-btn"/);
+    expect(html).toMatch(/class="action-btn save-tabs tidy-btn"/);
+    // "Close all" has a leading icon; Tidy up must too, for visual parity.
+    expect(html).toContain('<svg');
+    const tidyButton = html.slice(html.indexOf('tidy-btn'));
+    expect(tidyButton).toContain('<svg');
+  });
+
   it('appears for a duplicate tab', async () => {
     const { dashboard } = await buildDashboard([
       tab('https://a.com/'),

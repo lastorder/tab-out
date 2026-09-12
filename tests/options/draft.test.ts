@@ -8,6 +8,8 @@ import {
   hostnameFromField,
   hostnameToField,
   moveRow,
+  patternFromField,
+  patternToField,
   removeRow,
   settingsToDraft,
   splitList,
@@ -49,6 +51,49 @@ describe('splitList', () => {
   });
 });
 
+describe('pattern field conversion', () => {
+  // This is the field that replaced three separate ones (pathPrefix,
+  // pathExact, urlNotContains). Every shipped default must round-trip
+  // losslessly through it, or "is lossless for the shipped defaults" below
+  // would fail — these are the individual cases that guard the same thing.
+  it('encodes a prefix term with a trailing *', () => {
+    expect(patternToField({ pathPrefix: '/j/' })).toBe('/j/*');
+    expect(patternFromField('/j/*')).toEqual({ pathPrefix: '/j/' });
+  });
+
+  it('encodes exact paths as plain comma-separated terms', () => {
+    expect(patternToField({ pathExact: ['/', '/feed/'] })).toBe('/, /feed/');
+    expect(patternFromField('/, /feed/')).toEqual({ pathExact: ['/', '/feed/'] });
+  });
+
+  it('encodes veto terms with a leading !', () => {
+    expect(patternToField({ pathPrefix: '/', urlNotContains: ['#inbox/', '#sent/'] })).toBe(
+      '/*, !#inbox/, !#sent/',
+    );
+    expect(patternFromField('/*, !#inbox/, !#sent/')).toEqual({
+      pathPrefix: '/',
+      urlNotContains: ['#inbox/', '#sent/'],
+    });
+  });
+
+  it('treats blank input, or an empty prefix term, as "match only the root"', () => {
+    expect(patternFromField('')).toEqual({});
+    expect(patternFromField('*')).toEqual({ pathPrefix: '/' });
+  });
+
+  it('auto-prepends a slash to a path term missing one, but not to a veto term', () => {
+    // Veto terms are substrings of the *whole URL* (often a hash fragment
+    // like "#inbox/"), so they must not be forced to look like a path.
+    expect(patternFromField('home')).toEqual({ pathExact: ['/home'] });
+    expect(patternFromField('j*')).toEqual({ pathPrefix: '/j' });
+    expect(patternFromField('!#inbox/')).toEqual({ urlNotContains: ['#inbox/'] });
+  });
+
+  it('keeps only the first prefix term when more than one is given', () => {
+    expect(patternFromField('/a*, /b*')).toEqual({ pathPrefix: '/a' });
+  });
+});
+
 describe('draft round-trip', () => {
   it('is lossless for the shipped defaults', () => {
     const settings = createDefaultSettings();
@@ -65,9 +110,7 @@ describe('draft round-trip', () => {
     });
     expect(draft.disposable[0]).toEqual({
       hostname: 'mail.google.com',
-      pathPrefix: '/',
-      pathExact: '',
-      urlNotContains: '#inbox/, #sent/, #search/',
+      pattern: '/*, !#inbox/, !#sent/, !#search/',
     });
     expect(draft.maxHistoryItems).toBe('100');
     expect(draft.autoSortTabs).toBe(true);
@@ -109,7 +152,7 @@ describe('draft round-trip', () => {
 
     const disposable = draftToSettings({
       ...blankDraft,
-      disposable: [{ hostname: 'x.com', pathPrefix: '', pathExact: '/home', urlNotContains: '' }],
+      disposable: [{ hostname: 'x.com', pattern: '/home' }],
     });
     expect(disposable.settings.disposableRules[0]).toEqual({
       hostname: 'x.com',
@@ -127,11 +170,11 @@ describe('draft round-trip', () => {
 describe('addSuggestedDisposableRules', () => {
   it('appends a suggestion not already present, as its row form', () => {
     const result = addSuggestedDisposableRules([], [{ hostname: 'github.com', pathExact: ['/'] }]);
-    expect(result).toEqual([{ hostname: 'github.com', pathPrefix: '', pathExact: '/', urlNotContains: '' }]);
+    expect(result).toEqual([{ hostname: 'github.com', pattern: '/' }]);
   });
 
   it('never adds a rule already present, and never touches existing rows', () => {
-    const existing = [{ hostname: 'github.com', pathPrefix: '', pathExact: '/', urlNotContains: '' }];
+    const existing = [{ hostname: 'github.com', pattern: '/' }];
     const result = addSuggestedDisposableRules(existing, [{ hostname: 'github.com', pathExact: ['/'] }]);
     expect(result).toEqual(existing);
     expect(result).not.toBe(existing);

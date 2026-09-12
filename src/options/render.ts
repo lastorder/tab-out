@@ -42,9 +42,7 @@ const SECTIONS: Record<SectionName, SectionSpec> = {
     empty: 'No disposable rules — the Disposable card will stay empty.',
     fields: [
       { field: 'hostname', label: 'Hostname', placeholder: 'x.com or .zoom.us' },
-      { field: 'pathPrefix', label: 'Path starts with', placeholder: '/' },
-      { field: 'pathExact', label: 'Exact paths', placeholder: '/home, /feed' },
-      { field: 'urlNotContains', label: 'Except URLs containing', placeholder: '#inbox/, #sent/' },
+      { field: 'pattern', label: 'Path pattern', placeholder: '/j/*, !#inbox/' },
     ],
   },
   custom: {
