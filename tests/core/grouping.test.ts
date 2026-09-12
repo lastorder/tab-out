@@ -194,9 +194,68 @@ describe('applyPinnedSites', () => {
     applyPinnedSites(original, [], [{ url: 'https://a.com' }]);
     expect(JSON.stringify(original)).toBe(snapshot);
   });
+
+  describe('pinning a custom group', () => {
+    // Pinning several sites that share a custom-group rule (the shipped
+    // Calendar/Gmail/Chat -> "Google" example) is meant to behave as *one*
+    // pinned unit, not three: groupTabs() already merges their tabs into one
+    // kind:'custom' group before applyPinnedSites ever runs.
+    const rules = [
+      { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'a.com' },
+      { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'b.com' },
+    ];
+    const pinned = [{ url: 'https://a.com/' }, { url: 'https://b.com/' }];
+
+    it('promotes the one shared group instead of duplicating it per pinned site', () => {
+      const groups = [
+        { key: 'google-suite', kind: 'custom' as const, label: 'Google', tabs: tabs('https://a.com/', 'https://b.com/') },
+      ];
+      const { entries, orderedGroups } = applyPinnedSites(groups, [], pinned, rules);
+
+      expect(entries).toHaveLength(1);
+      expect(orderedGroups).toHaveLength(1);
+      expect(orderedGroups[0]).toMatchObject({ key: 'google-suite', kind: 'custom' });
+    });
+
+    it('renders one placeholder for the whole group, not one per pinned site, when nothing is open', () => {
+      const { entries } = applyPinnedSites([], [], pinned, rules);
+
+      expect(entries).toEqual([
+        { type: 'placeholder', site: { url: 'https://a.com/', label: 'Google' }, pinnedIndex: 0 },
+      ]);
+    });
+
+    it('still falls back to per-site pinning for a hostname no custom rule claims', () => {
+      const soloPinned = [{ url: 'https://a.com/' }, { url: 'https://solo.com/' }];
+      const { entries } = applyPinnedSites([], [], soloPinned, rules);
+
+      expect(entries).toEqual([
+        { type: 'placeholder', site: { url: 'https://a.com/', label: 'Google' }, pinnedIndex: 0 },
+        { type: 'placeholder', site: { url: 'https://solo.com/' }, pinnedIndex: 1 },
+      ]);
+    });
+  });
 });
 
 describe('buildDashboardModel', () => {
+  it('pins the shipped Google group as one card, wherever any of the three is open', () => {
+    // chat.google.com, not mail.google.com: a bare Gmail tab matches the
+    // disposable Gmail rule first and lands in Disposable instead, which is
+    // a different behaviour (documented on DEFAULT_DISPOSABLE_RULES) than
+    // what this test is about.
+    const model = buildDashboardModel(tabs('https://chat.google.com/'), defaultSettings());
+
+    expect(model.entries).toHaveLength(1);
+    expect(model.entries[0]).toMatchObject({ type: 'group', group: { key: 'google-suite', kind: 'custom' } });
+  });
+
+  it('shows exactly one placeholder for the shipped Google group when none of the three are open', () => {
+    const model = buildDashboardModel([], defaultSettings());
+
+    const placeholders = model.entries.filter((e) => e.type === 'placeholder');
+    expect(placeholders).toHaveLength(1);
+    expect(placeholders[0]).toMatchObject({ site: { label: 'Google' } });
+  });
   it('produces the full render model from raw tabs', () => {
     const settings = emptySettings({
       pinnedSites: [{ url: 'https://absent.com/' }],

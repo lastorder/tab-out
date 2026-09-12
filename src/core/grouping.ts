@@ -7,7 +7,7 @@
  * testable with plain objects.
  */
 
-import type { DisposableRule, PinnedSite, TabGroup, TabInfo, TabOutSettings } from '../types';
+import type { CustomGroupRule, DisposableRule, PinnedSite, TabGroup, TabInfo, TabOutSettings } from '../types';
 import { findCustomGroup, isDisposable, isDisposableDomain } from './matching';
 import { groupKeyOf, hostnameOf, isInternalUrl } from './url';
 
@@ -122,25 +122,67 @@ export function sortGroups(
  * Places pinned sites at the front of the dashboard.
  *
  * For each pinned site, in the user's configured order:
- *   1. If a domain group already exists for its hostname, promote that group.
- *   2. Otherwise, if any open tab matches the hostname (it may be sitting in
+ *   1. If its URL is claimed by a custom-group rule, the *whole group* is the
+ *      pinned unit, not just this one hostname — see below.
+ *   2. Otherwise, if a domain group already exists for its hostname, promote
+ *      that group.
+ *   3. Otherwise, if any open tab matches the hostname (it may be sitting in
  *      the Disposable card), build a synthetic group from those tabs and take
  *      them away from whichever group currently holds them, so no tab is
  *      rendered twice.
- *   3. Otherwise, render a click-to-open placeholder card.
+ *   4. Otherwise, render a click-to-open placeholder card.
+ *
+ * **Pinning a custom group.** Pinning several sites that share a custom-group
+ * `groupKey` (e.g. the shipped Calendar/Gmail/Chat → "Google" example) makes
+ * them behave as *one* pinned unit rather than three: `groupTabs()` already
+ * buckets their tabs into one `kind: 'custom'` group whenever any of them are
+ * open, before this function ever runs, so there is nothing to "reclaim"
+ * here — only the first pinned entry mapping to a given `groupKey` does
+ * anything, and it either promotes that one shared group, or — if none of
+ * the group's hostnames have an open tab — renders a *single* placeholder
+ * for the whole group (labelled with the rule's `groupLabel`, opening the
+ * first pinned entry's URL when clicked) instead of one placeholder per site.
  */
 export function applyPinnedSites(
   groups: readonly TabGroup[],
   realTabs: readonly TabInfo[],
   pinnedSites: readonly PinnedSite[],
+  customGroups: readonly CustomGroupRule[] = [],
 ): { entries: DashboardEntry[]; orderedGroups: TabGroup[] } {
   let remaining = groups.map((group) => ({ ...group, tabs: [...group.tabs] }));
   const entries: DashboardEntry[] = [];
   const orderedGroups: TabGroup[] = [];
+  const seenIdentities = new Set<string>();
 
   pinnedSites.forEach((site, pinnedIndex) => {
     const hostname = hostnameOf(site.url);
     if (!hostname) return;
+
+    const rule = findCustomGroup(site.url, customGroups);
+    const identity = rule ? `custom:${rule.groupKey}` : `site:${hostname}`;
+    if (seenIdentities.has(identity)) return;
+    seenIdentities.add(identity);
+
+    if (rule) {
+      const existingIdx = remaining.findIndex(
+        (group) => group.kind === 'custom' && group.key === rule.groupKey,
+      );
+      if (existingIdx !== -1) {
+        const [group] = remaining.splice(existingIdx, 1);
+        entries.push({ type: 'group', group: group! });
+        orderedGroups.push(group!);
+        return;
+      }
+
+      // None of this group's hostnames have an open tab: one placeholder
+      // for the whole group, not one per pinned site sharing its groupKey.
+      entries.push({
+        type: 'placeholder',
+        site: { url: site.url, label: rule.groupLabel },
+        pinnedIndex,
+      });
+      return;
+    }
 
     const existingIdx = remaining.findIndex(
       (group) => group.kind === 'domain' && group.key === hostname,
@@ -198,7 +240,7 @@ export function buildDashboardModel(
   const realTabs = getRealTabs(tabs);
   const groups = groupTabs(realTabs, settings);
   const { entries, orderedGroups } = settings.pinnedEnabled
-    ? applyPinnedSites(groups, realTabs, settings.pinnedSites)
+    ? applyPinnedSites(groups, realTabs, settings.pinnedSites, settings.customGroups)
     : { entries: groups.map((group): DashboardEntry => ({ type: 'group', group })), orderedGroups: groups };
   return { entries, orderedGroups, realTabs, groupCount: orderedGroups.length };
 }

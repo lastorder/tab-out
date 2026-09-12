@@ -140,7 +140,7 @@ tab-out/
 │   │   ├── dashboard.css
 │   │   └── options.css
 │   └── icons/
-├── tests/                    ← 单元测试（27 个文件，311 个用例）
+├── tests/                    ← 单元测试（27 个文件，316 个用例）
 │   ├── helpers/              ← 测试替身：假浏览器、数据工厂
 │   ├── core/ config/ services/ ui/ options/ newtab/ background/
 │   └── setup.ts
@@ -162,7 +162,7 @@ v1 的卖点之一是"**没有 package.json，没有构建步骤，写完直接�
 
 | v1 的痛点 | v2 的解法 |
 |-----------|-----------|
-| 改一个函数不知道会不会影响别处 | TypeScript 静态类型 + 311 个单元测试 |
+| 改一个函数不知道会不会影响别处 | TypeScript 静态类型 + 316 个单元测试 |
 | 想加功能得在 1700 行里找位置 | 按职责分成 34 个模块 |
 | 逻辑和 `chrome.*` 调用混在一起，没法测试 | `platform/` 接缝层，测试注入假对象 |
 | 首页规则是硬编码的 JS 函数，用户改不了 | 改成可序列化的声明式"可丢弃规则" + 设置页 |
@@ -581,8 +581,9 @@ Disposable 卡片  →  可丢弃规则提到过的域名  →  标签数多的 
 
 **第三步：置顶站点**（`applyPinnedSites`，仅当 `pinnedEnabled` 为真时执行）
 
-这一步逻辑最绕，三种情况：
+这一步逻辑最绕，四种情况：
 
+0. 这个置顶站点的域名被某条 Custom group 规则认领了 → **把整个 groupKey 当成置顶单位**，而不是这一个 hostname（详见 8.1 节的 Calendar/Gmail/Chat 例子）；同一个 groupKey 后面出现的置顶站点直接跳过
 1. 已经有该域名的卡片 → 提到最前面
 2. 没有卡片，但有该域名的标签（可能正躺在 Disposable 卡片里）→ **把这些标签"抢"过来**建一张新卡片，并从原来的组里移除，避免同一个标签被渲染两次
 3. 一个标签都没有 → 渲染一张灰色的"点击打开"占位卡片
@@ -779,10 +780,14 @@ export interface TabOutSettings {
 
 **铁律：设置里不允许出现函数。** 它必须能被 `chrome.storage` 序列化。这也是 [6.4](#64-matchingts--声明式规则引擎) 把可丢弃规则改成声明式数据的根本原因。
 
-**默认值本身也是一份"配置参考"**，`DEFAULT_PINNED_SITES` 目前是空的，`DEFAULT_CUSTOM_GROUPS` 反而不是空的——这个安排本身就是一个例子：
+**默认值本身也是一份"配置参考"**：`DEFAULT_PINNED_SITES` 和 `DEFAULT_CUSTOM_GROUPS` 里都有 Calendar / Gmail / Chat 这三个域名，而且是**同时**——这是一个刻意示范的组合用法：
 
 ```ts
-export const DEFAULT_PINNED_SITES: readonly PinnedSite[] = Object.freeze([]);
+export const DEFAULT_PINNED_SITES: readonly PinnedSite[] = Object.freeze([
+  { url: 'https://calendar.google.com/', label: 'Google Calendar' },
+  { url: 'https://mail.google.com/', label: 'Gmail' },
+  { url: 'https://chat.google.com/', label: 'Google Chat' },
+]);
 
 export const DEFAULT_CUSTOM_GROUPS: readonly CustomGroupRule[] = Object.freeze([
   { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'calendar.google.com' },
@@ -791,7 +796,34 @@ export const DEFAULT_CUSTOM_GROUPS: readonly CustomGroupRule[] = Object.freeze([
 ]);
 ```
 
-Calendar / Gmail / Chat 曾经是三条独立的 Pinned sites。但 Pinned sites 是**按精确 hostname 认领标签**的（见 6.5 节第三步）：即使这三个域名同时被自定义分组合并成一张卡，只要它们还留在 Pinned sites 里，`applyPinnedSites` 就会把它们的标签重新拆回三张独立卡片，**合并形同虚设**。所以要把三个域名合成一张卡，正确做法是**从 Pinned sites 里移除，改成三条共享同一个 `groupKey` 的 Custom groups 规则**——这正是上面默认值的写法，也是设置页里"Custom groups"那节应该教给别人的参考模式。
+第一版实现时，这两者其实是**冲突**的：Pinned sites 按精确 hostname 认领标签（6.5 节第三步），custom group 按 groupKey 合并——两边同时生效的话，Pinned 逻辑会把 custom group 已经合并好的标签重新拆回三张独立卡片，合并形同虚设。当时的解决办法是"二选一"：把这三个域名从 Pinned sites 里移除，只留 Custom groups。
+
+但"我想要这三个页面同时是默认置顶、同时是默认合并"是一个合理的真实需求——于是 `applyPinnedSites()` 改成了能识别这种组合：
+
+```ts
+pinnedSites.forEach((site, pinnedIndex) => {
+  const hostname = hostnameOf(site.url);
+  const rule = findCustomGroup(site.url, customGroups);
+  // 这个置顶站点的域名如果被某条 custom group 规则认领了，
+  // "置顶身份"就变成那条规则的 groupKey，而不是这一个 hostname。
+  const identity = rule ? `custom:${rule.groupKey}` : `site:${hostname}`;
+  if (seenIdentities.has(identity)) return;   // 同一个 groupKey 的后续站点，什么都不做
+  seenIdentities.add(identity);
+
+  if (rule) {
+    // groupTabs() 已经把这个 groupKey 下所有域名的标签合并成一个
+    // kind:'custom' 分组了（在 applyPinnedSites 跑之前就完成），
+    // 这里不需要"抢标签"，只需要把那一个共享分组提到最前面；
+    // 如果三个域名都没开标签，就渲染唯一一张占位卡（不是三张）。
+    ...
+  }
+  // ... 原来针对单个 hostname 的逻辑，保持不变
+});
+```
+
+关键洞察：`groupTabs()` 本来就在 `applyPinnedSites()` **之前**运行，而且已经按 `groupKey`（不是按 hostname）合并好了标签。所以"置顶一个属于某个 custom group 的站点"根本不需要"抢标签"这一步——它只需要判断"这个 groupKey 对应的合并分组现在存在吗"，存在就整体提到最前面，不存在就渲染**一张**占位卡（用规则的 `groupLabel` 当标题，点击打开列表里第一个域名，即 Calendar）。同一个 `groupKey` 后面重复出现的置顶站点全部跳过，不会重复渲染。
+
+> 这里有个真实的交互细节：Gmail 同时也是一条 Disposable 规则（见上面 8.1 之前的说明），而 `groupTabs()` 里 disposable 判断先于 custom-group 判断。所以**普通打开的 Gmail 收件箱**会先被 Disposable 规则拦下、进 Disposable 卡片，不会进"Google"合并卡——只有打开一封具体邮件（被 Gmail 规则的 `urlNotContains` 否决掉）才会落到"Google"卡里。Calendar 和 Chat 因为没有配 Disposable 规则，永远直接进"Google"卡。这不是 bug，只是两条规则叠加后的真实结果，值得在文档里说清楚，不要让读者以为"pin+group"处理错了。
 
 ### 8.2 `schema.ts` — 一个永不抛异常的校验器
 
@@ -1257,7 +1289,7 @@ document.addEventListener('input', (event) => {
 
 ### 12.1 规模
 
-**27 个测试文件，311 个用例**，用 [Vitest](https://vitest.dev) 运行，全套跑完约 0.8 秒。
+**27 个测试文件，316 个用例**，用 [Vitest](https://vitest.dev) 运行，全套跑完约 0.8 秒。
 
 ```bash
 npm test              # 跑一次
@@ -1474,7 +1506,7 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 |------|-----:|------|
 | `types/index.ts` | 134 | 全项目共享类型 |
 | **core/** | | **纯逻辑，无依赖** |
-| `core/grouping.ts` | 223 | 分组 + 排序 + 置顶站点，仪表盘核心算法 |
+| `core/grouping.ts` | 265 | 分组 + 排序 + 置顶站点（含"置顶自定义分组"），仪表盘核心算法 |
 | `core/title.ts` | 178 | 标题清洗流水线 |
 | `core/selection.ts` | 125 | 决定操作作用于哪些标签（风险最高） |
 | `core/matching.ts` | 92 | 声明式规则匹配 |
@@ -1522,7 +1554,7 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 
 | 文件 | 行数 | 职责 |
 |------|-----:|------|
-| `tests/**` | ~3296 | 27 个测试文件，311 个用例 |
+| `tests/**` | ~3359 | 27 个测试文件，316 个用例 |
 | `styles/dashboard.css` | 1578 | 仪表盘视觉体系 |
 | `styles/options.css` | 376 | 设置页样式 |
 | `newtab/index.html` | 162 | 仪表盘骨架 |
@@ -1532,8 +1564,8 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 
 ### 规模小结
 
-- **源代码**：约 4930 行 TypeScript + 1963 行 CSS + 313 行 HTML
-- **测试代码**：约 3296 行，311 个用例
+- **源代码**：约 4980 行 TypeScript + 1963 行 CSS + 313 行 HTML
+- **测试代码**：约 3359 行，316 个用例
 - **构建产物**：约 130 KB，零运行时依赖
 - **测试/源码比**：约 0.66 —— 测试只覆盖真正会出错的地方，不追求行数
 
@@ -1541,7 +1573,7 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 
 ## 结语
 
-v1 用 1738 行的单文件证明了"**想法是对的**"；v2 用分层架构和 311 个测试让它"**可以继续长大**"。
+v1 用 1738 行的单文件证明了"**想法是对的**"；v2 用分层架构和 316 个测试让它"**可以继续长大**"。
 
 如果你只想从这份文档带走一句话，那就是：
 

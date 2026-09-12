@@ -72,7 +72,7 @@ Click the gear icon in the top-right of the dashboard, or right-click the extens
 
 | Section | What it controls |
 |---------|------------------|
-| **Pinned sites** | Sites always shown first. With open tabs they get a normal card; without, a click-to-open placeholder. Has its own "Enabled" toggle — turn it off to stop applying the list without deleting it. Empty by default. |
+| **Pinned sites** | Sites always shown first. With open tabs they get a normal card; without, a click-to-open placeholder. Has its own "Enabled" toggle — turn it off to stop applying the list without deleting it. |
 | **Disposable tabs** | Which tabs are safe to close because reopening them costs nothing, collected into a shared **Disposable** card and counted by the "Tidy up" button. Also has its own "Enabled" toggle. |
 | **Custom groups** | Merge several hostnames into one card, or split one site into separate cards by path. |
 | **Tab sorting** | Whether tabs are reordered to match the dashboard automatically (on by default) or only via a manual "Sort tabs" banner. |
@@ -86,7 +86,9 @@ A single custom-group rule can only match one hostname. To merge *several* hostn
 
 The shipped default is a worked example of exactly this: Google Calendar, Gmail and Google Chat are three unrelated hostnames (`calendar.google.com`, `mail.google.com`, `chat.google.com`) that would otherwise render as three separate cards. All three rules share `groupKey: google-suite`, so they render as one "Google" card instead.
 
-> ⚠️ **This only works because those three hostnames are *not* also configured as Pinned sites.** A pinned entry claims tabs by exact hostname — if `mail.google.com` were pinned *and* in a custom group, the pinned-site logic would pull its tabs back out into their own card, undoing the merge. That's why Pinned sites ships empty by default now: these three used to live there.
+**These same three hostnames are also Pinned sites, at the same time** — and that combination is exactly what makes this a useful reference: pinning a site whose hostname is claimed by a custom-group rule pins the *whole group*, not just that one hostname. The dashboard always shows one "Google" card first, containing whichever of the three is currently open — and if none are, one click-to-open placeholder for the group (not three), opening Calendar (the first of the three listed).
+
+> One real interaction worth knowing: Gmail is *also* a Disposable rule by default (see below), and disposable-checking happens before custom-group-checking. So a plain Gmail inbox tab lands in the **Disposable** card, not the "Google" card — only reading a specific email thread (which the Gmail Disposable rule vetoes) lands in the merged card. Calendar and Chat always join it, since neither has a Disposable rule.
 
 ### Rule syntax
 

@@ -116,9 +116,9 @@ Most people miss this, so mention it explicitly:
 
 > Click the **gear icon** in the top-right of the dashboard (or right-click the extension icon → Options) to configure:
 >
-> - **Pinned sites** — the sites that always sit at the top. Sites with no open tabs show as click-to-open placeholders. Has its own on/off switch. Empty by default.
+> - **Pinned sites** — the sites that always sit at the top. Sites with no open tabs show as click-to-open placeholders. Has its own on/off switch.
 > - **Disposable tabs** — which tabs are safe to close and get collected into the shared Disposable card: a site's own homepage, or a spent one-off page like Zoom's post-join screen. Also has its own on/off switch.
-> - **Custom groups** — merge several hostnames into one card (give them the same Group key), or split one site into separate cards by path. Shipped with a worked example: Calendar, Gmail and Chat merged into one "Google" card.
+> - **Custom groups** — merge several hostnames into one card (give them the same Group key), or split one site into separate cards by path. Shipped with a worked example: Calendar, Gmail and Chat are pinned *and* merged into one "Google" card at once.
 > - **Tab sorting** — turn auto-sort off if you'd rather sort manually via a banner.
 > - **History** — how many recently closed tabs to remember (default 100).
 >
@@ -128,7 +128,7 @@ Rule syntax worth explaining if they ask:
 
 - Hostname `x.com` matches exactly; a **leading dot** like `.zoom.us` matches any subdomain.
 - Disposable rules narrow by a single **Path pattern** field, comma-separated: `/j/*` (prefix — that path and everything under it), `/home` (exact path only), `!#inbox/` (veto — excludes any URL containing that text). Blank matches only the site root. `/*, !#inbox/, !#sent/` is the shipped Gmail rule.
-- To merge hostnames with Custom groups, give each rule the same **Group key** — one rule per hostname, since a rule only matches one. But don't *also* pin those hostnames: Pinned sites claims by exact hostname and would pull them back out into separate cards, undoing the merge. That's exactly why Calendar/Gmail/Chat moved out of Pinned sites and into a shared Custom group.
+- To merge hostnames with Custom groups, give each rule the same **Group key** — one rule per hostname, since a rule only matches one. Pinning those same hostnames pins the *whole merged group* as one card (see the shipped Calendar/Gmail/Chat example) — the two features are meant to combine like this, not conflict.
 
 If they had homepage or pinned-site rules saved from an older version, mention that a shipped default only ever seeds a fresh install — their own saved settings are never touched.
 
@@ -221,6 +221,7 @@ Consequences you must respect:
 - **A pure decision that both a button's visibility and its label depend on belongs in `core/`, not in the renderer.** `core/tidy.ts`'s `selectTidyTabIds()` decides *which* tabs "Tidy up" would close and *why* (as a `{ disposable, saved, duplicates }` breakdown that always sums to the total); `newtab/dashboard.ts` only turns that into HTML and a tooltip string. This is what makes "does the button appear, and does its count match reality" testable without a DOM.
 - **The options-page "Path pattern" field is a presentation-layer encoding, not a schema change.** `DisposableRule` still has separate `pathPrefix` / `pathExact` / `urlNotContains` fields in storage and in `core/matching.ts` — nothing there changed. Only `options/draft.ts`'s `patternToField()` / `patternFromField()` collapse those three into one comma-separated field (`/j/*` = prefix, `/home` = exact, `!#inbox/` = veto) for editing, the same way `hostnameToField()` / `hostnameFromField()` already collapse `hostname` / `hostnameEndsWith` into one. If you touch this, keep the round-trip lossless for every shipped default — there's a test for exactly that.
 - **Custom-group rules can legitimately share a `groupKey`.** That's the only way to merge several hostnames into one card — a single `CustomGroupRule` matches only one hostname, so N hostnames on one card means N rules with the same key (see `DEFAULT_CUSTOM_GROUPS`: three rules, one `groupKey: 'google-suite'`). `normalizeSettings`'s de-dup for this section therefore identifies a rule by `customGroupIdentity()` (groupKey **+** hostname **+** pathPrefix), not by `groupKey` alone — deduping on `groupKey` alone silently discarded every rule after the first sharing a key, which broke this exact pattern. Don't revert that.
+- **Pinning a hostname that a custom-group rule also claims pins the whole group, not just that hostname.** `applyPinnedSites()` checks each pinned site against `customGroups` first; if a rule claims it, the pinned *identity* becomes that rule's `groupKey`, and every later pinned site sharing the same `groupKey` is a no-op (already handled). This works because `groupTabs()` already buckets the group's tabs together before `applyPinnedSites` ever runs, so there's nothing to reclaim — the function only needs to promote the one shared `kind: 'custom'` group if it exists, or render one placeholder (labelled with the rule's `groupLabel`) if it doesn't. This is what makes the shipped Calendar/Gmail/Chat example pinned *and* merged at once: three Pinned sites entries, three Custom-group rules sharing `groupKey: 'google-suite'`. Don't special-case "pinned + grouped" as a conflict to avoid — it's a supported combination.
 
 ## Testing
 

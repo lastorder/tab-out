@@ -104,8 +104,12 @@ describe('draft round-trip', () => {
     const draft = settingsToDraft(createDefaultSettings());
     expect(draft.pinnedEnabled).toBe(true);
     expect(draft.disposableEnabled).toBe(true);
-    // Pinned sites ships empty by default — see config/defaults.ts for why.
-    expect(draft.pinned).toEqual([]);
+    // Pinned and merged into one custom group at once — see config/defaults.ts.
+    expect(draft.pinned).toEqual([
+      { url: 'https://calendar.google.com/', label: 'Google Calendar' },
+      { url: 'https://mail.google.com/', label: 'Gmail' },
+      { url: 'https://chat.google.com/', label: 'Google Chat' },
+    ]);
     expect(draft.disposable[0]).toEqual({
       hostname: 'mail.google.com',
       pattern: '/*, !#inbox/, !#sent/, !#search/',
@@ -126,7 +130,7 @@ describe('draft round-trip', () => {
     draft.disposable.push({ ...EMPTY_DISPOSABLE_ROW });
 
     const { settings, issues } = draftToSettings(draft);
-    expect(settings.pinnedSites).toHaveLength(0);
+    expect(settings.pinnedSites).toHaveLength(3);
     expect(issues).toHaveLength(0);
   });
 

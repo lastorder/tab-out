@@ -14,19 +14,25 @@ export const SETTINGS_VERSION = 2;
 /**
  * Sites always shown at the front of the dashboard.
  *
- * Empty by default. Calendar, Gmail and Chat used to live here as three
- * separate pinned entries, but Pinned sites always renders one card per
- * *exact hostname* — so even with a custom group merging those three
- * hostnames into one card (see `DEFAULT_CUSTOM_GROUPS` below), pinning them
- * would have reclaimed each hostname's tabs back out into three separate
- * cards, undoing the merge. Moving them to custom groups is what actually
- * puts them on one card; see that constant's doc comment for the full story.
+ * Google Calendar, Gmail and Google Chat are pinned *and* configured as one
+ * merged custom group below (`DEFAULT_CUSTOM_GROUPS`) — both at once is
+ * intentional and is what `applyPinnedSites()` (in `core/grouping.ts`) is
+ * built to support: when a pinned site's URL is claimed by a custom-group
+ * rule, the whole group becomes the pinned unit, not just that one hostname.
+ * The result is one "Google" card, always pinned first, that shows either
+ * whichever of the three is actually open, or — if none are — a single
+ * click-to-open placeholder (opening Calendar, the first of the three
+ * listed here) instead of three separate placeholders.
  *
  * URLs must be written in already-normalised form (with the trailing slash
  * the URL parser produces) so that `normalizeSettings(defaults)` returns the
  * defaults unchanged. The settings-schema tests assert that invariant.
  */
-export const DEFAULT_PINNED_SITES: readonly PinnedSite[] = Object.freeze([]);
+export const DEFAULT_PINNED_SITES: readonly PinnedSite[] = Object.freeze([
+  { url: 'https://calendar.google.com/', label: 'Google Calendar' },
+  { url: 'https://mail.google.com/', label: 'Gmail' },
+  { url: 'https://chat.google.com/', label: 'Google Chat' },
+]);
 
 /** Whether pinned sites are applied by default. */
 export const DEFAULT_PINNED_ENABLED = true;
@@ -81,9 +87,11 @@ export const DEFAULT_DISPOSABLE_ENABLED = true;
  * card instead — see `core/grouping.ts`'s `groupTabs()`, which keys cards by
  * `groupKey`, not by hostname, for `kind: 'custom'` groups.
  *
- * This only works because these three hostnames are *not* also configured
- * as pinned sites (see `DEFAULT_PINNED_SITES` above) — a pinned entry claims
- * tabs by exact hostname and would split this same merge back apart.
+ * These same three hostnames are *also* pinned (`DEFAULT_PINNED_SITES`
+ * above) — that combination is deliberate, not a leftover: it's what makes
+ * the "Google" card pinned first *and* what makes its placeholder (when
+ * none of the three are open) a single card rather than three. See
+ * `applyPinnedSites()`'s doc comment for exactly how the two interact.
  */
 export const DEFAULT_CUSTOM_GROUPS: readonly CustomGroupRule[] = Object.freeze([
   { groupKey: 'google-suite', groupLabel: 'Google', hostname: 'calendar.google.com' },
