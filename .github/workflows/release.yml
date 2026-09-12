@@ -1,0 +1,102 @@
+name: Release
+
+# Pushing a `v*` tag is the release button: it builds, packages, uploads the zip
+# to the Chrome Web Store as a **draft** version, and attaches the zip to a
+# GitHub Release. Nothing is submitted for review — submit it from the developer
+# dashboard when you are ready. (`scripts/publish.mjs --publish` can automate
+# that submission too; add the flag to the upload step if you ever want it.)
+#
+# A manual run (workflow_dispatch) only builds and packages unless you tick
+# "upload", which is handy for pushing a draft without cutting a tag.
+#
+# Required repository secrets: CWS_EXTENSION_ID, CWS_PUBLISHER_ID and one of
+#   CWS_SERVICE_ACCOUNT_KEY  (preferred)
+#   CWS_CLIENT_ID + CWS_CLIENT_SECRET + CWS_REFRESH_TOKEN
+# See doc/publishing.md.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: Upload the packaged zip to the Chrome Web Store (as a draft)
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # attach the zip to a GitHub Release
+
+# Never let two releases race for the same store item.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and upload to the Chrome Web Store
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+      CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+      CWS_SERVICE_ACCOUNT_KEY: ${{ secrets.CWS_SERVICE_ACCOUNT_KEY }}
+      CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+      CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+      CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck, test and build
+        run: npm run check
+
+      - name: Package for the Chrome Web Store
+        # On a tag, refuse to build a zip whose version does not match the tag.
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            node scripts/package.mjs --expect-version "${GITHUB_REF_NAME}"
+          else
+            node scripts/package.mjs
+          fi
+
+      - name: Upload the zip as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tab-out-chrome-web-store
+          path: release/*.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload to the Chrome Web Store
+        if: github.event_name == 'push' || inputs.upload
+        run: node scripts/publish.mjs
+
+      - name: Summarize
+        if: github.event_name == 'push' || inputs.upload
+        run: |
+          {
+            echo "### Chrome Web Store draft uploaded"
+            echo ""
+            echo "The new version is in the store as a **draft** — it is not submitted for review yet."
+            echo "Submit it from the [developer dashboard](https://chrome.google.com/webstore/devconsole)."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Attach the zip to a GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 ||
+            gh release create "${GITHUB_REF_NAME}" release/*.zip \
+              --title "${GITHUB_REF_NAME}" \
+              --generate-notes

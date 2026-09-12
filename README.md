@@ -1,51 +1,114 @@
-# Tab Out
+# Tab Out 2
 
 **Keep tabs on your tabs.**
 
-Tab Out is a Chrome extension that replaces your new tab page with a dashboard of everything you have open. Tabs are grouped by domain, with disposable ones (Gmail inbox, X home, a spent Zoom meeting page…) pulled into their own group so you can clear them in one click without losing anything. Close tabs with a satisfying swoosh + confetti.
+Tab Out 2 is a Chrome extension that replaces your new tab page with a dashboard of everything you have open. Tabs are grouped by registrable domain, the ones that are safe to close are swept into a **Disposable** card, every tab you close lands in a searchable **History**, and a settings page lets you pin sites and write your own rules. Close tabs with a satisfying swoosh + confetti.
 
 No server. No account. No external API calls. Just a Chrome extension.
 
 ---
 
-## Install with a coding agent
+## About this fork
 
-Send your coding agent (Claude Code, Codex, etc.) this repo and say **"install this"**:
+Tab Out 2 is a fork of **[zarazhangrui/tab-out](https://github.com/zarazhangrui/tab-out)** — Zara's original Tab Out: a single-file JavaScript extension that groups your open tabs by domain. The idea, the design and the dashboard are hers, and all credit for them goes to her.
 
-```
-https://github.com/zarazhangrui/tab-out
-```
+This fork starts from that project (upstream `2c9b9c5`, *"feat: bento layout + custom group support"*) and develops it further. In short: it was **rewritten in TypeScript** with a testable architecture and gained a set of **user-facing features that upstream doesn't have** — History, pinned sites, Disposable tabs with a "Tidy up" button, a search overlay, automatic tab sorting, and a settings page. The two projects have since diverged substantially.
 
-The agent will walk you through it. Takes about 2 minutes.
+If you want the original, leaner extension, use **[upstream](https://github.com/zarazhangrui/tab-out)**. This repo is the extended one.
+
+---
+
+## What's new in this fork
+
+### Closed-tab History — everything you closed, one click from coming back
+
+A **History** panel (clock icon, top-right) lists every tab you've closed recently — however you closed it: Tab Out's own buttons, Chrome's tab ✕, or closing a whole window. It's recorded in the background worker, so nothing slips through.
+
+- Updates **live** — close a tab anywhere and it appears immediately, no refresh
+- Click a row to reopen it; it leaves the list the moment it's open again, so a URL is never shown as both open and closed
+- Has its own search box, and a configurable retention limit (default: last 100)
+
+Upstream had no history at all.
+
+### Disposable tabs + Tidy up — closing the boring tabs in one click
+
+Upstream grouped "homepages" (Gmail inbox, X home…) into one card with a fixed, hard-coded list. This fork turns that into a **configurable rule system** and adds the cleanup button that makes it useful:
+
+- **Disposable rules** match a hostname *plus a path pattern*, so you can be precise: prefix (`/j/*`), exact (`/home`), or veto (`!#inbox/` — *exclude* anything containing this). The shipped Gmail rule is `everything on mail.google.com except #inbox/, #sent/ and #search/`, which means your inbox is clutter but the email you're reading is not.
+- Non-homepage clutter works too: the default set includes Zoom's post-join launcher page (`.zoom.us` + `/j/*`) — the call is in the desktop app, so that tab is pure leftover.
+- **Tidy up** appears next to "Close all" whenever there's something safe to close — duplicates, disposable tabs, and tabs already on your saved list — and closes all of it in one click. Its tooltip and the toast spell out the breakdown (*"Closed 6 tabs — 3 disposable, 2 duplicates, 1 already saved"*), so nothing closes as a surprise.
+- The whole group has an on/off switch, and **"+ Add suggested rules"** picks up new or corrected defaults without touching rules you've written.
+
+### Pinned sites — always-visible shortcuts, inside their own card
+
+New: pin the sites you always want at hand (Settings → Pinned sites). A pinned site with an open tab looks like any other tab in its domain card; one with **no** open tab still shows up in that card as a greyed, click-to-open placeholder, so your shortcuts never disappear.
+
+- A pin claims a tab by **hostname + path** — pinning `https://calendar.google.com/` keeps labelling it "Google Calendar" after Calendar redirects deeper, while pinning one Jira board doesn't rename every other Jira tab
+- Most specific pin wins, so a pin on a site root and a pin on a deep page inside it can coexist
+- Give a pin its own **label**, and reorder the list: cards and chips follow your configured pin order first, then alphabetical
+- Has its own on/off switch
+
+Upstream had no pinning.
+
+### Search overlay — find a tab without hunting for it
+
+A configurable keyboard shortcut (default **Cmd+F** on macOS, **Ctrl+F** elsewhere) opens an overlay that searches across your **open tabs and closed-tab history** at once. Arrow keys move the selection, Enter jumps to an open tab or reopens a closed one. Only active on the Tab Out page, and the shortcut is rebindable.
+
+### Auto-sorted tabs — your tab bar follows the dashboard
+
+Your Chrome tab bar quietly reorders itself to match the dashboard's grouping, so the tabs you see on screen are in the same order as the tabs in the bar. On by default; turn it off in Settings and you get a manual **"Sort tabs"** banner instead.
+
+### One dashboard, always on the right
+
+Opening a new Tab Out page closes the other ones (upstream showed a "Close extras" banner asking you to do it), and the dashboard keeps itself on the **rightmost** tab, so everything you open next appears to its left.
+
+### A real settings page
+
+Upstream was configured by hand-editing a gitignored `config.local.js`. This fork ships a proper options page — pinned sites, disposable rules, tab sorting, shortcut, history limit — with per-section enable switches, **Export / Import** for backups, and a reset. Everything lives in `chrome.storage.sync`, so it follows your Chrome profile across machines, and bad input is repaired rather than crashing the page.
+
+### Cleaner grouping, and pages that used to break
+
+- **Subdomains merge automatically.** Cards group by *registrable domain*, so `mail.google.com` and `calendar.google.com` share a card with no rule. Upstream's "custom groups" feature — merging several hostnames by hand — was removed in this fork, because automatic grouping already solves it.
+- **Browser pages are first-class.** `chrome://extensions`, `chrome://settings` and friends group, close and get recorded into history like any other page. Local `file://` tabs can be reopened properly (Chrome blocks the naive approach), and the Disposable card closes by exact URL so it never takes unrelated tabs with it.
+
+### Under the hood
+
+- **TypeScript, strict, with a layered architecture**: pure decision logic in `core/` (no `chrome.*`, no DOM), browser access behind a swappable seam in `platform/`, thin composition roots at the edges.
+- **359 unit tests** across 29 files with Vitest (upstream had none), covering grouping precedence, what each action closes, rule matching, settings validation, HTML escaping and the dashboard's render loop.
+- **A release pipeline**: CI on every push and PR, and one `v*` tag builds, tests, packages and uploads the next version to the Chrome Web Store. See [doc/publishing.md](doc/publishing.md).
 
 ---
 
 ## Features
 
+**Items marked ✦ are new in this fork.**
+
+- ✦ **Closed-tab History** — every tab you close, live-updating and searchable, one click to reopen
+- ✦ **Disposable tabs + Tidy up** — configurable "safe to close" rules with path patterns and vetoes, and one button that closes duplicates, disposable and already-saved tabs together
+- ✦ **Pinned sites** — always-visible shortcuts shown inside their own card, with labels and click-to-open placeholders
+- ✦ **Search overlay** — search open tabs *and* history from a rebindable shortcut (default Cmd/Ctrl+F)
+- ✦ **Auto-sorted tabs** — the tab bar reorders itself to match the dashboard (or a manual banner, your choice)
+- ✦ **Settings page** — edit every rule without touching code, with per-section switches, Export / Import and Reset
+- ✦ **One dashboard, always** — opening a new Tab Out page closes the others, and it stays on the rightmost tab
 - **See all your tabs at a glance** on a clean grid, grouped by domain — including browser pages like `chrome://extensions` and local `file://` pages, not just websites
-- **Disposable tabs group** collects tabs that are safe to close because reopening them costs nothing — a site's own homepage (Gmail inbox, X home, GitHub front page) *and* spent one-off pages like the screen a Zoom meeting leaves behind — into one card. Fully configurable, and can be turned off entirely.
-- **Tidy up** one button next to "Close all" that closes every duplicate, disposable tab, and already-saved tab in a single click — it only appears when there's something to tidy
-- **Configurable settings page** edit pinned sites, disposable rules, and custom groups without touching code — pinned sites and disposable rules can each be switched off wholesale without deleting anything
-- **Close tabs with style** with swoosh sound + confetti burst
-- **Duplicate detection** flags when you have the same page open twice, with one-click cleanup
-- **Click any tab to jump to it** across windows, no new tab opened
-- **Save for later** bookmark tabs — including local files — to a checklist before closing them
-- **History** every tab you close — however you closed it — is remembered and one click away from reopening; a reopened (or already-open) tab is never shown twice
-- **Localhost grouping** shows port numbers next to each tab so you can tell your projects apart
-- **One dashboard, always** opening a new Tab Out page automatically closes the other ones, and keeps it pinned to the rightmost tab so new pages always open to its left
-- **Auto-sorted tabs** your tab bar quietly reorders itself to match the dashboard — turn it off in Settings for a manual "Sort tabs" banner instead
-- **100% local** your data never leaves your machine
+- **Close tabs with style** — swoosh sound + confetti burst, on a whole card or a single tab
+- **Duplicate detection** — an amber `(2x)` badge when you have the same page open twice, with one-click cleanup
+- **Click any tab to jump to it** across windows, without opening a new tab
+- **Save for later** — bookmark tabs to a checklist before closing them, with an archive for the ones you've dealt with
+- **Localhost grouping** — port numbers shown next to each tab, so you can tell your projects apart
+- **Expandable groups** — the first 8 tabs of a card, with a clickable "+N more"
+- **100% local** — your data never leaves your machine
 
 ---
 
 ## Setup
 
-Tab Out is written in TypeScript and compiles to a `dist/` folder. That folder is what you load into Chrome.
+This fork is written in TypeScript and compiles to a `dist/` folder. That folder is what you load into Chrome.
 
 **1. Clone and build**
 
 ```bash
-git clone https://github.com/zarazhangrui/tab-out.git
+git clone https://github.com/lastorder/tab-out.git
 cd tab-out
 npm install
 npm run build
@@ -60,9 +123,19 @@ npm run build
 
 **3. Open a new tab**
 
-You'll see Tab Out.
+You'll see Tab Out 2.
 
-> **Updating:** after `git pull`, run `npm run build` again and hit the reload icon on the Tab Out card in `chrome://extensions`.
+> **Updating:** after `git pull`, run `npm run build` again and hit the reload icon on the Tab Out 2 card in `chrome://extensions`.
+
+### Install with a coding agent
+
+Send your coding agent (Claude Code, Codex, etc.) this repo and say **"install this"**:
+
+```
+https://github.com/lastorder/tab-out
+```
+
+The agent will walk you through it. Takes about 2 minutes.
 
 ---
 
@@ -72,32 +145,22 @@ Click the gear icon in the top-right of the dashboard, or right-click the extens
 
 | Section | What it controls |
 |---------|------------------|
-| **Pinned sites** | Sites always shown first. With open tabs they get a normal card; without, a click-to-open placeholder. Has its own "Enabled" toggle — turn it off to stop applying the list without deleting it. |
-| **Disposable tabs** | Which tabs are safe to close because reopening them costs nothing, collected into a shared **Disposable** card and counted by the "Tidy up" button. Also has its own "Enabled" toggle. |
-| **Custom groups** | Merge several hostnames into one card, or split one site into separate cards by path. |
-| **Tab sorting** | Whether tabs are reordered to match the dashboard automatically (on by default) or only via a manual "Sort tabs" banner. |
+| **Pinned sites** | Sites you always want at hand. Shown inside their own domain card — with a tab open it looks like any other tab, without one it's a greyed, click-to-open placeholder. Each pin has a label, and the list order drives card order. Has its own "Enabled" toggle. |
+| **Disposable tabs** | Which tabs are safe to close because reopening them costs nothing, collected into a shared **Disposable** card and counted by "Tidy up". Also has its own "Enabled" toggle, and a "+ Add suggested rules" button. |
+| **Tab sorting** | Whether the tab bar is reordered to match the dashboard automatically (on by default) or only via a manual "Sort tabs" banner. |
+| **Keyboard shortcut** | The key combo that opens the Search overlay on the Tab Out page (default Cmd/Ctrl+F). |
 | **History** | How many recently closed tabs to remember (default 100). |
 
 Settings are stored in `chrome.storage.sync`, so they follow your Chrome profile across machines. Use **Export** / **Import** to move them as JSON.
 
-### Custom groups: merging several hostnames into one card
-
-A single custom-group rule can only match one hostname. To merge *several* hostnames into one card, add one rule per hostname and give them all the **same `Group key`** — every tab matching any of those rules lands on the same card, titled by whichever `Card title` you gave the rules (keep it consistent across them).
-
-The shipped default is a worked example of exactly this: Google Calendar, Gmail and Google Chat are three unrelated hostnames (`calendar.google.com`, `mail.google.com`, `chat.google.com`) that would otherwise render as three separate cards. All three rules share `groupKey: google-suite`, so they render as one "Google" card instead.
-
-**These same three hostnames are also Pinned sites, at the same time** — and that combination is exactly what makes this a useful reference: pinning a site whose hostname is claimed by a custom-group rule pins the *whole group*, not just that one hostname. The dashboard always shows one "Google" card first, containing whichever of the three is currently open — and if none are, one click-to-open placeholder for the group (not three), opening Calendar (the first of the three listed).
-
-> One real interaction worth knowing: Gmail is *also* a Disposable rule by default (see below), and disposable-checking happens before custom-group-checking. So a plain Gmail inbox tab lands in the **Disposable** card, not the "Google" card — only reading a specific email thread (which the Gmail Disposable rule vetoes) lands in the merged card. Calendar and Chat always join it, since neither has a Disposable rule.
-
 ### Rule syntax
 
-Both rule types use the same hostname field:
+Rules match on hostname:
 
 - `x.com` — matches that hostname exactly
 - `.zoom.us` — a **leading dot** matches any subdomain
 
-Disposable rules (custom groups still use a plain "Path starts with" field) narrow by a single **path pattern**, a comma-separated mix of:
+Disposable rules narrow by a single **Path pattern** field, a comma-separated mix of:
 
 | Term | Meaning |
 |------|---------|
@@ -105,11 +168,11 @@ Disposable rules (custom groups still use a plain "Path starts with" field) narr
 | `/home` | Exact match — only that exact path |
 | `!#inbox/` | Veto — excludes any URL containing that text |
 
-Blank matches only the site's root. Mix freely, e.g. `/*, !#inbox/, !#sent/` — that's the shipped Gmail rule: every `mail.google.com` path *except* URLs containing an inbox or sent-mail thread fragment, so your inbox is disposable while an individual email thread keeps its own card.
+Blank matches only the site's root. Mix freely, e.g. `/*, !#inbox/, !#sent/, !#search/` — that's the shipped Gmail rule: every `mail.google.com` path *except* inbox, sent and search URLs, so your inbox is disposable while an individual email thread keeps its own card.
 
-The shipped defaults cover two shapes of "disposable": a site's own homepage (Gmail inbox, X home, GitHub front page, LinkedIn feed), and Zoom's post-join launcher page (`.zoom.us` + `/j/*`) — since the call itself runs in the desktop app, that leftover browser tab is pure clutter. Google Meet and Microsoft Teams are **not** included by default, because their calls run *inside* the tab — auto-closing one would end a live meeting. Add a rule for them yourself only if that's genuinely safe for how you use them.
+The shipped defaults cover two shapes of "disposable": a site's own homepage (Gmail inbox, X home, GitHub front page, LinkedIn feed, YouTube home), and Zoom's post-join launcher page (`.zoom.us` + `/j/*`). Google Meet and Microsoft Teams are **not** included by default, because their calls run *inside* the tab — auto-closing one would end a live meeting. Add a rule for them yourself only if that's genuinely safe for how you use them.
 
-If you're upgrading from an older version with your own homepage or pinned-site rules already saved, they're untouched — a default only ever seeds a fresh install or a "Reset to defaults". Click **"+ Add suggested rules"** on the Disposable tabs panel to pick up new or corrected defaults (like the Zoom rule) without touching what you've already configured.
+If you're upgrading from an older version with your own rules already saved, they're untouched — a default only ever seeds a fresh install or a "Reset to defaults". Click **"+ Add suggested rules"** to pick up new or corrected defaults (like the Zoom rule) without touching what you've already configured.
 
 ---
 
@@ -127,7 +190,7 @@ Its tooltip and the toast after clicking both spell out the breakdown, e.g. *"Cl
 
 ## History
 
-Click the clock icon in the top-right of the dashboard to see every tab you've closed recently — however you closed it (Tab Out's buttons, Chrome's own tab X, closing a whole window). The list updates live: close a tab from anywhere and it appears immediately, no refresh needed. Click a row to reopen it; it disappears from history the moment it's open again, so a URL is never shown as both "open" and "closed" at once. Rows are sorted newest-closed first, with a search box to jump straight to the one you want. The oldest entries drop off once you pass the configured limit (Settings → History).
+Click the clock icon in the top-right of the dashboard to see every tab you've closed recently — however you closed it (Tab Out's buttons, Chrome's own tab ✕, closing a whole window). The list updates live: close a tab from anywhere and it appears immediately, no refresh needed. Click a row to reopen it; it disappears from history the moment it's open again, so a URL is never shown as both "open" and "closed" at once. Rows are sorted newest-closed first, with a search box to jump straight to the one you want. The oldest entries drop off once you pass the configured limit (Settings → History).
 
 ---
 
@@ -141,6 +204,8 @@ npm test              # run the unit tests
 npm run test:watch    # watch mode
 npm run test:coverage # coverage report
 npm run check         # typecheck + test + build (run before committing)
+npm run package       # build the Chrome Web Store zip → release/tab-out-<version>.zip
+npm run publish:cws   # upload that zip to the store as a draft (needs credentials)
 ```
 
 ### Project layout
@@ -150,13 +215,14 @@ src/
 ├── types/        Shared domain types
 ├── core/         Pure logic — no chrome.*, no DOM, fully unit tested
 │   ├── grouping.ts    Tabs + settings → the ordered list of cards
-│   ├── matching.ts    Evaluates disposable / custom-group rules
+│   ├── matching.ts    Evaluates disposable rules
 │   ├── tidy.ts        Which open tabs "Tidy up" would close, and why
 │   ├── selection.ts   Decides which tabs an action applies to
-│   ├── title.ts       Cleans up noisy tab titles
+│   ├── search.ts      Matching tabs/history entries against a query
+│   ├── title.ts       Cleans up noisy tab titles (and localhost ports)
 │   ├── domain.ts      Hostname → friendly brand name
 │   ├── duplicates.ts  Duplicate detection
-│   ├── url.ts         Total URL helpers
+│   ├── url.ts         Total URL helpers (registrable-domain grouping)
 │   ├── time.ts        Relative-time formatting
 │   ├── history.ts     Closed-tab list: dedup, ordering, trimming
 │   └── dashboard.ts   Identifying and positioning Tab Out's own tab
@@ -177,7 +243,7 @@ The architecture follows one organising rule: **decisions are pure, effects are 
 
 ### Tests
 
-302 unit tests across 27 files, run with [Vitest](https://vitest.dev):
+359 unit tests across 29 files, run with [Vitest](https://vitest.dev):
 
 ```bash
 npm test
@@ -198,6 +264,21 @@ covered through the service that uses them, since `createFakeBrowser()` and
 4. Handle that action in `newtab/controller.ts`.
 5. Run `npm run check`.
 
+### Releasing to the Chrome Web Store
+
+Releases run from GitHub Actions: pushing a `v*` tag builds, tests, packages and uploads the new version to the Chrome Web Store as a **draft**, then attaches the zip to a GitHub Release. Submitting that draft for review stays a manual step in the developer dashboard.
+
+`package.json#version` is the single source of truth — the build copies it into `dist/manifest.json`, and the release job refuses to run when the tag and `package.json` disagree.
+
+```bash
+npm version patch --no-git-tag-version   # bump the version
+git commit -am "Release v1.0.1"
+git tag v1.0.1
+git push origin main --tags
+```
+
+The first-ever upload has to be done by hand (the store API cannot create new items), and the workflow needs store credentials as repository secrets. Both are covered step by step in [doc/publishing.md](doc/publishing.md), along with the local equivalents (`npm run package`, `npm run publish:cws`).
+
 ---
 
 ## Tech stack
@@ -214,15 +295,14 @@ covered through the service that uses them, since `createFakeBrowser()` and
 | Tab snapshot cache | `chrome.storage.session` |
 | Sound | Web Audio API (synthesized, no files) |
 | Animations | CSS transitions + JS confetti particles |
+| Releases | GitHub Actions → Chrome Web Store API v2 (draft uploads) |
 
 Zero runtime dependencies — everything in `dist/` is first-party code.
 
 ---
 
-## License
+## Credits & License
 
-MIT
+MIT.
 
----
-
-Built by [Zara](https://x.com/zarazhangrui)
+Tab Out was created by [Zara](https://x.com/zarazhangrui) — the original project lives at [zarazhangrui/tab-out](https://github.com/zarazhangrui/tab-out). This extended fork is maintained by [lastorder](https://github.com/lastorder).

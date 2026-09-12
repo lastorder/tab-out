@@ -15,7 +15,7 @@ You're installing **Tab Out** for the user. Your job is not just to set it up �
 
 Before doing anything technical, tell the user what they're about to get:
 
-> **Tab Out** replaces your new tab page with a clean dashboard of everything you have open, grouped by domain.
+> **Tab Out 2** replaces your new tab page with a clean dashboard of everything you have open, grouped by domain.
 >
 > Here's what makes it great:
 > - **See all your open tabs at a glance** grouped by registrable domain on a grid — subdomains of the same site (like `mail.google.com` and `calendar.google.com`) share one card automatically
@@ -164,9 +164,13 @@ npm run build:watch   # rebuild on change
 npm run typecheck     # tsc --noEmit
 npm test              # unit tests (vitest)
 npm run check         # typecheck + test + build — run this before you finish
+npm run package       # Chrome Web Store zip → release/tab-out-<version>.zip
+npm run publish:cws   # upload that zip to the store as a draft (needs credentials)
 ```
 
 **Always run `npm run check` before declaring work done.**
+
+Releases are cut by pushing a `v*` tag, which runs `.github/workflows/release.yml`. `package.json#version` is the only version source: the build copies it into `dist/manifest.json`, and `scripts/package.mjs` refuses to package a stale `dist/` or a tag that disagrees with it. See `doc/publishing.md`.
 
 ## The one architectural rule
 

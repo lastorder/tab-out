@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Tab Out",
-  "version": "2.0.0",
+  "name": "Tab Out 2",
+  "version": "1.0.0",
   "description": "Keep tabs on your tabs. New tab page that groups your open tabs by domain and lets you close them with style.",
   "permissions": ["tabs", "storage"],
   "chrome_url_overrides": { "newtab": "index.html" },
@@ -11,7 +11,7 @@
     "open_in_tab": true
   },
   "action": {
-    "default_title": "Tab Out",
+    "default_title": "Tab Out 2",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png"

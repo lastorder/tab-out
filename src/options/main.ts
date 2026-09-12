@@ -250,7 +250,7 @@ byId('revertBtn')?.addEventListener('click', () => {
 /** Reset — restore the built-in defaults. */
 byId('resetBtn')?.addEventListener('click', () => {
   void (async () => {
-    if (!window.confirm('Reset all Tab Out settings to their defaults?')) return;
+    if (!window.confirm('Reset all Tab Out 2 settings to their defaults?')) return;
     const stored = await store.reset();
     draft = settingsToDraft(stored);
     savedSnapshot = JSON.stringify(draft);

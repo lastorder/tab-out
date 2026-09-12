@@ -11,6 +11,9 @@ dist/
 coverage/
 .npm-cache/
 
+# Chrome Web Store packages — rebuilt with `npm run package`.
+release/
+
 # Personal settings exports — may contain internal/company URLs.
 # Import these through the extension's settings page instead of committing them.
 *.local.json

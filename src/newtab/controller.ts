@@ -128,7 +128,7 @@ function toastOpenResult(
   } else if (result === 'created') {
     if (announceSuccess) showToast('Tab reopened');
   } else if (url.startsWith('file://')) {
-    showToast('Couldn\u2019t open — enable "Allow access to file URLs" for Tab Out');
+    showToast('Couldn\u2019t open — enable "Allow access to file URLs" for Tab Out 2');
   } else {
     showToast('Couldn\u2019t open that tab');
   }
