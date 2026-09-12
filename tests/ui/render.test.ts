@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { groupTitle, renderEmptyState, renderGroups, renderPinnedStrip, VISIBLE_CHIP_LIMIT } from '@/ui/render/cards';
+import { groupTitle, renderEmptyState, renderGroupCard, renderGroups, VISIBLE_CHIP_LIMIT } from '@/ui/render/cards';
 import { renderArchiveList, renderSavedItem } from '@/ui/render/saved';
 import { DISPOSABLE_GROUP_KEY } from '@/core/grouping';
 import type { TabGroup } from '@/types';
@@ -92,40 +92,38 @@ describe('renderGroups', () => {
     expect(html).not.toContain('data-group-index="2"');
   });
 
-  it('sorts a pinned tab first within its card, and marks it', () => {
-    const a = tab('https://github.com/a');
-    const b = tab('https://github.com/pinned-me', { url: 'https://pinned.com/x' });
+  it('passes each group its own placeholders by key', () => {
     const html = renderGroups(
-      [{ key: 'x', kind: 'domain', tabs: [a, b] }],
-      new Set(['pinned.com']),
+      [group()],
+      new Map([['github.com', [{ site: { url: 'https://absent.example/' }, pinnedIndex: 0 }]]]),
     );
-
-    expect(html).toContain('chip-pin-badge');
-    // The pinned tab's chip appears before the unpinned one.
-    expect(html.indexOf('pinned.com')).toBeLessThan(html.indexOf(a.url));
+    expect(html).toContain('page-chip-placeholder');
+    expect(html).toContain('data-pinned-url="https://absent.example/"');
   });
 });
 
-describe('renderPinnedStrip', () => {
-  it('renders an open pinned tab as focusable, and a closed one as a placeholder', () => {
-    const openTab = tab('https://mail.google.com/');
-    const html = renderPinnedStrip([
-      { site: { url: 'https://mail.google.com/', label: 'Gmail' }, pinnedIndex: 0, tab: openTab },
-      { site: { url: 'https://absent.com/', label: 'Absent' }, pinnedIndex: 1, tab: null },
+describe('renderGroupCard with placeholders', () => {
+  it('appends a grayed, click-to-open placeholder chip after the real tabs', () => {
+    const html = renderGroupCard(group(), 0, [
+      { site: { url: 'https://absent.com/', label: 'Absent' }, pinnedIndex: 2 },
     ]);
 
-    expect(html).toContain('data-action="focus-tab"');
-    expect(html).toContain(`data-tab-url="${openTab.url}"`);
+    expect(html).toContain('page-chip-placeholder');
     expect(html).toContain('data-action="open-pinned-site"');
     expect(html).toContain('data-pinned-url="https://absent.com/"');
-    expect(html).toContain('data-pinned-index="1"');
-    expect(html).toContain('pinned-chip-closed');
-    expect(html).toContain('Gmail');
+    expect(html).toContain('data-pinned-index="2"');
     expect(html).toContain('Absent');
   });
 
-  it('returns nothing when there is nothing pinned', () => {
-    expect(renderPinnedStrip([])).toBe('');
+  it('omits the tab-count badge and "Close all" button for a placeholder-only card', () => {
+    const emptyGroup: TabGroup = { key: 'absent.com', kind: 'domain', tabs: [] };
+    const html = renderGroupCard(emptyGroup, 0, [
+      { site: { url: 'https://absent.com/', label: 'Absent' }, pinnedIndex: 0 },
+    ]);
+
+    expect(html).not.toContain('tabs open');
+    expect(html).not.toContain('data-action="close-group"');
+    expect(html).toContain('pinned-only-card');
   });
 });
 

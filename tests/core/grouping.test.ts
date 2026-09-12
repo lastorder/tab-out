@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  attachPinnedPlaceholders,
   buildDashboardModel,
-  buildPinnedStrip,
   DISPOSABLE_GROUP_KEY,
   getRealTabs,
   groupTabs,
-  pinnedHostnameSet,
   pinnedInsertIndex,
   sortGroups,
 } from '@/core/grouping';
@@ -35,8 +34,8 @@ describe('groupTabs', () => {
       tabs('https://example.com/a', 'https://example.com/b', 'https://other.com/'),
       emptySettings(),
     );
-    expect(byHost.map((g) => g.key)).toEqual(['example.com', 'other.com']);
-    expect(byHost[0]!.tabs).toHaveLength(2);
+    expect(byHost.map((g) => g.key).sort()).toEqual(['example.com', 'other.com']);
+    expect(byHost.find((g) => g.key === 'example.com')!.tabs).toHaveLength(2);
 
     const merged = groupTabs(
       tabs('https://mail.google.com/', 'https://calendar.google.com/'),
@@ -59,13 +58,10 @@ describe('groupTabs', () => {
       defaultSettings(),
     );
 
-    expect(result[0]!.key).toBe(DISPOSABLE_GROUP_KEY);
-    expect(result[0]!.tabs.map((t) => t.url)).toEqual([
-      'https://github.com/',
-      'https://x.com/home',
-    ]);
-    expect(result[1]!.key).toBe('github.com');
-    expect(result[1]!.tabs).toHaveLength(1);
+    const disposable = result.find((g) => g.key === DISPOSABLE_GROUP_KEY)!;
+    expect(disposable.tabs.map((t) => t.url)).toEqual(['https://github.com/', 'https://x.com/home']);
+    const github = result.find((g) => g.key === 'github.com')!;
+    expect(github.tabs).toHaveLength(1);
   });
 
   it('skips tabs whose URL cannot be parsed', () => {
@@ -128,58 +124,83 @@ describe('sortGroups', () => {
     ];
     expect(sortGroups(groups, []).map((g) => g.key)).toEqual(['a.com', 'b.com']);
   });
+
+  it('bumps a pinned card ahead of same-sized or bigger non-pinned domains, but still behind Disposable', () => {
+    const groups = [
+      { key: DISPOSABLE_GROUP_KEY, kind: 'disposable' as const, tabs: tabs('https://x.com/home') },
+      {
+        key: 'big.com',
+        kind: 'domain' as const,
+        tabs: tabs('https://big.com/1', 'https://big.com/2'),
+      },
+      { key: 'pinned.com', kind: 'domain' as const, tabs: tabs('https://pinned.com/') },
+    ];
+    expect(sortGroups(groups, [], new Set(['pinned.com'])).map((g) => g.key)).toEqual([
+      DISPOSABLE_GROUP_KEY,
+      'pinned.com',
+      'big.com',
+    ]);
+  });
 });
 
-describe('buildPinnedStrip', () => {
-  it('carries the matching open tab for each pinned site, in configured order', () => {
-    const githubTab = tab('https://github.com/', { id: 1 });
-    const items = buildPinnedStrip(
+describe('attachPinnedPlaceholders', () => {
+  it('adds a placeholder for a pinned site with no open tab, under its own domain key', () => {
+    const groups = [{ key: 'github.com', kind: 'domain' as const, tabs: tabs('https://github.com/') }];
+    const { groups: withPlaceholders, placeholders } = attachPinnedPlaceholders(
+      groups,
+      tabs('https://github.com/'),
       [{ url: 'https://github.com' }, { url: 'https://absent.com', label: 'Absent' }],
-      [githubTab],
     );
 
-    expect(items).toEqual([
-      { site: { url: 'https://github.com' }, pinnedIndex: 0, tab: githubTab },
-      { site: { url: 'https://absent.com', label: 'Absent' }, pinnedIndex: 1, tab: null },
+    // github.com already existed and needed nothing extra.
+    expect(withPlaceholders.find((g) => g.key === 'github.com')!.tabs).toHaveLength(1);
+    expect(placeholders.get('github.com')).toBeUndefined();
+
+    // absent.com didn't exist at all — a new (empty) card is created for it.
+    const absentGroup = withPlaceholders.find((g) => g.key === 'absent.com');
+    expect(absentGroup).toMatchObject({ key: 'absent.com', kind: 'domain', tabs: [] });
+    expect(placeholders.get('absent.com')).toEqual([
+      { site: { url: 'https://absent.com', label: 'Absent' }, pinnedIndex: 1 },
     ]);
   });
 
-  it('ignores a pinned entry with an unusable URL', () => {
-    expect(buildPinnedStrip([{ url: 'nonsense' }], [])).toHaveLength(0);
-  });
-
-  it('collapses duplicate hostnames to the first entry', () => {
-    const items = buildPinnedStrip(
-      [{ url: 'https://a.com/x' }, { url: 'https://a.com/y' }],
+  it('groups two pinned placeholders under the same registrable domain into one card', () => {
+    const { groups, placeholders } = attachPinnedPlaceholders(
       [],
+      [],
+      [{ url: 'https://mail.google.com/' }, { url: 'https://calendar.google.com/' }],
     );
-    expect(items).toHaveLength(1);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.key).toBe('google.com');
+    expect(placeholders.get('google.com')).toHaveLength(2);
   });
-});
 
-describe('pinnedHostnameSet', () => {
-  it('collects the hostnames of every pinned entry', () => {
-    const items = buildPinnedStrip([{ url: 'https://a.com' }, { url: 'https://b.com' }], []);
-    expect(pinnedHostnameSet(items)).toEqual(new Set(['a.com', 'b.com']));
+  it('adds nothing for a pinned site with an unusable URL', () => {
+    const { groups, placeholders } = attachPinnedPlaceholders([], [], [{ url: 'nonsense' }]);
+    expect(groups).toHaveLength(0);
+    expect(placeholders.size).toBe(0);
   });
 });
 
 describe('buildDashboardModel', () => {
-  it('merges the shipped Google pinned sites into one domain card, and pins the open one', () => {
+  it('merges the shipped Google pinned sites into one domain card, with the open one rendering as a normal tab', () => {
     const model = buildDashboardModel(tabs('https://chat.google.com/'), defaultSettings());
 
     expect(model.orderedGroups).toHaveLength(1);
     expect(model.orderedGroups[0]).toMatchObject({ key: 'google.com', kind: 'domain' });
-    // chat.google.com is one of the three shipped pinned sites, and it's open.
-    expect(model.pinned.some((item) => item.tab?.url === 'https://chat.google.com/')).toBe(true);
+    expect(model.orderedGroups[0]!.tabs.map((t) => t.url)).toEqual(['https://chat.google.com/']);
+    // Only the two still-unopened shipped pinned sites get placeholders.
+    expect(model.placeholders.get('google.com')).toHaveLength(2);
   });
 
-  it('shows a pinned-strip placeholder for a shipped pinned site with nothing open', () => {
+  it('creates a placeholder-only Google card for the shipped pinned sites when nothing is open', () => {
     const model = buildDashboardModel([], defaultSettings());
 
-    expect(model.orderedGroups).toHaveLength(0);
-    expect(model.pinned).toHaveLength(3);
-    expect(model.pinned.every((item) => item.tab === null)).toBe(true);
+    expect(model.orderedGroups).toHaveLength(1);
+    expect(model.orderedGroups[0]).toMatchObject({ key: 'google.com', tabs: [] });
+    expect(model.placeholders.get('google.com')).toHaveLength(3);
+    // A card with only placeholders doesn't count toward "N domains".
+    expect(model.groupCount).toBe(0);
   });
 
   it('produces the full render model from raw tabs', () => {
@@ -197,33 +218,33 @@ describe('buildDashboardModel', () => {
     );
 
     expect(model.realTabs).toHaveLength(3);
-    expect(model.groupCount).toBe(model.orderedGroups.length);
-    // The one pinned site above has no open tab.
-    expect(model.pinned).toEqual([
-      { site: { url: 'https://absent.com/' }, pinnedIndex: 0, tab: null },
+    // github.com and example.com have real tabs; absent.com is placeholder-only.
+    expect(model.groupCount).toBe(2);
+    expect(model.orderedGroups).toHaveLength(3);
+    expect(model.placeholders.get('absent.com')).toEqual([
+      { site: { url: 'https://absent.com/' }, pinnedIndex: 0 },
     ]);
   });
 
   it('returns an empty model when nothing is open', () => {
-    expect(buildDashboardModel([], emptySettings())).toMatchObject({
-      orderedGroups: [],
-      pinned: [],
-      groupCount: 0,
-    });
+    const model = buildDashboardModel([], emptySettings());
+    expect(model.orderedGroups).toEqual([]);
+    expect(model.placeholders.size).toBe(0);
+    expect(model.groupCount).toBe(0);
   });
 
-  it('empties the pinned strip, without changing grouping, when pinnedEnabled is off', () => {
+  it('adds no placeholders and no pinned sort-priority when pinnedEnabled is off', () => {
     const settings = emptySettings({
       pinnedEnabled: false,
-      pinnedSites: [{ url: 'https://github.com/' }],
+      pinnedSites: [{ url: 'https://absent.com/' }],
     });
     const model = buildDashboardModel(tabs('https://github.com/'), settings);
 
-    expect(model.pinned).toHaveLength(0);
+    expect(model.placeholders.size).toBe(0);
     expect(model.orderedGroups.map((g) => g.key)).toEqual(['github.com']);
   });
 
-  it('keeps a pinned tab in its own domain card rather than extracting it — the strip is a shortcut, not a second copy', () => {
+  it('keeps an open pinned tab in its own domain card rather than extracting it', () => {
     const settings = emptySettings({ pinnedSites: [{ url: 'https://github.com/' }] });
     const model = buildDashboardModel(
       tabs('https://github.com/', 'https://github.com/acme/app'),
@@ -232,7 +253,7 @@ describe('buildDashboardModel', () => {
 
     expect(model.orderedGroups).toHaveLength(1);
     expect(model.orderedGroups[0]!.tabs).toHaveLength(2);
-    expect(model.pinned[0]!.tab?.url).toBe('https://github.com/');
+    expect(model.placeholders.size).toBe(0);
   });
 });
 

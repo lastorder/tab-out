@@ -1,13 +1,12 @@
 /**
- * ui/render/cards.ts — the dashboard's cards, the page chips inside them, and
- * the "Pinned" strip above the grid.
+ * ui/render/cards.ts — the dashboard's cards and the page chips inside them.
  *
  * Pure string builders: data in, HTML out, so they are testable without a DOM.
  * Chips live here rather than in their own module because they are an
  * implementation detail of a card — nothing else renders them.
  */
 
-import type { PinnedStripItem } from '../../core/grouping';
+import type { PinnedPlaceholder } from '../../core/grouping';
 import type { TabGroup, TabInfo } from '../../types';
 import { analyzeDuplicates, uniqueByUrl } from '../../core/duplicates';
 import { friendlyDomain } from '../../core/domain';
@@ -29,26 +28,15 @@ function chipLabel(tab: TabInfo, groupHostname: string): string {
 /**
  * Renders one page chip: favicon, title, duplicate badge, and the hover
  * actions (save for later / close).
- *
- * `isPinned` marks a tab whose hostname is in the user's Pinned sites list —
- * see {@link renderPinnedStrip} for the separate quick-access strip above the
- * grid. Pinning never moves a tab to a different card; it only highlights and
- * (see {@link renderGroupCard}) sorts it first within its own card.
  */
-function renderChip(
-  tab: TabInfo,
-  duplicateCount: number,
-  groupHostname: string,
-  isPinned: boolean,
-): string {
+function renderChip(tab: TabInfo, duplicateCount: number, groupHostname: string): string {
   const label = chipLabel(tab, groupHostname);
   const hostname = hostnameOf(tab.url);
   const favicon = faviconUrl(hostname, 16);
   const isDupe = duplicateCount > 1;
 
-  return `<div class="page-chip clickable${isDupe ? ' chip-has-dupes' : ''}${isPinned ? ' chip-pinned' : ''}"
+  return `<div class="page-chip clickable${isDupe ? ' chip-has-dupes' : ''}"
       data-action="focus-tab" data-tab-url="${escapeHtml(tab.url)}" title="${escapeHtml(label)}">
-      ${isPinned ? `<span class="chip-pin-badge" title="Pinned">${ICONS.pin}</span>` : ''}
       ${favicon ? `<img class="chip-favicon" src="${escapeHtml(favicon)}" alt="" loading="lazy">` : ''}
       <span class="chip-text">${escapeHtml(label)}</span>${
         isDupe ? ` <span class="chip-dupe-badge">(${duplicateCount}x)</span>` : ''
@@ -67,6 +55,25 @@ function renderChip(
 }
 
 /**
+ * Renders one pinned-but-not-open placeholder chip inside its card: a
+ * grayed-out, click-to-open chip — not a card of its own, and not
+ * closable/saveable like a real tab's chip.
+ */
+function renderPlaceholderChip(item: PinnedPlaceholder): string {
+  const hostname = hostnameOf(item.site.url);
+  const label = item.site.label || friendlyDomain(hostname) || item.site.url;
+  const favicon = faviconUrl(hostname, 16);
+
+  return `<div class="page-chip page-chip-placeholder clickable"
+      data-action="open-pinned-site" data-pinned-url="${escapeHtml(item.site.url)}"
+      data-pinned-index="${item.pinnedIndex}" title="${escapeHtml(label)} — click to open">
+      ${favicon ? `<img class="chip-favicon" src="${escapeHtml(favicon)}" alt="" loading="lazy">` : ''}
+      <span class="chip-text">${escapeHtml(label)}</span>
+      <span class="chip-placeholder-hint">Click to open</span>
+    </div>`;
+}
+
+/**
  * Renders the hidden chips plus the "+N more" button that reveals them.
  * The overflow container is display:none until the button is clicked.
  */
@@ -74,14 +81,9 @@ function renderOverflowChips(
   hiddenTabs: readonly TabInfo[],
   counts: Record<string, number>,
   groupHostname: string,
-  pinnedHostnames: ReadonlySet<string>,
 ): string {
   if (hiddenTabs.length === 0) return '';
-  const hidden = hiddenTabs
-    .map((tab) =>
-      renderChip(tab, counts[tab.url] ?? 1, groupHostname, pinnedHostnames.has(hostnameOf(tab.url))),
-    )
-    .join('');
+  const hidden = hiddenTabs.map((tab) => renderChip(tab, counts[tab.url] ?? 1, groupHostname)).join('');
 
   return `
     <div class="page-chips-overflow" style="display:none">${hidden}</div>
@@ -103,13 +105,17 @@ export function groupTitle(group: TabGroup): string {
  * `data-group-index`. Click handlers look groups up by that index rather than
  * by a slugified name, so keys containing punctuation can never collide.
  *
- * `pinnedHostnames` (empty when pinning is off) marks and sorts-first any tab
- * whose hostname is pinned — pinning acts within a card, never across cards.
+ * `placeholders` (empty unless a pinned site with no open tab belongs under
+ * this card) renders as extra grayed, click-to-open chips appended after the
+ * real tabs — pinning surfaces inside its own card, it never gets one of its
+ * own. A card can have placeholders with zero real tabs at all (`tabCount`
+ * is 0), in which case the tab-count badge and "Close all" button are
+ * omitted — there is nothing open to count or close.
  */
 export function renderGroupCard(
   group: TabGroup,
   index: number,
-  pinnedHostnames: ReadonlySet<string> = new Set(),
+  placeholders: readonly PinnedPlaceholder[] = [],
 ): string {
   const tabCount = group.tabs.length;
   const { counts, hasDuplicates, extraCount } = analyzeDuplicates(group.tabs);
@@ -118,22 +124,13 @@ export function renderGroupCard(
   const groupHostname = group.kind === 'domain' ? group.key : '';
 
   const unique = uniqueByUrl(group.tabs);
-  const sorted = pinnedHostnames.size
-    ? [...unique].sort((a, b) => {
-        const aPinned = pinnedHostnames.has(hostnameOf(a.url));
-        const bPinned = pinnedHostnames.has(hostnameOf(b.url));
-        return aPinned === bPinned ? 0 : aPinned ? -1 : 1;
-      })
-    : unique;
-  const visible = sorted.slice(0, VISIBLE_CHIP_LIMIT);
-  const hidden = sorted.slice(VISIBLE_CHIP_LIMIT);
+  const visible = unique.slice(0, VISIBLE_CHIP_LIMIT);
+  const hidden = unique.slice(VISIBLE_CHIP_LIMIT);
 
   const chips =
-    visible
-      .map((tab) =>
-        renderChip(tab, counts[tab.url] ?? 1, groupHostname, pinnedHostnames.has(hostnameOf(tab.url))),
-      )
-      .join('') + renderOverflowChips(hidden, counts, groupHostname, pinnedHostnames);
+    visible.map((tab) => renderChip(tab, counts[tab.url] ?? 1, groupHostname)).join('') +
+    renderOverflowChips(hidden, counts, groupHostname) +
+    placeholders.map(renderPlaceholderChip).join('');
 
   const dupeBadge = hasDuplicates
     ? `<span class="open-tabs-badge badge-amber">${escapeHtml(
@@ -147,21 +144,33 @@ export function renderGroupCard(
       </button>`
     : '';
 
+  const tabsBadge =
+    tabCount > 0
+      ? `<span class="open-tabs-badge">${ICONS.tabs}${escapeHtml(plural(tabCount, 'tab'))} open</span>`
+      : '';
+
+  const closeAllButton =
+    tabCount > 0
+      ? `<button class="action-btn close-tabs" data-action="close-group" data-group-index="${index}">
+            ${ICONS.close}Close all ${escapeHtml(plural(tabCount, 'tab'))}
+          </button>`
+      : '';
+
   return `
-    <div class="mission-card domain-card ${hasDuplicates ? 'has-amber-bar' : 'has-neutral-bar'}"
+    <div class="mission-card domain-card ${hasDuplicates ? 'has-amber-bar' : 'has-neutral-bar'}${
+    tabCount === 0 ? ' pinned-only-card' : ''
+  }"
          data-group-index="${index}">
       <div class="status-bar"></div>
       <div class="mission-content">
         <div class="mission-top">
           <span class="mission-name">${escapeHtml(groupTitle(group))}</span>
-          <span class="open-tabs-badge">${ICONS.tabs}${escapeHtml(plural(tabCount, 'tab'))} open</span>
+          ${tabsBadge}
           ${dupeBadge}
         </div>
         <div class="mission-pages">${chips}</div>
         <div class="actions">
-          <button class="action-btn close-tabs" data-action="close-group" data-group-index="${index}">
-            ${ICONS.close}Close all ${escapeHtml(plural(tabCount, 'tab'))}
-          </button>
+          ${closeAllButton}
           ${dedupeButton}
         </div>
       </div>
@@ -172,41 +181,14 @@ export function renderGroupCard(
     </div>`;
 }
 
-/**
- * Renders one chip in the "Pinned" strip above the grid: an open pinned tab
- * (click focuses it, same as any other chip) or a click-to-open placeholder
- * when nothing matching is currently open. Either way this is a single small
- * chip, never a full card — a pinned site never gets its own group.
- */
-function renderPinnedStripItem(item: PinnedStripItem): string {
-  const hostname = hostnameOf(item.site.url);
-  const label = item.site.label || friendlyDomain(hostname) || item.site.url;
-  const favicon = faviconUrl(hostname, 18);
-  const isOpen = item.tab !== null;
-
-  const actionAttrs = isOpen
-    ? `data-action="focus-tab" data-tab-url="${escapeHtml(item.tab!.url)}"`
-    : `data-action="open-pinned-site" data-pinned-url="${escapeHtml(item.site.url)}" data-pinned-index="${item.pinnedIndex}"`;
-
-  return `
-    <div class="pinned-chip${isOpen ? '' : ' pinned-chip-closed'} clickable" ${actionAttrs} title="${escapeHtml(label)}">
-      ${ICONS.pin}
-      ${favicon ? `<img class="pinned-chip-favicon" src="${escapeHtml(favicon)}" alt="" loading="lazy">` : ''}
-      <span class="pinned-chip-text">${escapeHtml(label)}</span>
-    </div>`;
-}
-
-/** Renders the whole "Pinned" strip's chips, or `''` when nothing is pinned. */
-export function renderPinnedStrip(items: readonly PinnedStripItem[]): string {
-  return items.map(renderPinnedStripItem).join('');
-}
-
 /** Renders every group card in the dashboard model, in order. */
 export function renderGroups(
   groups: readonly TabGroup[],
-  pinnedHostnames: ReadonlySet<string> = new Set(),
+  placeholders: ReadonlyMap<string, PinnedPlaceholder[]> = new Map(),
 ): string {
-  return groups.map((group, index) => renderGroupCard(group, index, pinnedHostnames)).join('');
+  return groups
+    .map((group, index) => renderGroupCard(group, index, placeholders.get(group.key) ?? []))
+    .join('');
 }
 
 /** The "Inbox zero" state shown when every card is gone. */

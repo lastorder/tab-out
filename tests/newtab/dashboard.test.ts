@@ -27,7 +27,6 @@ function mountDom(): void {
     <h1 id="greeting"></h1>
     <div id="dateDisplay"></div>
     <div id="tabSortBanner" style="display:none"></div>
-    <div id="pinnedStrip" style="display:none"></div>
     <div id="openTabsSection" style="display:none">
       <div id="openTabsSectionCount"></div>
       <div id="openTabsMissions"></div>
@@ -72,7 +71,6 @@ async function buildDashboard(tabsList: TabInfo[], settings?: Partial<TabOutSett
 }
 
 const missions = (): string => document.getElementById('openTabsMissions')!.innerHTML;
-const pinnedStrip = (): string => document.getElementById('pinnedStrip')!.innerHTML;
 
 beforeEach(() => {
   resetTabIds();
@@ -136,14 +134,15 @@ describe('Dashboard.render', () => {
     expect(first!.tabs).toHaveLength(2);
   });
 
-  it('renders a pinned-strip placeholder for a pinned site with no open tabs', async () => {
+  it('renders a placeholder-only card for a pinned site with no open tabs', async () => {
     const { dashboard } = await buildDashboard([], {
       pinnedSites: [{ url: 'https://mail.google.com/', label: 'Gmail' }],
     });
     await dashboard.render();
 
-    expect(pinnedStrip()).toContain('data-action="open-pinned-site"');
-    expect(pinnedStrip()).toContain('Gmail');
+    expect(missions()).toContain('data-action="open-pinned-site"');
+    expect(missions()).toContain('Gmail');
+    expect(missions()).toContain('pinned-only-card');
   });
 
   it('shows the sort banner only when the tab bar is out of order, if auto-sort is off', async () => {
@@ -363,7 +362,7 @@ describe('Dashboard History panel', () => {
 });
 
 describe('Dashboard pinned sites', () => {
-  it('shows the pinned tab as open, then reverts the strip to a click-to-open placeholder once it closes', async () => {
+  it('keeps the pinned site in its own domain card while open, then shows a placeholder in the same card once it closes', async () => {
     const pinned = { pinnedSites: [{ url: 'https://example.com/', label: 'Example' }] };
 
     const { dashboard, browser } = await buildDashboard(
@@ -372,20 +371,18 @@ describe('Dashboard pinned sites', () => {
     );
     await dashboard.render();
 
-    // Open: the domain card renders normally, and the strip shows it as open
-    // (not a click-to-open placeholder).
+    // Open: renders as a normal tab in its own domain card, no placeholder.
     expect(missions()).toContain('data-group-index="0"');
-    expect(pinnedStrip()).not.toContain('data-action="open-pinned-site"');
-    expect(pinnedStrip()).toContain('data-action="focus-tab"');
+    expect(missions()).not.toContain('data-action="open-pinned-site"');
 
-    // Closed: the domain card disappears (nothing left to show), and the
-    // strip's entry becomes a click-to-open placeholder rather than vanishing.
+    // Closed: the same card comes back with a click-to-open placeholder
+    // instead of disappearing entirely.
     await browser.close([1]);
     await dashboard.render();
 
-    expect(missions()).toBe('');
-    expect(pinnedStrip()).toContain('data-action="open-pinned-site"');
-    expect(pinnedStrip()).toContain('Example');
+    expect(missions()).toContain('data-action="open-pinned-site"');
+    expect(missions()).toContain('Example');
+    expect(missions()).toContain('pinned-only-card');
   });
 });
 

@@ -109,7 +109,7 @@ Once the extension is loaded:
 > 9. **Only one Tab Out page stays open** — opening a new one automatically closes the others, and it always sits on the rightmost tab, so anything you open next appears to its left.
 > 10. **History** — click the clock icon to see every tab you've recently closed, however you closed it, and reopen one with a click. It updates live — close a tab and it shows up immediately, no refresh needed — and a reopened tab drops off the list immediately too.
 > 11. **Your tab bar quietly reorders itself** to match the dashboard — this is on by default; turn it off in Settings for a manual "Sort tabs" banner instead.
-> 12. **Pinned sites get a "Pinned" strip up top**, one small chip per site — click to jump to it if it's open, or to open it if it's not. A pinned tab is also highlighted and sorted first inside its own domain card below; pinning never pulls a tab into a separate card of its own.
+> 12. **Pinned sites live inside their own domain card**, not a card of their own: an open pinned tab looks like any other tab, and one with no open tab still shows up in that same card as a grayed-out, click-to-open placeholder chip.
 
 ## Step 4 — Point them at the settings page
 
@@ -117,7 +117,7 @@ Most people miss this, so mention it explicitly:
 
 > Click the **gear icon** in the top-right of the dashboard (or right-click the extension icon → Options) to configure:
 >
-> - **Pinned sites** — a compact "Pinned" strip above the grid, plus a highlight on the matching tab inside its own domain card. Pinning is tab-level: it never merges or promotes a whole card. Has its own on/off switch.
+> - **Pinned sites** — shown inside each site's own domain card. An open pinned tab looks like any other tab there; one with no open tab still shows up in that card as a grayed-out, click-to-open placeholder, instead of getting a card of its own. Has its own on/off switch.
 > - **Disposable tabs** — which tabs are safe to close and get collected into the shared Disposable card: a site's own homepage, or a spent one-off page like Zoom's post-join screen. Also has its own on/off switch.
 > - **Tab sorting** — turn auto-sort off if you'd rather sort manually via a banner.
 > - **History** — how many recently closed tabs to remember (default 100).
@@ -221,7 +221,7 @@ Consequences you must respect:
 - **A pure decision that both a button's visibility and its label depend on belongs in `core/`, not in the renderer.** `core/tidy.ts`'s `selectTidyTabIds()` decides *which* tabs "Tidy up" would close and *why* (as a `{ disposable, saved, duplicates }` breakdown that always sums to the total); `newtab/dashboard.ts` only turns that into HTML and a tooltip string. This is what makes "does the button appear, and does its count match reality" testable without a DOM.
 - **The options-page "Path pattern" field is a presentation-layer encoding, not a schema change.** `DisposableRule` still has separate `pathPrefix` / `pathExact` / `urlNotContains` fields in storage and in `core/matching.ts` — nothing there changed. Only `options/draft.ts`'s `patternToField()` / `patternFromField()` collapse those three into one comma-separated field (`/j/*` = prefix, `/home` = exact, `!#inbox/` = veto) for editing, the same way `hostnameToField()` / `hostnameFromField()` already collapse `hostname` / `hostnameEndsWith` into one. If you touch this, keep the round-trip lossless for every shipped default — there's a test for exactly that.
 - **Domain cards group by registrable domain, not raw hostname.** `core/url.ts`'s `groupKeyOf`/`registrableDomainOf` collapse `mail.google.com` and `calendar.google.com` to `google.com` before `core/grouping.ts`'s `groupTabs()` ever buckets tabs, so subdomains of one site share a card without a merge rule. `isDisposableDomain` (in `core/matching.ts`) compares against this same registrable-domain key, not the rule's raw hostname — don't compare a rule's `hostname` field directly against a group's `key` again.
-- **Pinning is tab-level, not group-level.** `core/grouping.ts#buildPinnedStrip` never touches which card a tab belongs to — it only looks up, per pinned site, the matching open tab (by hostname) for the "Pinned" strip, and `pinnedHostnameSet()` feeds `ui/render/cards.ts#renderGroupCard` a set used purely to sort that tab first within its own card and badge its chip. If you need "pin this whole card" back, that is a deliberately different feature from this one — don't quietly conflate them.
+- **Pinning surfaces inside its own card, never gets a card of its own.** `core/grouping.ts#attachPinnedPlaceholders` never touches which card an *open* pinned tab belongs to — `groupTabs()` already placed it correctly by registrable domain. It only adds a grayed, click-to-open `PinnedPlaceholder` chip (via the returned `Map<groupKey, PinnedPlaceholder[]>`) for a pinned site with no open tab, creating an otherwise-empty card for it if none already exists. `sortGroups()`'s `pinnedGroupKeys` param only bumps that card's sort priority; it doesn't change membership. If you need a "promote this whole card to the front" feature back, that is a deliberately different, previously-removed feature — don't quietly conflate the two.
 
 ## Testing
 
@@ -232,7 +232,7 @@ adding one, ask what bug it would catch.
 - Decision logic with branches — grouping precedence, which tabs an action
   closes, rule matching, validation.
 - Invariants worth stating out loud (`normalizeSettings(defaults) === defaults`;
-  `buildPinnedStrip` doesn't mutate its input).
+  `attachPinnedPlaceholders` doesn't mutate its input).
 - Past bugs, so they stay fixed. Several tests exist only for this and say so
   in a comment — leave those alone.
 - HTML escaping, since page titles are attacker-controlled.
@@ -270,7 +270,7 @@ Don't "restore" these — their absence is the design:
 - **The `extension/` directory and `app.js`.** Replaced by `src/` plus a build step. `dist/` is generated and gitignored — never edit it by hand.
 - **The `activeTab` permission.** It was unused; `tabs` already covers what's needed.
 - **Custom groups.** `CustomGroupRule`, `customGroups`/`customGroupsEnabled`, `findCustomGroup`/`matchesCustomGroup`, and the whole "Custom groups" options panel are gone. Merging several hostnames into one card is now automatic — grouping by registrable domain (see below) already puts `mail.google.com` and `calendar.google.com` on one card without a rule. Don't reintroduce a merge-rule feature to solve a problem registrable-domain grouping already solves.
-- **Whole-card pinning.** Pinning used to promote a pinned site's entire card to the front of the grid (and render a placeholder card when nothing was open). It's tab-level now: see the "Pinning is tab-level, not group-level" convention above. `applyPinnedSites()` and the `DashboardEntry` `'placeholder'` variant are gone along with it — don't resurrect a "promote this whole card" code path.
+- **Whole-card pinning, and a separate "Pinned" strip above the grid.** Two earlier iterations of pinning are both gone: promoting a pinned site's entire card to the front of the grid, and (briefly) a compact strip of pinned-tab chips above the domain cards. Current behaviour: see the "Pinning surfaces inside its own card" convention above. `applyPinnedSites()`, `buildPinnedStrip()`, `pinnedHostnameSet()`, the `DashboardEntry` `'placeholder'` variant, and `#pinnedStrip` are all gone along with them — don't resurrect a "promote this card" or "separate strip" code path.
 
 ## Key facts
 
