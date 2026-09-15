@@ -9,6 +9,7 @@
 
 import type { SavedTab, SavedTabBuckets } from '../types';
 import type { KeyValueStore } from '../platform/storage';
+import { matchesQueryTerms, tokenizeQuery } from '../core/query';
 
 /** Storage key holding the saved-tab array. */
 export const SAVED_TABS_KEY = 'deferred';
@@ -110,13 +111,12 @@ export class SavedTabsService {
 /**
  * Pure filter used by the archive search box. Queries shorter than two
  * characters return everything, so the list does not flicker while typing.
+ * Space-separated terms narrow the list, matching every other search box in
+ * the extension — see `core/query.ts`.
  */
 function filterSavedTabs(items: readonly SavedTab[], query: string): SavedTab[] {
-  const q = query.trim().toLowerCase();
-  if (q.length < 2) return [...items];
-  return items.filter(
-    (item) =>
-      (item.title || '').toLowerCase().includes(q) ||
-      (item.url || '').toLowerCase().includes(q),
-  );
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return [...items];
+  const terms = tokenizeQuery(trimmed);
+  return items.filter((item) => matchesQueryTerms(terms, [item.title || '', item.url || '']));
 }

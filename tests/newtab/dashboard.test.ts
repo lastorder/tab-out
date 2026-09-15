@@ -23,6 +23,10 @@ import { emptySettings, resetTabIds, tab } from '../helpers/factories';
 
 /** The subset of index.html the Dashboard writes into. */
 function mountDom(): void {
+  // jsdom has no layout, so `scrollIntoView` is missing entirely; the Search
+  // overlay calls it to keep the selected row visible.
+  Element.prototype.scrollIntoView ??= () => {};
+
   document.body.innerHTML = `
     <h1 id="greeting"></h1>
     <div id="dateDisplay"></div>
@@ -45,6 +49,10 @@ function mountDom(): void {
       <div id="historyCount"></div>
       <input id="historySearch" type="text">
       <div id="historyList"></div>
+    </div>
+    <div id="searchOverlay" style="display:none">
+      <input id="searchInput" type="text">
+      <div id="searchResults"></div>
     </div>
     <div id="statTabs">—</div>`;
 }
@@ -359,6 +367,23 @@ describe('Dashboard History panel', () => {
 
     expect(document.getElementById('historyList')!.innerHTML).toContain('Example');
     expect(document.getElementById('historyBadge')!.textContent).toBe('1');
+  });
+});
+
+describe('Dashboard Search overlay', () => {
+  it('narrows a space-separated query across open tabs and history', async () => {
+    const { dashboard, historyService } = await buildDashboard([
+      tab('https://docs.example.com/guide', { title: 'Tab Out Guide' }),
+      tab('https://blog.example.com/post', { title: 'Tab Out Launch' }),
+    ]);
+    await historyService.record({ url: 'https://docs.example.com/old', title: 'Tab Out Docs' }, 100);
+
+    await dashboard.renderSearchPanel('tab docs', 0);
+
+    const html = document.getElementById('searchResults')!.innerHTML;
+    expect(html).toContain('Tab Out Guide');
+    expect(html).toContain('Tab Out Docs');
+    expect(html).not.toContain('Tab Out Launch');
   });
 });
 

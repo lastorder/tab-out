@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { clampHistory, filterHistory, sortHistoryByRecency, upsertHistoryEntry } from '@/core/history';
-import { historyEntry } from '../helpers/factories';
+import {
+  clampHistory,
+  filterHistory,
+  shouldRecordClosedTab,
+  sortHistoryByRecency,
+  upsertHistoryEntry,
+} from '@/core/history';
+import { emptySettings, historyEntry } from '../helpers/factories';
 
 const at = (iso: string, url: string) => historyEntry(url, { closedAt: iso });
 
@@ -69,5 +75,40 @@ describe('filterHistory', () => {
   it('shows everything until the query is worth filtering on', () => {
     expect(filterHistory(entries, '')).toHaveLength(2);
     expect(filterHistory(entries, 'r')).toHaveLength(2);
+  });
+
+  it('narrows a space-separated query, requiring every term', () => {
+    const entries = [
+      historyEntry('https://docs.example.com/tab-out', { title: 'Tab Out Guide' }),
+      historyEntry('https://docs.example.com/other', { title: 'Other Docs' }),
+      historyEntry('https://blog.example.com/tab-out', { title: 'Tab Out Launch' }),
+    ];
+    // Only the first matches both "tab" (title) and "docs" (URL).
+    expect(filterHistory(entries, 'tab docs').map((e) => e.title)).toEqual(['Tab Out Guide']);
+  });
+});
+
+describe('shouldRecordClosedTab', () => {
+  const rules = [{ hostname: 'github.com', pathExact: ['/'] }];
+
+  it('skips a disposable URL while disposable rules are enabled', () => {
+    expect(
+      shouldRecordClosedTab('https://github.com/', emptySettings({ disposableRules: rules })),
+    ).toBe(false);
+  });
+
+  it('records the same URL once disposable rules are switched off', () => {
+    expect(
+      shouldRecordClosedTab(
+        'https://github.com/',
+        emptySettings({ disposableEnabled: false, disposableRules: rules }),
+      ),
+    ).toBe(true);
+  });
+
+  it('records a URL the rules do not match', () => {
+    expect(
+      shouldRecordClosedTab('https://github.com/issue/1', emptySettings({ disposableRules: rules })),
+    ).toBe(true);
   });
 });

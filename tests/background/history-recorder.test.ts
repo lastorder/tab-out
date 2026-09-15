@@ -3,6 +3,7 @@ import { recordTabRemoved, trackTabActivity } from '@/background/history-recorde
 import { TabHistoryService } from '@/services/tab-history';
 import { TabSnapshotCache } from '@/services/tab-snapshot-cache';
 import { createMemoryStore } from '@/platform/storage';
+import { emptySettings } from '../helpers/factories';
 
 function makeDeps() {
   const historyService = new TabHistoryService(createMemoryStore());
@@ -10,12 +11,17 @@ function makeDeps() {
   return { historyService, snapshotCache };
 }
 
+/** Record-removal deps with disposable rules off and the default history limit. */
+function removalDeps(deps: ReturnType<typeof makeDeps>, maxHistoryItems = 100) {
+  return { ...deps, getSettings: async () => emptySettings({ maxHistoryItems }) };
+}
+
 describe('trackTabActivity', () => {
   it('snapshots the tab so it can be recorded when it later closes', async () => {
     const deps = makeDeps();
     await trackTabActivity({ id: 7, url: 'https://a.com/', title: 'A' }, deps);
 
-    await recordTabRemoved(7, { ...deps, getMaxHistoryItems: async () => 100 });
+    await recordTabRemoved(7, removalDeps(deps));
     expect(await deps.historyService.list()).toMatchObject([{ url: 'https://a.com/' }]);
   });
 
@@ -46,14 +52,14 @@ describe('recordTabRemoved', () => {
     const deps = makeDeps();
     await deps.snapshotCache.record(5, { url: 'https://a.com/', title: 'A' });
 
-    await recordTabRemoved(5, { ...deps, getMaxHistoryItems: async () => 100 });
+    await recordTabRemoved(5, removalDeps(deps));
 
     expect(await deps.historyService.list()).toMatchObject([{ url: 'https://a.com/', title: 'A' }]);
   });
 
   it('does nothing for a tab id with no snapshot', async () => {
     const deps = makeDeps();
-    await recordTabRemoved(999, { ...deps, getMaxHistoryItems: async () => 100 });
+    await recordTabRemoved(999, removalDeps(deps));
     expect(await deps.historyService.list()).toEqual([]);
   });
 
@@ -61,7 +67,7 @@ describe('recordTabRemoved', () => {
     const deps = makeDeps();
     await deps.snapshotCache.record(5, { url: 'chrome://newtab/', title: '' });
 
-    await recordTabRemoved(5, { ...deps, getMaxHistoryItems: async () => 100 });
+    await recordTabRemoved(5, removalDeps(deps));
 
     expect(await deps.historyService.list()).toEqual([]);
   });
@@ -69,7 +75,7 @@ describe('recordTabRemoved', () => {
   it('consumes the snapshot even when the page was internal, so it cannot leak to a later tab id', async () => {
     const deps = makeDeps();
     await deps.snapshotCache.record(5, { url: 'chrome://newtab/', title: '' });
-    await recordTabRemoved(5, { ...deps, getMaxHistoryItems: async () => 100 });
+    await recordTabRemoved(5, removalDeps(deps));
 
     expect(await deps.snapshotCache.consume(5)).toBeNull();
   });
@@ -77,12 +83,53 @@ describe('recordTabRemoved', () => {
   it('respects the injected history limit', async () => {
     const deps = makeDeps();
     await deps.snapshotCache.record(1, { url: 'https://a.com/', title: 'A' });
-    await recordTabRemoved(1, { ...deps, getMaxHistoryItems: async () => 100 });
+    await recordTabRemoved(1, removalDeps(deps, 100));
     await deps.snapshotCache.record(2, { url: 'https://b.com/', title: 'B' });
-    await recordTabRemoved(2, { ...deps, getMaxHistoryItems: async () => 1 });
+    await recordTabRemoved(2, removalDeps(deps, 1));
 
     const list = await deps.historyService.list();
     expect(list).toHaveLength(1);
     expect(list[0]!.url).toBe('https://b.com/');
+  });
+
+  it('does not record a tab the disposable rules call safe to lose', async () => {
+    const deps = makeDeps();
+    await deps.snapshotCache.record(5, { url: 'https://github.com/', title: 'GitHub' });
+
+    await recordTabRemoved(5, {
+      ...deps,
+      getSettings: async () =>
+        emptySettings({ disposableRules: [{ hostname: 'github.com', pathExact: ['/'] }] }),
+    });
+
+    expect(await deps.historyService.list()).toEqual([]);
+  });
+
+  it('records a disposable-looking tab while disposable rules are switched off', async () => {
+    const deps = makeDeps();
+    await deps.snapshotCache.record(5, { url: 'https://github.com/', title: 'GitHub' });
+
+    await recordTabRemoved(5, {
+      ...deps,
+      getSettings: async () =>
+        emptySettings({
+          disposableEnabled: false,
+          disposableRules: [{ hostname: 'github.com', pathExact: ['/'] }],
+        }),
+    });
+
+    expect(await deps.historyService.list()).toMatchObject([{ url: 'https://github.com/' }]);
+  });
+
+  it('still consumes the snapshot for a skipped disposable tab', async () => {
+    const deps = makeDeps();
+    await deps.snapshotCache.record(5, { url: 'https://github.com/', title: 'GitHub' });
+    await recordTabRemoved(5, {
+      ...deps,
+      getSettings: async () =>
+        emptySettings({ disposableRules: [{ hostname: 'github.com', pathExact: ['/'] }] }),
+    });
+
+    expect(await deps.snapshotCache.consume(5)).toBeNull();
   });
 });

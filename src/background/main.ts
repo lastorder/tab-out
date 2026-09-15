@@ -101,7 +101,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   void recordTabRemoved(tabId, {
     historyService,
     snapshotCache,
-    getMaxHistoryItems: async () => (await settingsStore.load()).maxHistoryItems,
+    getSettings: () => settingsStore.load(),
   });
 });
 

@@ -98,4 +98,16 @@ describe('SavedTabsService.searchArchive', () => {
     expect(await ctx.service.searchArchive('python')).toHaveLength(0);
     expect(await ctx.service.searchArchive('r')).toHaveLength(2);
   });
+
+  it('narrows a space-separated query, requiring every term', async () => {
+    const ctx = makeService();
+    await ctx.service.save({ url: 'https://docs.example.com/guide', title: 'TypeScript guide' });
+    await ctx.service.save({ url: 'https://other.com/', title: 'Rust guide' });
+    await ctx.service.complete('id-1');
+    await ctx.service.complete('id-2');
+
+    // "typescript" hits the first title, "docs" its URL; both must match.
+    expect(await ctx.service.searchArchive('typescript docs')).toHaveLength(1);
+    expect(await ctx.service.searchArchive('typescript rust')).toHaveLength(0);
+  });
 });

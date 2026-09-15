@@ -7,6 +7,7 @@
  */
 
 import type { ClosedTabEntry, TabInfo } from '../types';
+import { matchesQueryTerms, tokenizeQuery } from './query';
 
 /** One row in the Search overlay's results list. */
 export interface SearchResult {
@@ -34,30 +35,27 @@ function historyToResult(entry: ClosedTabEntry): SearchResult {
   };
 }
 
-/** Case-insensitive substring match against title or URL. */
-function matches(title: string, url: string, query: string): boolean {
-  const q = query.toLowerCase();
-  return title.toLowerCase().includes(q) || url.toLowerCase().includes(q);
-}
-
 /**
  * Builds the ranked result list for a query: matching open tabs first (in
  * their given order), then matching history entries (already sorted
  * newest-first by the caller). An empty query returns open tabs followed by
  * history, unfiltered — so opening the overlay with nothing typed yet shows
  * something useful rather than a blank list.
+ *
+ * Matching is shared with every other search box in the extension; see
+ * `core/query.ts` for the space-separated "narrow as you type" rule.
  */
 export function searchTabsAndHistory(
   tabs: readonly TabInfo[],
   history: readonly ClosedTabEntry[],
   query: string,
 ): SearchResult[] {
-  const q = query.trim();
+  const terms = tokenizeQuery(query);
   const tabResults = tabs
-    .filter((tab) => q.length === 0 || matches(tab.title, tab.url, q))
+    .filter((tab) => matchesQueryTerms(terms, [tab.title, tab.url]))
     .map(tabToResult);
   const historyResults = history
-    .filter((entry) => q.length === 0 || matches(entry.title, entry.url, q))
+    .filter((entry) => matchesQueryTerms(terms, [entry.title, entry.url]))
     .map(historyToResult);
   return [...tabResults, ...historyResults];
 }

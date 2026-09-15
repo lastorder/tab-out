@@ -7,7 +7,9 @@
  * `chrome.tabs` event stream.
  */
 
+import { shouldRecordClosedTab } from '../core/history';
 import { isInternalUrl } from '../core/url';
+import type { TabOutSettings } from '../types';
 import type { TabHistoryService } from '../services/tab-history';
 import type { TabSnapshotCache } from '../services/tab-snapshot-cache';
 
@@ -21,6 +23,11 @@ export interface TrackedTab {
 export interface HistoryRecorderDeps {
   historyService: TabHistoryService;
   snapshotCache: TabSnapshotCache;
+}
+
+/** Extra dependency only the removal path needs: the settings that define "disposable". */
+export interface RecordTabRemovedDeps extends HistoryRecorderDeps {
+  getSettings: () => Promise<TabOutSettings>;
 }
 
 /**
@@ -42,14 +49,16 @@ export async function trackTabActivity(tab: TrackedTab, deps: HistoryRecorderDep
 
 /**
  * Called when a tab is closed. Looks up what it was showing right before it
- * closed and, unless that was a browser-internal page, records it to history.
+ * closed and, unless that was a browser-internal page or a tab the disposable
+ * rules already call safe to lose, records it to history.
  */
 export async function recordTabRemoved(
   tabId: number,
-  deps: HistoryRecorderDeps & { getMaxHistoryItems: () => Promise<number> },
+  deps: RecordTabRemovedDeps,
 ): Promise<void> {
   const snapshot = await deps.snapshotCache.consume(tabId);
   if (!snapshot || isInternalUrl(snapshot.url)) return;
-  const maxItems = await deps.getMaxHistoryItems();
-  await deps.historyService.record(snapshot, maxItems);
+  const settings = await deps.getSettings();
+  if (!shouldRecordClosedTab(snapshot.url, settings)) return;
+  await deps.historyService.record(snapshot, settings.maxHistoryItems);
 }

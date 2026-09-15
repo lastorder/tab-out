@@ -102,6 +102,7 @@ tab-out/
 │   │   ├── url.ts            ← URL 工具（永不抛异常）
 │   │   ├── dashboard.ts      ← 识别与定位 Tab Out 自己的标签页
 │   │   ├── history.ts        ← 关闭历史的排序与裁剪
+│   │   ├── query.ts          ← 搜索分词与匹配规则（所有搜索框共用）
 │   │   ├── time.ts           ← 相对时间格式化
 │   │   └── friendly-domains.ts ← 域名映射表（纯数据）
 │   ├── platform/             ← 【接缝层】把 chrome.* 封在这里
@@ -1441,6 +1442,8 @@ npm run build
 | **单例仪表盘取代 "Close extras"** | 能自动做对的事，不要做成需要用户决策的 UI |
 | **卡片按 index 定位** | 字符串 slug 会冲突（`Work-Jira` 和 `work.jira`），会关错卡片 |
 | **按域名关 vs 按精确 URL 关** | 关 GitHub 卡片该带走所有 GitHub 标签；关 Disposable 不能带走你在读的邮件 |
+| **可丢弃标签不进关闭历史** | 它们本来就是"关了也不心疼"的页面，记下来只会让 History 被刚清掉的杂物塞满。关掉 Disposable 开关就恢复普通记录 |
+| **多词搜索是"逐步收窄"而非"扩宽"** | `tab doc` 先匹配 `tab` 再按 `doc` 过滤，两个词可以各命中标题和 URL 之一（词之间是 AND，不是 OR）。规则集中在 `core/query.ts`，搜索浮层、全局弹窗、History 面板、归档搜索四处共用，行为不会各走各的 |
 | **规则缺 hostname 时永不匹配** | 用户填到一半的规则不应该吞掉全互联网的标签 |
 | **删掉 `activeTab` 权限** | 从未使用。权限最小化降低用户的信任成本 |
 | **所有插值都转义** | 任何网站都能自定义 `<title>`，这是真实攻击面 |
@@ -1500,7 +1503,7 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 
 ## 16. 附录：文件清单
 
-### 源代码（TypeScript，34 个模块，约 3670 行）
+### 源代码（TypeScript，35 个模块，约 3710 行）
 
 | 模块 | 行数 | 职责 |
 |------|-----:|------|
@@ -1514,7 +1517,8 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 | `core/friendly-domains.ts` | 87 | 域名 → 品牌名映射表（纯数据） |
 | `core/duplicates.ts` | 85 | 重复检测与去重选择 |
 | `core/tidy.ts` | 76 | "Tidy up" 该关哪些标签、原因是什么 |
-| `core/history.ts` | 53 | 关闭历史的去重、排序、裁剪 |
+| `core/history.ts` | 71 | 关闭历史的去重、排序、裁剪，以及"这个标签值不值得记" |
+| `core/query.ts` | 38 | 搜索查询的分词与匹配规则（所有搜索框共用） |
 | `core/time.ts` | 50 | 相对时间、问候语 |
 | `core/dashboard.ts` | 48 | 识别与定位 Tab Out 自己的标签页 |
 | `core/domain.ts` | 39 | 域名友好化 |
@@ -1547,7 +1551,7 @@ export function decideSomething(tabs: readonly TabInfo[], settings: X): Y { ... 
 | `options/render.ts` | 121 | 表单渲染（数据驱动） |
 | `background/main.ts` | 145 | Service Worker 事件接线 |
 | `newtab/main.ts` | 58 | 组装根 |
-| `background/history-recorder.ts` | 55 | 关闭标签的记录逻辑 |
+| `background/history-recorder.ts` | 64 | 关闭标签的记录逻辑（可丢弃标签会被跳过） |
 | `background/badge.ts` | 35 | 角标计算（纯函数） |
 
 ### 其他

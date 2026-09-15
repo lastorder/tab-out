@@ -27,6 +27,22 @@ describe('searchTabsAndHistory', () => {
     expect(results.map((r) => r.title)).toEqual(['Beta']);
   });
 
+  it('narrows a space-separated query, requiring every term to match', () => {
+    // "Old Alpha" is at alpha-archive.com: "alpha" hits the title, "archive"
+    // the URL. Both must match, and they may match different fields.
+    const results = searchTabsAndHistory(openTabs, history, 'alpha archive');
+    expect(results.map((r) => r.title)).toEqual(['Old Alpha']);
+  });
+
+  it('is order-independent and ignores extra whitespace', () => {
+    const results = searchTabsAndHistory(openTabs, history, '  archive   ALPHA  ');
+    expect(results.map((r) => r.title)).toEqual(['Old Alpha']);
+  });
+
+  it('returns nothing when one of several terms matches nothing', () => {
+    expect(searchTabsAndHistory(openTabs, history, 'alpha gamma')).toEqual([]);
+  });
+
   it('tags each result with the fields its kind needs', () => {
     const [tabResult, , historyResult] = searchTabsAndHistory(openTabs, history, '');
     expect(tabResult).toMatchObject({ kind: 'tab', tabId: openTabs[0]!.id });

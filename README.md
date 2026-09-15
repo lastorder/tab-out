@@ -26,6 +26,7 @@ A **History** panel (clock icon, top-right) lists every tab you've closed recent
 
 - Updates **live** — close a tab anywhere and it appears immediately, no refresh
 - Click a row to reopen it; it leaves the list the moment it's open again, so a URL is never shown as both open and closed
+- **Disposable tabs are skipped** — anything matching an enabled disposable rule (the Gmail inbox, GitHub's front page, a spent Zoom page…) is never recorded, so History stays a list of things actually worth reopening instead of the clutter "Tidy up" just cleared
 - Has its own search box, and a configurable retention limit (default: last 100)
 
 Upstream had no history at all.
@@ -53,6 +54,8 @@ Upstream had no pinning.
 ### Search overlay — find a tab without hunting for it
 
 A configurable keyboard shortcut (default **Cmd+F** on macOS, **Ctrl+F** elsewhere) opens an overlay that searches across your **open tabs and closed-tab history** at once. Arrow keys move the selection, Enter jumps to an open tab or reopens a closed one. Only active on the Tab Out page, and the shortcut is rebindable.
+
+Space-separated words **narrow** the results: `tab doc` first matches everything for "tab", then keeps only those that also match "doc" — the two may hit different fields (one the title, the other the URL). The same rule applies to every search box in Tab Out: the dashboard overlay, the browser-global popup, the History panel and the saved-tabs archive.
 
 ### Auto-sorted tabs — your tab bar follows the dashboard
 
@@ -203,7 +206,7 @@ Its tooltip and the toast after clicking both spell out the breakdown, e.g. *"Cl
 
 ## History
 
-Click the clock icon in the top-right of the dashboard to see every tab you've closed recently — however you closed it (Tab Out's buttons, Chrome's own tab ✕, closing a whole window). The list updates live: close a tab from anywhere and it appears immediately, no refresh needed. Click a row to reopen it; it disappears from history the moment it's open again, so a URL is never shown as both "open" and "closed" at once. Rows are sorted newest-closed first, with a search box to jump straight to the one you want. The oldest entries drop off once you pass the configured limit (Settings → History).
+Click the clock icon in the top-right of the dashboard to see every tab you've closed recently — however you closed it (Tab Out's buttons, Chrome's own tab ✕, closing a whole window). The list updates live: close a tab from anywhere and it appears immediately, no refresh needed. Click a row to reopen it; it disappears from history the moment it's open again, so a URL is never shown as both "open" and "closed" at once. Rows are sorted newest-closed first, with a search box to jump straight to the one you want. The oldest entries drop off once you pass the configured limit (Settings → History). Tabs matching an enabled disposable rule are deliberately left out — they're safe to lose by definition, so recording them would just refill History with rows worth reopening after every "Tidy up". Turn the Disposable feature off and they're recorded like any other tab.
 
 ---
 
@@ -232,6 +235,7 @@ src/
 │   ├── tidy.ts        Which open tabs "Tidy up" would close, and why
 │   ├── selection.ts   Decides which tabs an action applies to
 │   ├── search.ts      Matching tabs/history entries against a query
+│   ├── query.ts       Query tokenizing + matching, shared by every search box
 │   ├── title.ts       Cleans up noisy tab titles (and localhost ports)
 │   ├── domain.ts      Hostname → friendly brand name
 │   ├── duplicates.ts  Duplicate detection
