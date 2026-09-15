@@ -88,6 +88,7 @@ Most people miss this, so mention it explicitly:
 > - **Disposable tabs** — which tabs are safe to close into the shared Disposable card. Also switchable off.
 > - **Tab sorting** — turn auto-sort off if you'd rather sort manually via a banner.
 > - **History** — how many recently closed tabs to remember (default 100).
+> - **Global shortcuts** — two shortcuts that work anywhere in Chrome and are **off by default**: `Cmd+Shift+F` (Mac) opens the Tab Out search box over whatever page you're on, and `Cmd+Shift+T` (Mac) opens the dashboard even if Tab Out isn't your new tab page. Tick them on here; to change the keys themselves, use the button that opens Chrome's own shortcut settings.
 >
 > Settings sync across your Chrome profile, and there are Export/Import buttons for backups.
 
@@ -117,6 +118,8 @@ Then click the **reload icon** on the Tab Out card in `chrome://extensions`.
 | New tab is still Chrome's default | Another extension is also overriding the new tab page. Disable it in `chrome://extensions`. |
 | Code changes don't show up | `dist/` is a build artifact. Run `npm run build`, then reload the extension. |
 | A saved local `file://` tab won't reopen ("Couldn't open" toast) | Chrome requires per-extension opt-in for file access. `chrome://extensions` → Tab Out → **Details** → enable **Allow access to file URLs**. |
+| A global shortcut does nothing | It's off by default — turn it on in Settings → **Global shortcuts**. Also check `chrome://extensions/shortcuts`: Chrome may have kept `Cmd+Shift+T` for "reopen closed tab", or another extension may hold the chord. |
+| Chrome refuses to load the extension ("requires a newer version of Chrome") | Tab Out needs Chrome 127+ for the global search shortcut (`manifest.json#minimum_chrome_version`). Update Chrome. |
 
 ---
 
@@ -152,7 +155,7 @@ services/  Orchestration: TabActions, SavedTabsService, TabHistoryService
   ↓
 ui/        Pure HTML string renderers + DOM effects
   ↓
-newtab/ options/ background/    Entry points — thin wiring only
+newtab/ options/ background/ popup/    Entry points — thin wiring only
 ```
 
 - **Never import `chrome.*` inside `core/` or `ui/render/`** — pass browser data in as an argument.
@@ -201,6 +204,16 @@ newtab/ options/ background/    Entry points — thin wiring only
 - **Don't derive live state from `Dashboard`'s last render model.** `#model` is a snapshot from the previous full render, stale exactly when you most want to repaint (a tab just closed). `renderHistoryPanel` queries open tabs live for this reason — reading `#model.realTabs` made a just-closed tab still look open and filtered its new history entry straight back out.
 - **`RenderScheduler.suppress()` delays repaints; it must never drop them.** Close handlers mutate the DOM for instant feedback, but only a real render recomputes derived state — e.g. a pinned site whose last tab closed has to return as a click-to-open placeholder instead of vanishing. `suppress()` queues a catch-up render; don't bypass it.
 - **A pure decision behind both a button's visibility and its label belongs in `core/`, not the renderer.** `core/tidy.ts`'s `selectTidyTabIds()` decides *which* tabs "Tidy up" would close and *why*, as a `{ disposable, saved, duplicates }` breakdown that always sums to the total; `newtab/dashboard.ts` only turns that into HTML and a tooltip. That's what makes "does the button appear, and does its count match reality" testable without a DOM.
+
+**Global shortcuts**
+
+- **There are two different shortcut systems, and they are not interchangeable.** `searchShortcut` (`core/shortcut.ts`) is a plain `keydown` listener that only fires while the Tab Out page has focus. The global ones are `chrome.commands`, declared in `src/manifest.json`, which fire anywhere in the browser. Don't "unify" them: only `chrome.commands` can register a browser-wide chord, and Chrome — not our options page — owns rebinding it (`chrome://extensions/shortcuts`).
+- **Both global features are off by default and gated in the handler, not the manifest.** A fresh install must not claim a browser-wide chord. `normalizeGlobal*ShortcutEnabled` therefore defaults to `false`, and `core/global-commands.ts#planGlobalCommand` returns `null` for a disabled command. Chrome reserves the *keys* via `suggested_key` either way; our handler just declines to act.
+- **`planGlobalCommand()` is the whole decision, and it is pure.** It takes a `GlobalCommandContext` (settings, tab list, dashboard URLs, page URL) and returns either `null` or a `GlobalCommandAction`; `background/main.ts` performs the effect. Adding a global shortcut means a new command name + a new branch there, not new logic in the worker.
+- **"Do nothing" is a real outcome, not an error.** The global search shortcut opens an action popup, which cannot appear on a page Chrome blocks it from (or when `chrome.action.openPopup()` rejects); the handler swallows that deliberately. Don't add a tab-opening fallback — that was explicitly rejected as hijacking the user's current tab.
+- **`minimum_chrome_version` is 127 because gesture-free `chrome.action.openPopup()` landed there.** Lowering it silently breaks the global search shortcut (the promise rejects and nothing happens).
+- **The options page reads the chords straight out of `manifest.json`.** They are shown, never edited, so there is no recorder like the in-page shortcut's; `tests/config/global-shortcuts.test.ts` pins both the defaults and the manifest so they can't drift.
+- **Any page that renders a Search box must link `styles/search.css` itself.** The rules are shared by the dashboard overlay and the popup, but `dashboard.css` deliberately does **not** `@import` them — so the `<link>` is load-bearing, and a page that renders `ui/render/search.ts` output without it silently falls back to browser-default inputs and buttons. That is exactly how the popup first shipped broken; `tests/styles/search-styles.test.ts` now guards it. The popup also overrides `.popup-modal` to drop the overlay's border/shadow while keeping an inset — removing the padding makes rows and the input run edge to edge.
 
 ## Testing
 

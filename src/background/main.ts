@@ -19,6 +19,7 @@
 import { badgeStateForTabs } from './badge';
 import { recordTabRemoved, trackTabActivity } from './history-recorder';
 import { dashboardUrls } from '../core/dashboard';
+import { planGlobalCommand } from '../core/global-commands';
 import { createChromeBrowserTabs } from '../platform/browser';
 import { createChromeStore } from '../platform/storage';
 import { SettingsStore } from '../config/store';
@@ -119,6 +120,68 @@ const keepDashboardAtEnd = (): void => {
 };
 
 chrome.tabs.onCreated.addListener(keepDashboardAtEnd);
+
+/* ----------------------------------------------------------------
+   Global keyboard shortcuts
+
+   The two chords are declared in `manifest.json` under `commands` — the only
+   way to register a shortcut that fires while some other site's tab has
+   focus. Both features are **off** until the user arms them in the options
+   page, so this listener usually decides to do nothing; see
+   `core/global-commands.ts` for the decision itself.
+   ---------------------------------------------------------------- */
+
+/**
+ * Runs the shortcut the user pressed, if its feature is armed.
+ *
+ * Never throws: a command that fails to act must not take the worker down
+ * with it, and the dashboard shortcut in particular is racing a tab list that
+ * can change between the query and the activation.
+ */
+async function runGlobalCommand(command: string): Promise<void> {
+  try {
+    const [settings, tabs] = await Promise.all([
+      settingsStore.load(),
+      tabActions.queryAllTabs(),
+    ]);
+
+    const action = planGlobalCommand(command, {
+      settings,
+      tabs,
+      dashboardUrls: dashboardUrls(chrome.runtime.id),
+      // `chrome.runtime.getURL` rather than hand-building the
+      // `chrome-extension://` URL — the popup and dashboard both need the
+      // id, and only Chrome knows it for certain.
+      dashboardPageUrl: chrome.runtime.getURL('index.html'),
+    });
+
+    if (!action) return;
+
+    if (action.kind === 'open-search-popup') {
+      // Chrome 127+ allows this from a command handler without a user
+      // gesture. On an older Chrome the promise rejects and we deliberately
+      // do nothing rather than hijack the current tab — see the options page
+      // note about the toolbar button as the fallback path.
+      await chrome.action.openPopup();
+      return;
+    }
+
+    if (action.kind === 'focus-dashboard') {
+      await chrome.tabs.update(action.tabId, { active: true });
+      await chrome.windows.update(action.windowId, { focused: true });
+      return;
+    }
+
+    await chrome.tabs.create({ url: action.url, active: true });
+  } catch {
+    // Intentionally silent: "do nothing" is the documented behaviour when a
+    // global shortcut can't act on the current page.
+  }
+}
+
+chrome.commands.onCommand.addListener((command) => {
+  void runGlobalCommand(command);
+});
 
 /* ----------------------------------------------------------------
    Lifecycle

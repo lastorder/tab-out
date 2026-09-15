@@ -46,3 +46,19 @@ export function findDashboardTabNeedingMove(
 
   return !last || last.id === dashboard.id ? null : dashboard.id;
 }
+
+/**
+ * Finds the dashboard tab to jump to, if one is open anywhere.
+ *
+ * Returns the *active* one in preference to an arbitrary match, so a user with
+ * the dashboard open in two windows lands where they last were rather than
+ * wherever the tab list happens to start.
+ */
+export function findDashboardTab(
+  tabs: readonly TabInfo[],
+  dashboardUrls: readonly string[],
+): TabInfo | null {
+  const matches = tabs.filter((tab) => dashboardUrls.includes(tab.url));
+  if (matches.length === 0) return null;
+  return matches.find((tab) => tab.active) ?? matches[0]!;
+}

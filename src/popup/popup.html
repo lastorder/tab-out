@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tab Out 2 — Search</title>
+
+  <!-- Same pairing as the dashboard so the popup feels like the same product -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300;1,6..72,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <!-- `dashboard.css` supplies the palette and `.popup-body` reset; the
+       Search rules themselves live in `search.css` and are *not* imported by
+       dashboard.css, so every page that renders a Search box must link it. -->
+  <link rel="stylesheet" href="styles/dashboard.css">
+  <link rel="stylesheet" href="styles/search.css">
+  <link rel="stylesheet" href="styles/popup.css">
+</head>
+<body class="popup-body">
+
+<!-- ================================================================
+     GLOBAL SEARCH POPUP
+
+     Opened by the browser-global search shortcut (Cmd+Shift+F on macOS)
+     or by clicking the toolbar icon. Unlike the dashboard's Search
+     overlay, this runs in the extension's action popup so it can appear
+     over any page without needing access to that page.
+
+     Rows are rendered by ui/render/search.ts into #searchResults and
+     handled by popup/main.ts.
+     ================================================================ -->
+<div class="search-modal popup-modal">
+  <div class="search-modal-header">
+    <input type="text" class="search-input" id="searchInput"
+           placeholder="Search open tabs and history..." autocomplete="off" spellcheck="false">
+  </div>
+  <div class="search-results" id="searchResults"></div>
+  <div class="popup-footer" id="popupFooter"></div>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>

@@ -24,6 +24,7 @@ import {
   settingsToDraft,
 } from './draft';
 import { renderIssues, renderSection } from './render';
+import manifest from '../manifest.json';
 
 const store = new SettingsStore(createChromeStore('sync'));
 const historyService = new TabHistoryService(createChromeStore('local'));
@@ -46,6 +47,49 @@ const TOGGLEABLE_PANELS: readonly { panelId: string; field: 'pinnedEnabled' | 'd
 let draft: DraftState = settingsToDraft(createDefaultSettings());
 /** The last saved state, used by Revert and the dirty indicator. */
 let savedSnapshot = JSON.stringify(draft);
+
+/**
+ * The chords the manifest declares for the two global commands.
+ *
+ * Read straight out of the manifest rather than re-typed here: Chrome owns the
+ * binding (rebinding happens in `chrome://extensions/shortcuts`), so
+ * `src/manifest.json` is the single source of truth and this page only shows
+ * what it says. `suggestedKeyFor()` turns Chrome's chord syntax into the same
+ * label style the in-page shortcut recorder uses.
+ */
+const GLOBAL_SHORTCUT_FIELDS = [
+  'globalSearchShortcutEnabled',
+  'globalDashboardShortcutEnabled',
+] as const;
+
+/** Chrome's key syntax looks like `Command+Shift+F`; we want `⌘⇧F`. */
+function suggestedKeyFor(command: 'global-search' | 'global-dashboard'): string {
+  const commandDef = (manifest.commands as Record<string, { suggested_key?: Record<string, string> }>)[
+    command
+  ];
+  const raw = commandDef?.suggested_key?.[IS_MAC ? 'mac' : 'default'] ?? '';
+  return raw
+    .split('+')
+    .map((part) => {
+      const token = part.trim().toLowerCase();
+      if (IS_MAC) {
+        if (token === 'command' || token === 'cmd' || token === 'meta') return '\u2318';
+        if (token === 'shift') return '\u21e7';
+        if (token === 'alt' || token === 'option') return '\u2325';
+        if (token === 'ctrl' || token === 'control') return '\u2303';
+      } else {
+        if (token === 'ctrl' || token === 'control') return 'Ctrl';
+        if (token === 'shift') return 'Shift';
+        if (token === 'alt' || token === 'option') return 'Alt';
+        if (token === 'command' || token === 'cmd' || token === 'meta') return 'Win';
+      }
+      return part.trim().toUpperCase();
+    })
+    .join(IS_MAC ? '' : '+');
+}
+
+const GLOBAL_SEARCH_SHORTCUT_LABEL = suggestedKeyFor('global-search');
+const GLOBAL_DASHBOARD_SHORTCUT_LABEL = suggestedKeyFor('global-dashboard');
 
 function byId<T extends HTMLElement = HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
@@ -75,6 +119,20 @@ function render(): void {
   const shortcutInput = byId<HTMLInputElement>('searchShortcut');
   if (shortcutInput) {
     shortcutInput.value = formatShortcut(draft.searchShortcut, IS_MAC);
+  }
+
+  // The two global shortcuts. Their chords live in the manifest (Chrome owns
+  // rebinding), so this page only ever shows them — and shows them from the
+  // same default constants the manifest was written to match, so the two
+  // can't drift silently.
+  const globalSearchKeys = byId('globalSearchShortcutKeys');
+  if (globalSearchKeys) globalSearchKeys.textContent = GLOBAL_SEARCH_SHORTCUT_LABEL;
+  const globalDashboardKeys = byId('globalDashboardShortcutKeys');
+  if (globalDashboardKeys) globalDashboardKeys.textContent = GLOBAL_DASHBOARD_SHORTCUT_LABEL;
+
+  for (const field of GLOBAL_SHORTCUT_FIELDS) {
+    const checkbox = byId<HTMLInputElement>(field);
+    if (checkbox && checkbox.checked !== draft[field]) checkbox.checked = draft[field];
   }
 
   // The two "apply this section at all" toggles: sync the checkbox, and dim
@@ -162,6 +220,16 @@ document.addEventListener('input', (event) => {
   if (input.id === 'disposableEnabled') {
     draft = { ...draft, disposableEnabled: input.checked };
     render();
+    return;
+  }
+  if (input.id === 'globalSearchShortcutEnabled') {
+    draft = { ...draft, globalSearchShortcutEnabled: input.checked };
+    updateStatus();
+    return;
+  }
+  if (input.id === 'globalDashboardShortcutEnabled') {
+    draft = { ...draft, globalDashboardShortcutEnabled: input.checked };
+    updateStatus();
     return;
   }
 
@@ -322,6 +390,19 @@ byId<HTMLInputElement>('searchShortcut')?.addEventListener('keydown', (event) =>
 byId('resetShortcutBtn')?.addEventListener('click', () => {
   draft = { ...draft, searchShortcut: { ...DEFAULT_SEARCH_SHORTCUT } };
   render();
+});
+
+/**
+ * Jumps to Chrome's own shortcut editor.
+ *
+ * A link would be blocked (extension pages can't navigate to `chrome://` via
+ * `<a href>`), so this goes through `chrome.tabs.create`. Chrome only allows
+ * the extension to *open* the page, not to rewrite a binding — which is why
+ * this button hands off instead of offering a recorder like the in-page
+ * shortcut above.
+ */
+byId('openChromeShortcutsBtn')?.addEventListener('click', () => {
+  void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
 });
 
 /* ---------------------------------------------------------------

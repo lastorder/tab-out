@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { dashboardUrls, findDashboardTabNeedingMove } from '@/core/dashboard';
+import { dashboardUrls, findDashboardTab, findDashboardTabNeedingMove } from '@/core/dashboard';
 import { resetTabIds, tab } from '../helpers/factories';
 
 beforeEach(() => resetTabIds());
@@ -41,5 +41,24 @@ describe('findDashboardTabNeedingMove', () => {
       tab('https://b.com/', { id: 3, windowId: 2, index: 5 }),
     ];
     expect(findDashboardTabNeedingMove(tabs, URLS)).toBe(1);
+  });
+});
+
+describe('findDashboardTab', () => {
+  it('returns null when no dashboard is open', () => {
+    expect(findDashboardTab([tab('https://a.com/')], URLS)).toBeNull();
+  });
+
+  it('prefers the active dashboard so the user lands where they left off', () => {
+    const tabs = [
+      tab(DASHBOARD, { id: 1, windowId: 1 }),
+      tab(DASHBOARD, { id: 2, windowId: 2, active: true }),
+    ];
+    expect(findDashboardTab(tabs, URLS)?.id).toBe(2);
+  });
+
+  it('falls back to any dashboard when none is active', () => {
+    const tabs = [tab('https://a.com/'), tab('chrome://newtab/', { id: 5 })];
+    expect(findDashboardTab(tabs, URLS)?.id).toBe(5);
   });
 });

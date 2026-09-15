@@ -3,7 +3,7 @@
  */
 
 import type { ClosedTabEntry, TabInfo, TabOutSettings } from '@/types';
-import { createDefaultSettings } from '@/config/defaults';
+import { createDefaultSettings, SETTINGS_VERSION } from '@/config/defaults';
 
 let nextId = 1;
 
@@ -47,7 +47,9 @@ export function historyEntry(
 /** Settings with everything empty — the neutral baseline for grouping tests. */
 export function emptySettings(overrides: Partial<TabOutSettings> = {}): TabOutSettings {
   return {
-    version: 3,
+    // Taken from the source constant rather than hard-coded, so bumping the
+    // settings shape doesn't leave every fixture looking like a stale upgrade.
+    version: SETTINGS_VERSION,
     pinnedEnabled: true,
     pinnedSites: [],
     disposableEnabled: true,
@@ -55,6 +57,8 @@ export function emptySettings(overrides: Partial<TabOutSettings> = {}): TabOutSe
     maxHistoryItems: 100,
     autoSortTabs: true,
     searchShortcut: { key: 'f', ctrl: true, meta: false, alt: false, shift: false },
+    globalSearchShortcutEnabled: false,
+    globalDashboardShortcutEnabled: false,
     ...overrides,
   };
 }

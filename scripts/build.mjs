@@ -30,6 +30,7 @@ const ENTRY_POINTS = {
   'newtab': path.join(SRC, 'newtab/main.ts'),
   'options': path.join(SRC, 'options/main.ts'),
   'background': path.join(SRC, 'background/main.ts'),
+  'popup': path.join(SRC, 'popup/main.ts'),
 };
 
 /** Static files copied verbatim: [source, destination-relative-to-dist]. */
@@ -37,7 +38,10 @@ const STATIC_ASSETS = [
   ['manifest.json', 'manifest.json'],
   ['newtab/index.html', 'index.html'],
   ['options/options.html', 'options.html'],
+  ['popup/popup.html', 'popup.html'],
   ['styles/dashboard.css', 'styles/dashboard.css'],
+  ['styles/search.css', 'styles/search.css'],
+  ['styles/popup.css', 'styles/popup.css'],
   ['styles/options.css', 'styles/options.css'],
   ['icons', 'icons'],
 ];

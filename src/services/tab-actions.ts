@@ -7,7 +7,7 @@
  */
 
 import type { BrowserTabs } from '../platform/browser';
-import type { PinnedSite, TabGroup } from '../types';
+import type { PinnedSite, TabGroup, TabInfo } from '../types';
 import { selectDuplicateTabIds } from '../core/duplicates';
 import { pinnedInsertIndex } from '../core/grouping';
 import { findDashboardTabNeedingMove } from '../core/dashboard';
@@ -24,6 +24,17 @@ export class TabActions {
 
   constructor(browser: BrowserTabs) {
     this.#browser = browser;
+  }
+
+  /**
+   * Every open tab across all windows.
+   *
+   * Exposed so a caller that must *decide* something from the tab list — the
+   * global-shortcut handler asking "is a dashboard already open?" — can do so
+   * through this seam rather than reaching for `chrome.tabs` itself.
+   */
+  async queryAllTabs(): Promise<TabInfo[]> {
+    return this.#browser.queryAll();
   }
 
   /** Closes one tab by exact URL. Returns true when something was closed. */

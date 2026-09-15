@@ -3,6 +3,7 @@
   "name": "Tab Out 2",
   "version": "1.0.0",
   "description": "Keep tabs on your tabs. New tab page that groups your open tabs by domain and lets you close them with style.",
+  "minimum_chrome_version": "127",
   "permissions": ["tabs", "storage"],
   "chrome_url_overrides": { "newtab": "index.html" },
   "background": { "service_worker": "background.js" },
@@ -11,10 +12,27 @@
     "open_in_tab": true
   },
   "action": {
-    "default_title": "Tab Out 2",
+    "default_title": "Tab Out 2 — Search",
+    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png"
+    }
+  },
+  "commands": {
+    "global-search": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+F",
+        "mac": "Command+Shift+F"
+      },
+      "description": "Open the Tab Out search box"
+    },
+    "global-dashboard": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+T",
+        "mac": "Command+Shift+T"
+      },
+      "description": "Open the Tab Out dashboard"
     }
   },
   "icons": {

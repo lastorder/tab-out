@@ -134,6 +134,47 @@
   </section>
 
   <!-- ================================================================
+       GLOBAL SHORTCUTS
+       ================================================================ -->
+  <section class="panel" id="globalShortcutPanel">
+    <div class="panel-header">
+      <h2>Global shortcuts</h2>
+      <p>
+        Work anywhere in Chrome, not just on the Tab Out 2 page. Both are
+        <strong>off by default</strong>. The key combination itself is owned by
+        Chrome, so it is changed in Chrome's own shortcut settings, not here.
+      </p>
+    </div>
+
+    <label class="checkbox-field">
+      <input type="checkbox" id="globalSearchShortcutEnabled">
+      <span>
+        <strong id="globalSearchShortcutKeys">Cmd+Shift+F</strong> &mdash;
+        open the Tab Out search box over the page you're on
+      </span>
+    </label>
+
+    <label class="checkbox-field">
+      <input type="checkbox" id="globalDashboardShortcutEnabled">
+      <span>
+        <strong id="globalDashboardShortcutKeys">Cmd+Shift+T</strong> &mdash;
+        open the Tab Out dashboard, even when Tab Out isn't your new tab page
+      </span>
+    </label>
+
+    <p class="field-hint">
+      Chrome keeps some combinations for itself &mdash; <kbd>Cmd+Shift+T</kbd>
+      normally reopens your last closed tab, so if that wins you'll need to
+      reassign it below. A combination shown as blank in Chrome has been taken
+      by another extension.
+    </p>
+
+    <div class="field field-inline">
+      <button class="btn btn-ghost" id="openChromeShortcutsBtn">Change in Chrome's shortcut settings</button>
+    </div>
+  </section>
+
+  <!-- ================================================================
        HISTORY
        ================================================================ -->
   <section class="panel" id="historyPanel">

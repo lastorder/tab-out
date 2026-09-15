@@ -215,6 +215,28 @@ body {
   cursor: pointer;
 }
 
+/* Stacked checkboxes inside one panel need breathing room between them. */
+.checkbox-field + .checkbox-field {
+  margin-top: 12px;
+}
+
+/* Explanatory line under a control — quieter than the panel's own copy. */
+.field-hint {
+  margin-top: 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.field-hint kbd {
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--ink);
+  background: var(--warm-gray);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
 .field label {
   font-size: 10px;
   text-transform: uppercase;

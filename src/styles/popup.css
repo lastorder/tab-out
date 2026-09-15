@@ -1,0 +1,72 @@
+/* ============================================================
+   Tab Out 2 — Global search popup
+
+   The popup reuses the dashboard's Search markup and the shared
+   `search.css` rules; only the frame differs. Chrome gives an action
+   popup a fixed width, so this file owns the viewport size and the
+   footer hint line rather than the dashboard's centred overlay.
+   ============================================================ */
+
+.popup-body {
+  width: 560px;
+  /* Grow with the result list, up to Chrome's popup ceiling — a fixed height
+     would leave dead space whenever the list is short. `min-height` keeps a
+     couple of rows visible in the empty state. */
+  max-height: 460px;
+  min-height: 180px;
+  background: var(--card-bg);
+  /* The result list does its own scrolling; the popup itself never should. */
+  overflow: hidden;
+}
+
+/* dashboard.css paints a decorative paper-noise layer across `body::before`.
+   The dashboard lifts its `.container` above it; the popup has no container,
+   so it turns the flourish off rather than lifting a whole stacking context. */
+.popup-body::before {
+  content: none;
+}
+
+/* The modal already sits inside the popup's own frame, so it drops the
+   overlay's border/radius/shadow and just fills the window. It keeps an
+   inset, though: without it the rows and the input run edge to edge and the
+   favicon/text get clipped by the rounded row highlight. */
+.popup-modal {
+  max-width: none;
+  max-height: none;
+  height: 100%;
+  padding: 12px 12px 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* The footer owns the bottom edge, so the list must not also add padding
+   under itself — otherwise the two stack into a visible gap. */
+.popup-modal .search-results {
+  padding-bottom: 0;
+}
+
+.popup-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--warm-gray);
+  padding: 7px 4px 5px;
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.popup-footer kbd {
+  font-family: inherit;
+  font-size: 10px;
+  border: 1px solid var(--warm-gray);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+/* The dashboard hides the search hint icon until hover/selection; in the
+   popup a click target is the primary affordance, so it stays visible. */
+.popup-body .search-result-hint {
+  opacity: 0.35;
+}

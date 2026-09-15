@@ -14,7 +14,7 @@ describe('normalizeSettings', () => {
 
   it('round-trips valid settings unchanged', () => {
     const input = {
-      version: 3,
+      version: SETTINGS_VERSION,
       pinnedEnabled: false,
       pinnedSites: [{ url: 'https://example.com/', label: 'Example' }],
       disposableEnabled: false,
@@ -22,6 +22,8 @@ describe('normalizeSettings', () => {
       maxHistoryItems: 250,
       autoSortTabs: false,
       searchShortcut: { key: 'k', ctrl: true, meta: false, alt: false, shift: true },
+      globalSearchShortcutEnabled: true,
+      globalDashboardShortcutEnabled: true,
     };
     expect(normalizeSettings(input).settings).toEqual(input);
   });
