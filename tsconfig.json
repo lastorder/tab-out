@@ -21,9 +21,8 @@
 
     "types": ["chrome", "node", "vitest/globals"],
 
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
