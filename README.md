@@ -152,7 +152,7 @@ Click the gear icon in the top-right of the dashboard, or right-click the extens
 | **Disposable tabs** | Which tabs are safe to close because reopening them costs nothing, collected into a shared **Disposable** card and counted by "Tidy up". Also has its own "Enabled" toggle, and a "+ Add suggested rules" button. |
 | **Tab sorting** | Whether the tab bar is reordered to match the dashboard automatically (on by default) or only via a manual "Sort tabs" banner. |
 | **Keyboard shortcut** | The key combo that opens the Search overlay on the Tab Out page (default Cmd/Ctrl+F). |
-| **Global shortcuts** | Two shortcuts that work anywhere in Chrome, both **off by default**: `Cmd/Ctrl+Shift+F` opens the Tab Out search box over the page you're on, and `Cmd/Ctrl+Shift+T` opens the dashboard even when Tab Out isn't your new tab page. Chrome owns the key combinations, so rebinding them opens Chrome's own shortcut settings. |
+| **Global shortcuts** | Two shortcuts that work anywhere in Chrome, both **off by default**: `Cmd/Ctrl+Shift+O` opens the Tab Out search box over the page you're on, and `Cmd/Ctrl+Shift+T` opens the dashboard even when Tab Out isn't your new tab page. Chrome owns the key combinations, so rebinding them opens Chrome's own shortcut settings. |
 | **History** | How many recently closed tabs to remember (default 100). |
 
 Settings are stored in `chrome.storage.sync`, so they follow your Chrome profile across machines. Use **Export** / **Import** to move them as JSON.

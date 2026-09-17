@@ -4,7 +4,7 @@
  * import, so each page must link it itself.
  *
  * That split already caused a real bug: `popup.html` was written against the
- * shared markup but shipped without the `<link>`, so the global Cmd+Shift+F
+ * shared markup but shipped without the `<link>`, so the global Cmd+Shift+O
  * popup rendered with browser-default inputs and buttons instead of Tab Out's
  * styling. These checks fail loudly if a page renders search markup without
  * the stylesheet again.

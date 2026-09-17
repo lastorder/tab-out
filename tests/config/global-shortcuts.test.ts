@@ -13,8 +13,8 @@ describe('manifest commands', () => {
   it('declares _execute_action and the dashboard command with the documented Mac defaults', () => {
     expect(Object.keys(commands)).toEqual(['_execute_action', 'global-dashboard']);
     expect(commands['_execute_action']?.suggested_key).toEqual({
-      default: 'Ctrl+Shift+F',
-      mac: 'Command+Shift+F',
+      default: 'Ctrl+Shift+O',
+      mac: 'Command+Shift+O',
     });
     expect(commands['global-dashboard']?.suggested_key).toEqual({
       default: 'Ctrl+Shift+T',

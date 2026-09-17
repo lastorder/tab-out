@@ -88,7 +88,7 @@ Most people miss this, so mention it explicitly:
 > - **Disposable tabs** — which tabs are safe to close into the shared Disposable card. Also switchable off.
 > - **Tab sorting** — turn auto-sort off if you'd rather sort manually via a banner.
 > - **History** — how many recently closed tabs to remember (default 100).
-> - **Global shortcuts** — `Cmd+Shift+F` (Mac) works anywhere in Chrome and opens the Tab Out search box over whatever page you're on (press it again to close the box) — this is Chrome's own "activate the extension" shortcut. `Cmd+Shift+T` (Mac) opens the dashboard even if Tab Out isn't your new tab page. Both are already on by default with these keys; to change either one, use the button that opens Chrome's own shortcut settings — there's nothing to toggle on this page, since the key itself is entirely Chrome's to bind.
+> - **Global shortcuts** — `Cmd+Shift+O` (Mac) works anywhere in Chrome and opens the Tab Out search box over whatever page you're on (press it again to close the box) — this is Chrome's own "activate the extension" shortcut. `Cmd+Shift+T` (Mac) opens the dashboard even if Tab Out isn't your new tab page. Both are already on by default with these keys; to change either one, use the button that opens Chrome's own shortcut settings — there's nothing to toggle on this page, since the key itself is entirely Chrome's to bind.
 >
 > Settings sync across your Chrome profile, and there are Export/Import buttons for backups.
 

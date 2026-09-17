@@ -22,8 +22,8 @@
   "commands": {
     "_execute_action": {
       "suggested_key": {
-        "default": "Ctrl+Shift+F",
-        "mac": "Command+Shift+F"
+        "default": "Ctrl+Shift+O",
+        "mac": "Command+Shift+O"
       }
     },
     "global-dashboard": {
