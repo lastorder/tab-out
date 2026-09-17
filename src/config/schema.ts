@@ -22,8 +22,6 @@ import {
   DEFAULT_PINNED_ENABLED,
   DEFAULT_DISPOSABLE_ENABLED,
   DEFAULT_SEARCH_SHORTCUT,
-  DEFAULT_GLOBAL_SEARCH_SHORTCUT_ENABLED,
-  DEFAULT_GLOBAL_DASHBOARD_SHORTCUT_ENABLED,
 } from './defaults';
 import { normalizeUrlInput } from '../core/url';
 
@@ -190,39 +188,6 @@ export function normalizeDisposableEnabled(raw: unknown, issues: ValidationIssue
 }
 
 /**
- * Coerces the "global search shortcut armed" field to a boolean.
- *
- * Defaults to **off** — see {@link DEFAULT_GLOBAL_SEARCH_SHORTCUT_ENABLED}.
- * Unlike the other booleans here, a missing value must not fall back to "on",
- * or every existing user would silently acquire a browser-wide keybinding the
- * first time they load a settings object that predates the field.
- */
-export function normalizeGlobalSearchShortcutEnabled(
-  raw: unknown,
-  issues: ValidationIssue[],
-): boolean {
-  return normalizeBoolean(
-    raw,
-    'globalSearchShortcutEnabled',
-    DEFAULT_GLOBAL_SEARCH_SHORTCUT_ENABLED,
-    issues,
-  );
-}
-
-/** Coerces the "global dashboard shortcut armed" field to a boolean, defaulting to off. */
-export function normalizeGlobalDashboardShortcutEnabled(
-  raw: unknown,
-  issues: ValidationIssue[],
-): boolean {
-  return normalizeBoolean(
-    raw,
-    'globalDashboardShortcutEnabled',
-    DEFAULT_GLOBAL_DASHBOARD_SHORTCUT_ENABLED,
-    issues,
-  );
-}
-
-/**
  * Coerces the Search-overlay shortcut to a valid {@link KeyCombo}, falling
  * back to the platform default whenever the raw value can't be trusted —
  * missing key, non-boolean modifier, or not an object at all.
@@ -320,14 +285,6 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
   const maxHistoryItems = normalizeMaxHistoryItems(raw['maxHistoryItems'], issues);
   const autoSortTabs = normalizeAutoSortTabs(raw['autoSortTabs'], issues);
   const searchShortcut = normalizeSearchShortcut(raw['searchShortcut'], issues);
-  const globalSearchShortcutEnabled = normalizeGlobalSearchShortcutEnabled(
-    raw['globalSearchShortcutEnabled'],
-    issues,
-  );
-  const globalDashboardShortcutEnabled = normalizeGlobalDashboardShortcutEnabled(
-    raw['globalDashboardShortcutEnabled'],
-    issues,
-  );
 
   return {
     settings: {
@@ -339,8 +296,6 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
       maxHistoryItems,
       autoSortTabs,
       searchShortcut,
-      globalSearchShortcutEnabled,
-      globalDashboardShortcutEnabled,
     },
     issues,
   };
@@ -355,12 +310,21 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
  * migration and would otherwise see a renamed field as simply missing. v3
  * drops `customGroupsEnabled` / `customGroups` entirely — `normalizeSettings`
  * simply no longer reads them, so old stored values are silently ignored
- * rather than needing an explicit migration step. v4 adds the two
- * global-shortcut flags, which `normalizeSettings` defaults to `false` when
- * absent — an upgrading user must never be handed a browser-wide keybinding
- * they didn't ask for. This function only stamps the version number — but the
- * hook exists so a future shape change that isn't just "renamed/dropped and
- * defaulted" has an obvious home.
+ * rather than needing an explicit migration step. v4 added a global-shortcut
+ * flag (`globalDashboardShortcutEnabled`, plus a short-lived
+ * `globalSearchShortcutEnabled`), each defaulting to `false` when absent so
+ * an upgrading user was never handed a browser-wide keybinding they didn't
+ * ask for. v5 removes both flags entirely: the chords they gated are wholly
+ * owned by Chrome (`chrome://extensions/shortcuts`) regardless of the flag,
+ * so the checkbox only risked showing a shortcut as "configured" on the
+ * options page while the handler silently ignored it. `normalizeSettings`
+ * simply no longer reads either field, so old stored `true`/`false` values
+ * are dropped without needing an explicit migration step — the commands
+ * they used to gate (`core/global-commands.ts`'s `global-dashboard`, and
+ * `manifest.json`'s native `_execute_action`) are just always on now. This
+ * function only stamps the version number — but the hook exists so a future
+ * shape change that isn't just "renamed/dropped and defaulted" has an
+ * obvious home.
  */
 export function migrateSettings(settings: TabOutSettings): TabOutSettings {
   if (settings.version === SETTINGS_VERSION) return settings;

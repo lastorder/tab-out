@@ -51,10 +51,6 @@ export interface DraftState {
   autoSortTabs: boolean;
   /** The Search overlay's keyboard shortcut — a recorder widget, not a row table. */
   searchShortcut: KeyCombo;
-  /** Arm the browser-global search shortcut (chord fixed in the manifest). */
-  globalSearchShortcutEnabled: boolean;
-  /** Arm the browser-global dashboard shortcut (chord fixed in the manifest). */
-  globalDashboardShortcutEnabled: boolean;
 }
 
 /** Which row-table a row belongs to. Scalar fields are not tables. */
@@ -179,8 +175,6 @@ export function settingsToDraft(settings: TabOutSettings): DraftState {
     maxHistoryItems: String(settings.maxHistoryItems),
     autoSortTabs: settings.autoSortTabs,
     searchShortcut: { ...settings.searchShortcut },
-    globalSearchShortcutEnabled: settings.globalSearchShortcutEnabled,
-    globalDashboardShortcutEnabled: settings.globalDashboardShortcutEnabled,
   };
 }
 
@@ -212,8 +206,6 @@ export function draftToSettings(draft: DraftState): NormalizeResult {
     maxHistoryItems: draft.maxHistoryItems,
     autoSortTabs: draft.autoSortTabs,
     searchShortcut: draft.searchShortcut,
-    globalSearchShortcutEnabled: draft.globalSearchShortcutEnabled,
-    globalDashboardShortcutEnabled: draft.globalDashboardShortcutEnabled,
   });
 }
 

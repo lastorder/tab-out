@@ -57,8 +57,6 @@ export function emptySettings(overrides: Partial<TabOutSettings> = {}): TabOutSe
     maxHistoryItems: 100,
     autoSortTabs: true,
     searchShortcut: { key: 'f', ctrl: true, meta: false, alt: false, shift: false },
-    globalSearchShortcutEnabled: false,
-    globalDashboardShortcutEnabled: false,
     ...overrides,
   };
 }

@@ -24,8 +24,6 @@ const blankDraft = {
   maxHistoryItems: '100',
   autoSortTabs: true,
   searchShortcut: { key: 'f', ctrl: true, meta: false, alt: false, shift: false },
-  globalSearchShortcutEnabled: false,
-  globalDashboardShortcutEnabled: false,
 };
 
 describe('hostname field conversion', () => {

@@ -49,21 +49,19 @@ let draft: DraftState = settingsToDraft(createDefaultSettings());
 let savedSnapshot = JSON.stringify(draft);
 
 /**
- * The chords the manifest declares for the two global commands.
+ * The chords the manifest declares for the two global commands, shown as
+ * plain text on the options page.
  *
- * Read straight out of the manifest rather than re-typed here: Chrome owns the
- * binding (rebinding happens in `chrome://extensions/shortcuts`), so
- * `src/manifest.json` is the single source of truth and this page only shows
- * what it says. `suggestedKeyFor()` turns Chrome's chord syntax into the same
- * label style the in-page shortcut recorder uses.
+ * Neither is backed by a settings flag any more: both chords are entirely
+ * owned by Chrome (`chrome://extensions/shortcuts`), so a checkbox here
+ * could only ever show a shortcut as "configured" while doing nothing to the
+ * actual keybinding — the exact bug an options-page toggle for a
+ * Chrome-owned setting invites. `suggestedKeyFor()` turns Chrome's chord
+ * syntax into the same label style the in-page shortcut recorder uses, and
+ * is read straight out of `src/manifest.json` (the single source of truth)
+ * so the two can't drift.
  */
-const GLOBAL_SHORTCUT_FIELDS = [
-  'globalSearchShortcutEnabled',
-  'globalDashboardShortcutEnabled',
-] as const;
-
-/** Chrome's key syntax looks like `Command+Shift+F`; we want `⌘⇧F`. */
-function suggestedKeyFor(command: 'global-search' | 'global-dashboard'): string {
+function suggestedKeyFor(command: '_execute_action' | 'global-dashboard'): string {
   const commandDef = (manifest.commands as Record<string, { suggested_key?: Record<string, string> }>)[
     command
   ];
@@ -88,7 +86,12 @@ function suggestedKeyFor(command: 'global-search' | 'global-dashboard'): string 
     .join(IS_MAC ? '' : '+');
 }
 
-const GLOBAL_SEARCH_SHORTCUT_LABEL = suggestedKeyFor('global-search');
+/**
+ * `_execute_action` and `global-dashboard` are both always-on commands now —
+ * see the module doc comment above `suggestedKeyFor`. Neither has anything
+ * to opt into, so both labels are purely informational.
+ */
+const ACTIVATE_EXTENSION_SHORTCUT_LABEL = suggestedKeyFor('_execute_action');
 const GLOBAL_DASHBOARD_SHORTCUT_LABEL = suggestedKeyFor('global-dashboard');
 
 function byId<T extends HTMLElement = HTMLElement>(id: string): T | null {
@@ -121,19 +124,14 @@ function render(): void {
     shortcutInput.value = formatShortcut(draft.searchShortcut, IS_MAC);
   }
 
-  // The two global shortcuts. Their chords live in the manifest (Chrome owns
-  // rebinding), so this page only ever shows them — and shows them from the
-  // same default constants the manifest was written to match, so the two
-  // can't drift silently.
-  const globalSearchKeys = byId('globalSearchShortcutKeys');
-  if (globalSearchKeys) globalSearchKeys.textContent = GLOBAL_SEARCH_SHORTCUT_LABEL;
+  // Both global shortcuts' chords live in the manifest (Chrome owns
+  // rebinding), so this page only ever shows them — from the same constants
+  // the manifest was written to match, so they can't drift silently. Neither
+  // has a checkbox: both are always on (see the module doc comment above).
+  const activateExtensionKeys = byId('activateExtensionShortcutKeys');
+  if (activateExtensionKeys) activateExtensionKeys.textContent = ACTIVATE_EXTENSION_SHORTCUT_LABEL;
   const globalDashboardKeys = byId('globalDashboardShortcutKeys');
   if (globalDashboardKeys) globalDashboardKeys.textContent = GLOBAL_DASHBOARD_SHORTCUT_LABEL;
-
-  for (const field of GLOBAL_SHORTCUT_FIELDS) {
-    const checkbox = byId<HTMLInputElement>(field);
-    if (checkbox && checkbox.checked !== draft[field]) checkbox.checked = draft[field];
-  }
 
   // The two "apply this section at all" toggles: sync the checkbox, and dim
   // the rows underneath (still editable — turning it off doesn't lock the
@@ -220,16 +218,6 @@ document.addEventListener('input', (event) => {
   if (input.id === 'disposableEnabled') {
     draft = { ...draft, disposableEnabled: input.checked };
     render();
-    return;
-  }
-  if (input.id === 'globalSearchShortcutEnabled') {
-    draft = { ...draft, globalSearchShortcutEnabled: input.checked };
-    updateStatus();
-    return;
-  }
-  if (input.id === 'globalDashboardShortcutEnabled') {
-    draft = { ...draft, globalDashboardShortcutEnabled: input.checked };
-    updateStatus();
     return;
   }
 

@@ -19,7 +19,7 @@ const IS_MAC =
   typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || navigator.userAgent || '');
 
 /** Bumped whenever the stored shape changes; drives migrations. */
-export const SETTINGS_VERSION = 4;
+export const SETTINGS_VERSION = 5;
 
 /**
  * Sites always pinned for quick access.
@@ -100,16 +100,6 @@ export const DEFAULT_AUTO_SORT_TABS = true;
  */
 export const DEFAULT_SEARCH_SHORTCUT: KeyCombo = defaultSearchShortcut(IS_MAC);
 
-/**
- * Whether the browser-global shortcuts are armed by default.
- *
- * Both are **off**: a global shortcut claims a browser-wide chord, and a
- * fresh install should not silently take one over. The user opts in from the
- * options page, which is also where the current binding is shown.
- */
-export const DEFAULT_GLOBAL_SEARCH_SHORTCUT_ENABLED = false;
-export const DEFAULT_GLOBAL_DASHBOARD_SHORTCUT_ENABLED = false;
-
 /** Returns a fresh, deeply-copied default settings object. */
 export function createDefaultSettings(): TabOutSettings {
   return {
@@ -121,7 +111,5 @@ export function createDefaultSettings(): TabOutSettings {
     maxHistoryItems: DEFAULT_MAX_HISTORY_ITEMS,
     autoSortTabs: DEFAULT_AUTO_SORT_TABS,
     searchShortcut: { ...DEFAULT_SEARCH_SHORTCUT },
-    globalSearchShortcutEnabled: DEFAULT_GLOBAL_SEARCH_SHORTCUT_ENABLED,
-    globalDashboardShortcutEnabled: DEFAULT_GLOBAL_DASHBOARD_SHORTCUT_ENABLED,
   };
 }

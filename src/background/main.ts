@@ -124,15 +124,25 @@ chrome.tabs.onCreated.addListener(keepDashboardAtEnd);
 /* ----------------------------------------------------------------
    Global keyboard shortcuts
 
-   The two chords are declared in `manifest.json` under `commands` — the only
-   way to register a shortcut that fires while some other site's tab has
-   focus. Both features are **off** until the user arms them in the options
-   page, so this listener usually decides to do nothing; see
-   `core/global-commands.ts` for the decision itself.
+   Only one custom command remains: `global-dashboard`, declared in
+   `manifest.json` under `commands` — the only way to register a shortcut
+   that fires while some other site's tab has focus. It is always on — there
+   used to be a `globalDashboardShortcutEnabled` setting gating it, removed
+   because the chord is entirely Chrome's to bind/rebind
+   (`chrome://extensions/shortcuts`) regardless of our own on/off flag, so
+   the checkbox only ever risked showing a shortcut as "configured" while our
+   handler silently ignored it. See `core/global-commands.ts` for the
+   decision itself.
+
+   Opening the Search box has no listener here at all: `manifest.json`
+   declares it as `_execute_action`, Chrome's reserved name for "do exactly
+   what clicking the toolbar icon does" (open the popup, and close it again
+   on a second press, same as the icon). That command never reaches
+   `chrome.commands.onCommand`, so there is nothing to gate or wire up.
    ---------------------------------------------------------------- */
 
 /**
- * Runs the shortcut the user pressed, if its feature is armed.
+ * Runs the shortcut the user pressed.
  *
  * Never throws: a command that fails to act must not take the worker down
  * with it, and the dashboard shortcut in particular is racing a tab list that
@@ -140,13 +150,9 @@ chrome.tabs.onCreated.addListener(keepDashboardAtEnd);
  */
 async function runGlobalCommand(command: string): Promise<void> {
   try {
-    const [settings, tabs] = await Promise.all([
-      settingsStore.load(),
-      tabActions.queryAllTabs(),
-    ]);
+    const tabs = await tabActions.queryAllTabs();
 
     const action = planGlobalCommand(command, {
-      settings,
       tabs,
       dashboardUrls: dashboardUrls(chrome.runtime.id),
       // `chrome.runtime.getURL` rather than hand-building the
@@ -156,15 +162,6 @@ async function runGlobalCommand(command: string): Promise<void> {
     });
 
     if (!action) return;
-
-    if (action.kind === 'open-search-popup') {
-      // Chrome 127+ allows this from a command handler without a user
-      // gesture. On an older Chrome the promise rejects and we deliberately
-      // do nothing rather than hijack the current tab — see the options page
-      // note about the toolbar button as the fallback path.
-      await chrome.action.openPopup();
-      return;
-    }
 
     if (action.kind === 'focus-dashboard') {
       await chrome.tabs.update(action.tabId, { active: true });

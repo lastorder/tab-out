@@ -140,33 +140,31 @@
     <div class="panel-header">
       <h2>Global shortcuts</h2>
       <p>
-        Work anywhere in Chrome, not just on the Tab Out 2 page. Both are
-        <strong>off by default</strong>. The key combination itself is owned by
-        Chrome, so it is changed in Chrome's own shortcut settings, not here.
+        Work anywhere in Chrome, not just on the Tab Out 2 page. The key
+        combination itself is owned by Chrome, so it's changed in Chrome's
+        own shortcut settings, not here &mdash; both are already on by
+        default with the recommended keys below.
       </p>
     </div>
 
-    <label class="checkbox-field">
-      <input type="checkbox" id="globalSearchShortcutEnabled">
-      <span>
-        <strong id="globalSearchShortcutKeys">Cmd+Shift+F</strong> &mdash;
-        open the Tab Out search box over the page you're on
-      </span>
-    </label>
-
-    <label class="checkbox-field">
-      <input type="checkbox" id="globalDashboardShortcutEnabled">
-      <span>
-        <strong id="globalDashboardShortcutKeys">Cmd+Shift+T</strong> &mdash;
-        open the Tab Out dashboard, even when Tab Out isn't your new tab page
-      </span>
-    </label>
+    <p class="field-hint">
+      <strong id="activateExtensionShortcutKeys">Cmd+Shift+F</strong> &mdash;
+      opens the Tab Out search box over the page you're on, and closes it
+      again on a second press &mdash; identical to clicking the toolbar icon.
+      This is Chrome's own "activate the extension" shortcut.
+    </p>
 
     <p class="field-hint">
-      Chrome keeps some combinations for itself &mdash; <kbd>Cmd+Shift+T</kbd>
-      normally reopens your last closed tab, so if that wins you'll need to
-      reassign it below. A combination shown as blank in Chrome has been taken
-      by another extension.
+      <strong id="globalDashboardShortcutKeys">Cmd+Shift+T</strong> &mdash;
+      opens the Tab Out dashboard, even when Tab Out isn't your new tab page.
+    </p>
+
+    <p class="field-hint">
+      Chrome keeps some combinations for itself &mdash; <kbd>Ctrl+Shift+T</kbd>
+      (Windows/Linux) and <kbd>Cmd+Shift+T</kbd> (Mac) both normally reopen
+      your last closed tab, so either one may already be taken and Tab Out's
+      binding shown as blank until you reassign it below. A combination shown
+      as blank in Chrome may also mean another extension has claimed it.
     </p>
 
     <div class="field field-inline">

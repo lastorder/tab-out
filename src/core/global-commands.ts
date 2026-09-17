@@ -1,35 +1,45 @@
 /**
- * core/global-commands.ts — what each browser-global shortcut should do.
+ * core/global-commands.ts — what the browser-global dashboard shortcut should do.
  *
- * The two chords themselves live in `manifest.json` under `commands`, since
- * only `chrome.commands` can register a shortcut that fires while some other
- * site's tab has focus. Chrome also owns *rebinding* them (via
+ * The chord itself lives in `manifest.json` under `commands`, since only
+ * `chrome.commands` can register a shortcut that fires while some other
+ * site's tab has focus. Chrome also owns *rebinding* it (via
  * `chrome://extensions/shortcuts`), so unlike `core/shortcut.ts` there is no
- * user-editable combo here — just the name of each command and the decision
+ * user-editable combo here — just the name of the command and the decision
  * of what it should do.
  *
  * That decision is pure and lives here so it can be tested without a browser:
- * `background/main.ts` supplies the settings and tab list, then performs the
- * effect itself. "Off by default" is enforced here — a disabled command
- * resolves to `null`, which the caller treats as "do nothing at all".
+ * `background/main.ts` supplies the tab list, then performs the effect
+ * itself. There is no settings-driven on/off switch any more (see below) —
+ * `planGlobalCommand` always acts on a recognised command.
+ *
+ * Note there used to be a second command, `global-search`, which called
+ * `chrome.action.openPopup()` — functionally a duplicate of Chrome's own
+ * `_execute_action` command (manifest.json), which does the same thing as
+ * clicking the toolbar icon: opens the Search popup, and — being an ordinary
+ * popup — closes it again if it's already open. `_execute_action` doesn't
+ * dispatch `onCommand` events, so it needs no entry here at all; it was
+ * removed to stop offering two shortcuts for one feature.
+ *
+ * There also used to be a `globalDashboardShortcutEnabled` setting gating
+ * this command behind an options-page checkbox. It was removed: the chord
+ * itself is entirely owned by Chrome (`chrome://extensions/shortcuts`), so
+ * the checkbox only ever controlled whether *our* handler reacted to a key
+ * Chrome had already bound and displayed as active — a footgun where the
+ * options page could show a shortcut as configured while it silently did
+ * nothing. The command is simply always on now, same as `_execute_action`;
+ * the options page explains the recommended chord in plain text instead of
+ * offering a toggle that doesn't control the actual keybinding.
  */
 
-import type { TabOutSettings, TabInfo } from '../types';
+import type { TabInfo } from '../types';
 import { findDashboardTab } from './dashboard';
 
-/**
- * The `chrome.commands` names, matching `manifest.json`.
- *
- * `global-search` opens the Search popup over whatever page is focused;
- * `global-dashboard` jumps to (or opens) the Tab Out page itself.
- */
-export const GLOBAL_SEARCH_COMMAND = 'global-search';
+/** The `chrome.commands` name, matching `manifest.json`. Jumps to (or opens) the Tab Out page itself. */
 export const GLOBAL_DASHBOARD_COMMAND = 'global-dashboard';
 
 /** What an armed global command should make the browser do. */
 export type GlobalCommandAction =
-  /** Open the extension popup containing the Search box. */
-  | { kind: 'open-search-popup' }
   /** Focus the already-open dashboard tab. */
   | { kind: 'focus-dashboard'; tabId: number; windowId: number }
   /** Open the dashboard page — used when Tab Out isn't the new-tab override. */
@@ -37,7 +47,6 @@ export type GlobalCommandAction =
 
 /** Everything the decision needs about the outside world. */
 export interface GlobalCommandContext {
-  settings: Pick<TabOutSettings, 'globalSearchShortcutEnabled' | 'globalDashboardShortcutEnabled'>;
   /** Every open tab, used to find an existing dashboard. */
   tabs: readonly TabInfo[];
   /** Every URL that counts as the dashboard — see `dashboardUrls()`. */
@@ -55,21 +64,16 @@ export interface GlobalCommandContext {
 /**
  * Decides what `command` should do, or `null` when it does nothing.
  *
- * `null` covers three cases the caller treats identically: an unknown command
- * name, a known command whose feature is switched off, and — for the
- * dashboard command — nothing that needs doing because the active tab is
- * already the dashboard.
+ * `null` covers two cases the caller treats identically: an unknown command
+ * name, and — for the dashboard command — nothing that needs doing because
+ * the active tab is already the dashboard.
  */
 export function planGlobalCommand(
   command: string,
   context: GlobalCommandContext,
 ): GlobalCommandAction | null {
   switch (command) {
-    case GLOBAL_SEARCH_COMMAND:
-      return context.settings.globalSearchShortcutEnabled ? { kind: 'open-search-popup' } : null;
-
     case GLOBAL_DASHBOARD_COMMAND:
-      if (!context.settings.globalDashboardShortcutEnabled) return null;
       return planDashboardJump(context);
 
     default:

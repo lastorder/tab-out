@@ -22,8 +22,6 @@ describe('normalizeSettings', () => {
       maxHistoryItems: 250,
       autoSortTabs: false,
       searchShortcut: { key: 'k', ctrl: true, meta: false, alt: false, shift: true },
-      globalSearchShortcutEnabled: true,
-      globalDashboardShortcutEnabled: true,
     };
     expect(normalizeSettings(input).settings).toEqual(input);
   });

@@ -77,7 +77,17 @@ export interface KeyCombo {
   shift: boolean;
 }
 
-/** The complete, user-editable configuration. */
+/**
+ * The complete, user-editable configuration.
+ *
+ * Neither browser-global shortcut (opening the Search box, opening the
+ * dashboard) has a field here any more. Both chords are declared in
+ * `manifest.json` under `commands` and entirely owned by Chrome
+ * (`chrome://extensions/shortcuts`) — a stored on/off flag only ever risked
+ * showing a shortcut as "configured" on the options page while our own
+ * `chrome.commands.onCommand` handler silently ignored it. They are simply
+ * always on now; see `core/global-commands.ts`.
+ */
 export interface TabOutSettings {
   version: number;
   /**
@@ -108,25 +118,6 @@ export interface TabOutSettings {
    * fires while the user is typing in some other site's tab.
    */
   searchShortcut: KeyCombo;
-  /**
-   * Whether the browser-global "open the Tab Out search box anywhere"
-   * shortcut is armed. Off by default, so a fresh install claims no
-   * browser-wide keybinding until the user opts in.
-   *
-   * The chord itself is declared in `manifest.json` under `commands`, because
-   * only `chrome.commands` can register a shortcut that fires outside Tab
-   * Out's own pages. Chrome owns rebinding it, so this flag only gates
-   * whether our `chrome.commands.onCommand` handler acts on it — the key
-   * stays reserved in Chrome either way.
-   */
-  globalSearchShortcutEnabled: boolean;
-  /**
-   * Whether the browser-global "open the Tab Out dashboard" shortcut is
-   * armed. Off by default. Unlike the new-tab override, this works even when
-   * Tab Out is not the user's new tab page, because it opens the extension
-   * page directly.
-   */
-  globalDashboardShortcutEnabled: boolean;
 }
 
 /** An item on the "Saved for later" checklist. */
