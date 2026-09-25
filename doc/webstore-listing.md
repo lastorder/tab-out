@@ -69,7 +69,7 @@ Tabs are grouped by site — mail.google.com and calendar.google.com land on one
 WHAT YOU GET
 
 • Every open tab at a glance, grouped by site on a single grid
-• Chrome tab groups — a group you've created yourself is shown as its own card, named and coloured to match; an optional setting auto-groups 2+ same-site tabs for you
+• Chrome tab groups — a group you've created yourself is shown as its own card, named and coloured to match; an optional setting auto-groups same-site tabs for you, and every later tab of that site joins the group you already have
 • Disposable tabs — your own rules for what is safe to close, with a one-click Tidy up
 • History — every tab you close is remembered, searchable, and one click from coming back
 • Pinned sites — the sites you always want at hand, always visible in their own card

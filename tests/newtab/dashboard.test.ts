@@ -212,6 +212,28 @@ describe('Dashboard.render', () => {
     expect(browser.moved).toEqual([]);
   });
 
+  it('never moves a tab that is already in a real Chrome tab group, and never flags it as out of order', async () => {
+    const { dashboard, browser } = await buildDashboard(
+      [
+        // A real Chrome group sitting in whatever order the user left it —
+        // "b" before "a" alphabetically-speaking, deliberately out of sync
+        // with what card-order sorting would otherwise want.
+        tab('https://b.com/', { id: 1, index: 0, windowId: 1, groupId: 9 }),
+        tab('https://a.com/', { id: 2, index: 1, windowId: 1, groupId: 9 }),
+        tab('https://example.com/', { id: 3, index: 2, windowId: 1 }),
+      ],
+      { autoSortTabs: false },
+    );
+    browser.groups.set(9, { id: 9, title: 'My Group', color: 'blue' });
+    await dashboard.render();
+
+    // The lone ungrouped tab is already "in order" on its own, so no banner
+    // and nothing gets moved — the grouped tabs are excluded from the
+    // comparison entirely, not flagged as a mismatch to fix.
+    expect(document.getElementById('tabSortBanner')!.style.display).toBe('none');
+    expect(browser.moved).toEqual([]);
+  });
+
   it('picks up settings changes on the next render', async () => {
     const { dashboard } = await buildDashboard([tab('https://acme.net/x')]);
     await dashboard.render();

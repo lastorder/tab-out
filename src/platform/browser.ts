@@ -33,6 +33,8 @@ export interface BrowserTabs {
   queryGroups(): Promise<ChromeGroupInfo[]>;
   /** Puts the given tabs into a new Chrome tab group titled `title`, returning its id. */
   createGroup(tabIds: readonly number[], title: string): Promise<number>;
+  /** Adds the given tabs to an existing Chrome tab group. */
+  addToGroup(tabIds: readonly number[], groupId: number): Promise<void>;
 }
 
 /** Converts Chrome's tab object into our narrower {@link TabInfo}. */
@@ -118,6 +120,11 @@ export function createChromeBrowserTabs(): BrowserTabs {
       const groupId = await chrome.tabs.group({ tabIds: [...tabIds] });
       await chrome.tabGroups.update(groupId, { title });
       return groupId;
+    },
+
+    async addToGroup(tabIds: readonly number[], groupId: number): Promise<void> {
+      if (tabIds.length === 0) return;
+      await chrome.tabs.group({ tabIds: [...tabIds], groupId });
     },
   };
 }

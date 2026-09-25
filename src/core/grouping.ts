@@ -174,17 +174,34 @@ export function groupDisplayTitle(group: Pick<TabGroup, 'key' | 'label'>): strin
 }
 
 /**
+ * A Chrome-group card's position in the tab bar: the lowest `index` among
+ * its tabs. Groups are contiguous in Chrome, so this is also effectively the
+ * group's own leftmost position — using it (rather than alphabetical title)
+ * keeps the dashboard's card order matching the order the user already gave
+ * their groups in the real tab bar. `undefined` for anything that isn't a
+ * chrome-group card.
+ */
+function chromeGroupOrderKey(group: Pick<TabGroup, 'kind' | 'tabs'>): number | undefined {
+  if (group.kind !== 'chrome-group' || group.tabs.length === 0) return undefined;
+  return Math.min(...group.tabs.map((tab) => tab.index));
+}
+
+/**
  * Orders groups for display: cards holding a pinned site first — in the
  * order those sites are configured, so an earlier pinned entry's card leads
- * even when pinned sites from different cards are interleaved — then
- * everything else alphabetically by displayed title, with the Disposable
- * card always last (it's a housekeeping bucket, not content worth leading
- * with).
+ * even when pinned sites from different cards are interleaved — then real
+ * Chrome tab group cards next, ordered by their own position in the tab bar
+ * (leftmost group first, matching what the user already arranged there
+ * rather than resorting them alphabetically), then everything else
+ * alphabetically by displayed title, with the Disposable card always last
+ * (it's a housekeeping bucket, not content worth leading with).
  *
  * `pinnedGroupOrder` maps a card's `key` to the earliest `pinnedIndex` of any
  * pinned site that belongs under it (see {@link buildPinnedPriorities});
  * empty when pinning is off, so every card falls through to the alphabetical
- * tier as if pinning didn't exist.
+ * tier as if pinning didn't exist. A pinned site's key is always a
+ * registrable domain, never a chrome-group key, so a pinned card still leads
+ * even ahead of a Chrome tab group.
  */
 export function sortGroups(
   groups: readonly TabGroup[],
@@ -201,6 +218,15 @@ export function sortGroups(
     const bPinned = bIdx !== undefined;
     if (aPinned !== bPinned) return aPinned ? -1 : 1;
     if (aPinned && bPinned && aIdx !== bIdx) return (aIdx as number) - (bIdx as number);
+
+    const aChromeOrder = chromeGroupOrderKey(a);
+    const bChromeOrder = chromeGroupOrderKey(b);
+    const aIsChromeGroup = aChromeOrder !== undefined;
+    const bIsChromeGroup = bChromeOrder !== undefined;
+    if (aIsChromeGroup !== bIsChromeGroup) return aIsChromeGroup ? -1 : 1;
+    if (aIsChromeGroup && bIsChromeGroup && aChromeOrder !== bChromeOrder) {
+      return (aChromeOrder as number) - (bChromeOrder as number);
+    }
 
     return groupDisplayTitle(a).localeCompare(groupDisplayTitle(b));
   });

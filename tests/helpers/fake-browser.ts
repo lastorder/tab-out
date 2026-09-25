@@ -23,6 +23,8 @@ export interface FakeBrowser extends BrowserTabs {
   readonly groups: Map<number, ChromeGroupInfo>;
   /** `{ tabIds, title, groupId }` calls passed to `createGroup()`, in call order. */
   readonly createdGroups: { tabIds: number[]; title: string; groupId: number }[];
+  /** `{ tabIds, groupId }` calls passed to `addToGroup()`, in call order. */
+  readonly addedToGroups: { tabIds: number[]; groupId: number }[];
   /** Fires the tab-change listeners. */
   emitChange(): void;
 }
@@ -45,6 +47,7 @@ export function createFakeBrowser(
     activated: null as { tabId: number; windowId: number } | null,
     groups: new Map<number, ChromeGroupInfo>(),
     createdGroups: [] as { tabIds: number[]; title: string; groupId: number }[],
+    addedToGroups: [] as { tabIds: number[]; groupId: number }[],
     nextGroupId: 1,
   };
   const listeners = new Set<() => void>();
@@ -72,6 +75,9 @@ export function createFakeBrowser(
     },
     get createdGroups() {
       return state.createdGroups;
+    },
+    get addedToGroups() {
+      return state.addedToGroups;
     },
 
     async queryAll() {
@@ -125,6 +131,13 @@ export function createFakeBrowser(
       const ids = new Set(tabIds);
       state.tabs = state.tabs.map((tab) => (ids.has(tab.id) ? { ...tab, groupId } : tab));
       return groupId;
+    },
+
+    async addToGroup(tabIds, groupId) {
+      if (tabIds.length === 0) return;
+      state.addedToGroups.push({ tabIds: [...tabIds], groupId });
+      const ids = new Set(tabIds);
+      state.tabs = state.tabs.map((tab) => (ids.has(tab.id) ? { ...tab, groupId } : tab));
     },
 
     emitChange() {

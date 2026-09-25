@@ -94,6 +94,71 @@ describe('TabActions.runAutoGroup', () => {
     expect(browser.createdGroups).toEqual([{ tabIds: [1, 2], title: 'Example', groupId: 1 }]);
     expect(browser.tabs.every((t) => t.groupId === 1)).toBe(true);
   });
+
+  it('adds a newly opened tab of an already grouped domain to that group instead of creating a second one', async () => {
+    const browser = createFakeBrowser([
+      tab('https://thoughtworks.com/a', { id: 1, groupId: 4 }),
+      tab('https://thoughtworks.com/b', { id: 2, groupId: 4 }),
+      tab('https://thoughtworks.com/c', { id: 3 }),
+    ]);
+    browser.groups.set(4, { id: 4, title: 'Thoughtworks', color: 'blue' });
+
+    const applied = await new TabActions(browser).runAutoGroup({
+      autoGroupEnabled: true,
+      disposableEnabled: true,
+      disposableRules: [],
+    });
+
+    expect(applied).toBe(1);
+    expect(browser.createdGroups).toEqual([]);
+    expect(browser.addedToGroups).toEqual([{ tabIds: [3], groupId: 4 }]);
+    expect(browser.tabs.every((t) => t.groupId === 4)).toBe(true);
+  });
+
+  it('leaves tabs alone entirely when autoGroupEnabled is off, even ones a domain group could adopt', async () => {
+    const browser = createFakeBrowser([
+      tab('https://example.com/a', { id: 1, groupId: 4 }),
+      tab('https://example.com/b', { id: 2 }),
+    ]);
+    browser.groups.set(4, { id: 4, title: 'Example', color: 'blue' });
+
+    const applied = await new TabActions(browser).runAutoGroup({
+      autoGroupEnabled: false,
+      disposableEnabled: true,
+      disposableRules: [],
+    });
+
+    expect(applied).toBe(0);
+    expect(browser.addedToGroups).toEqual([]);
+    expect(browser.createdGroups).toEqual([]);
+  });
+
+  it('never creates a second group for a domain it already grouped, across repeated sweeps', async () => {
+    // The end-to-end shape of the reported bug: two Thoughtworks tabs get
+    // grouped, then two more open. The second sweep must add them to the
+    // existing group, not seed another "Thoughtworks" group beside it.
+    const browser = createFakeBrowser([
+      tab('https://thoughtworks.com/a', { id: 1 }),
+      tab('https://thoughtworks.com/b', { id: 2 }),
+    ]);
+    const actions = new TabActions(browser);
+    const settings = {
+      autoGroupEnabled: true,
+      disposableEnabled: true,
+      disposableRules: [],
+    };
+
+    await actions.runAutoGroup(settings);
+    expect(browser.createdGroups).toHaveLength(1);
+
+    browser.tabs.push(tab('https://thoughtworks.com/c', { id: 3 }));
+    browser.tabs.push(tab('https://thoughtworks.com/d', { id: 4 }));
+    await actions.runAutoGroup(settings);
+
+    expect(browser.createdGroups).toHaveLength(1);
+    expect(browser.addedToGroups).toEqual([{ tabIds: [3, 4], groupId: 1 }]);
+    expect(browser.tabs.every((t) => t.groupId === 1)).toBe(true);
+  });
 });
 
 describe('TabActions closing', () => {

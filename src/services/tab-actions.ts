@@ -8,7 +8,7 @@
 
 import type { BrowserTabs } from '../platform/browser';
 import type { PinnedSite, TabGroup, TabInfo, TabOutSettings } from '../types';
-import { planAutoGroups } from '../core/auto-group';
+import { planTabGrouping } from '../core/auto-group';
 import { selectDuplicateTabIds } from '../core/duplicates';
 import { pinnedInsertIndex } from '../core/grouping';
 import { findDashboardTabNeedingMove } from '../core/dashboard';
@@ -197,20 +197,32 @@ export class TabActions {
   }
 
   /**
-   * When auto-grouping is enabled, creates a real Chrome tab group for any
-   * ungrouped domain card that now has 2+ tabs (see `core/auto-group.ts`).
+   * When auto-grouping is enabled, brings the browser's real Chrome tab
+   * groups in line with the dashboard: any ungrouped domain bucket with 2+
+   * tabs becomes a new Chrome tab group, and any ungrouped tab whose domain
+   * already has one *joins* that group instead — see
+   * `core/auto-group.ts#planTabGrouping`.
+   *
    * A no-op (never queries or touches the browser) when the setting is off.
    *
-   * @returns how many new groups were created.
+   * @returns how many grouping actions were applied.
    */
   async runAutoGroup(settings: Pick<TabOutSettings, 'autoGroupEnabled' | 'disposableEnabled' | 'disposableRules'>): Promise<number> {
     if (!settings.autoGroupEnabled) return 0;
     const tabs = await this.#browser.queryAll();
-    const plans = planAutoGroups(tabs, settings);
-    for (const plan of plans) {
-      await this.#browser.createGroup(plan.tabIds, plan.title);
+    const actions = planTabGrouping(tabs, settings);
+
+    let applied = 0;
+    for (const action of actions) {
+      if (action.tabIds.length === 0) continue;
+      if (action.kind === 'create') {
+        await this.#browser.createGroup(action.tabIds, action.title);
+      } else {
+        await this.#browser.addToGroup(action.tabIds, action.groupId);
+      }
+      applied++;
     }
-    return plans.length;
+    return applied;
   }
 
   /**

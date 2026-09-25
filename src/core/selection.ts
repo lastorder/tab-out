@@ -5,7 +5,7 @@
  * the risky part (picking tabs to close) is pure and exhaustively testable.
  */
 
-import type { TabInfo } from '../types';
+import type { TabGroup, TabInfo } from '../types';
 import { hostnameOf } from './url';
 
 /**
@@ -114,19 +114,44 @@ export function selectStaleDashboardTabIds(
 /**
  * Computes the desired tab-bar order from the dashboard's group order,
  * restricted to one window.
+ *
+ * Chrome-tab-group cards are skipped entirely: those tabs are already
+ * ordered and kept contiguous by Chrome itself, and the user arranged that
+ * group on purpose. Folding them into the auto-sort/"Sort tabs" move plan
+ * would mean issuing `chrome.tabs.move()` calls that shuffle a group's tabs
+ * to match the dashboard's card order (alphabetical-ish, not the user's own
+ * arrangement) — actively fighting the group instead of leaving it alone.
  */
 export function desiredTabOrder(
-  groups: readonly { tabs: readonly TabInfo[] }[],
+  groups: readonly Pick<TabGroup, 'kind' | 'tabs'>[],
   windowId: number,
 ): number[] {
   const order: number[] = [];
   for (const group of groups) {
+    if (group.kind === 'chrome-group') continue;
     const windowTabs = group.tabs
       .filter((tab) => tab.windowId === windowId)
       .sort((a, b) => a.index - b.index);
     order.push(...windowTabs.map((tab) => tab.id));
   }
   return order;
+}
+
+/**
+ * Ids of every tab currently rendered under a Chrome-tab-group card.
+ *
+ * Used to keep the "actual tab order" side of the sort-mismatch check
+ * consistent with {@link desiredTabOrder}, which leaves those same tabs out
+ * of the desired side — comparing a filtered list against an unfiltered one
+ * would report a mismatch (and re-trigger auto-sort) for no reason.
+ */
+export function chromeGroupedTabIds(groups: readonly Pick<TabGroup, 'kind' | 'tabs'>[]): Set<number> {
+  const ids = new Set<number>();
+  for (const group of groups) {
+    if (group.kind !== 'chrome-group') continue;
+    for (const tab of group.tabs) ids.add(tab.id);
+  }
+  return ids;
 }
 
 /** True when the real tab-bar order differs from the dashboard's order. */

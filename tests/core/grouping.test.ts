@@ -185,6 +185,52 @@ describe('sortGroups', () => {
       DISPOSABLE_GROUP_KEY,
     ]);
   });
+
+  it('orders Chrome-tab-group cards by their own tab-bar position, ahead of plain domain cards but behind pinned ones', () => {
+    const groups = [
+      { key: 'zzz.com', kind: 'domain' as const, tabs: tabs('https://zzz.com/') },
+      {
+        key: '__chrome-group-2__',
+        kind: 'chrome-group' as const,
+        label: 'Zebra Group', // alphabetically last, but positioned first in the tab bar
+        tabs: [tab('https://a.com/', { index: 0 })],
+      },
+      {
+        key: '__chrome-group-5__',
+        kind: 'chrome-group' as const,
+        label: 'Apple Group',
+        tabs: [tab('https://b.com/', { index: 5 })],
+      },
+      { key: 'aaa.com', kind: 'domain' as const, tabs: tabs('https://aaa.com/') },
+      { key: DISPOSABLE_GROUP_KEY, kind: 'disposable' as const, tabs: tabs('https://x.com/home') },
+    ];
+
+    expect(sortGroups(groups).map((g) => g.key)).toEqual([
+      '__chrome-group-2__',
+      '__chrome-group-5__',
+      'aaa.com',
+      'zzz.com',
+      DISPOSABLE_GROUP_KEY,
+    ]);
+  });
+
+  it('still puts a pinned domain card ahead of every Chrome tab group', () => {
+    const groups = [
+      {
+        key: '__chrome-group-1__',
+        kind: 'chrome-group' as const,
+        label: 'Group',
+        tabs: [tab('https://a.com/', { index: 0 })],
+      },
+      { key: 'pinned.com', kind: 'domain' as const, tabs: tabs('https://pinned.com/') },
+    ];
+    const pinnedGroupOrder = new Map([['pinned.com', 0]]);
+
+    expect(sortGroups(groups, pinnedGroupOrder).map((g) => g.key)).toEqual([
+      'pinned.com',
+      '__chrome-group-1__',
+    ]);
+  });
 });
 
 describe('groupDisplayTitle', () => {

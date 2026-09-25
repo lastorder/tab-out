@@ -11,9 +11,11 @@
  * 3. Keep the dashboard pinned to the rightmost tab of its window, so any
  *    newly opened page lands to its left. Decision logic lives in
  *    `core/position.ts`, behind `TabActions.moveDashboardToEnd`.
- * 4. When enabled, automatically create a real Chrome tab group for any
- *    domain that has accumulated 2+ ungrouped tabs. Decision logic lives in
- *    `core/auto-group.ts`, behind `TabActions.runAutoGroup`.
+ * 4. When enabled, keep the real Chrome tab groups in step with the domain
+ *    cards: a new tab whose domain already has a group joins it, and a
+ *    domain that has accumulated 2+ ungrouped tabs gets a group of its own.
+ *    Decision logic lives in `core/auto-group.ts`, behind
+ *    `TabActions.runAutoGroup`.
  *
  * This file is only wiring: it constructs the concrete adapters and forwards
  * `chrome.tabs` events to the testable functions above.
@@ -127,11 +129,11 @@ chrome.tabs.onCreated.addListener(keepDashboardAtEnd);
 /* ----------------------------------------------------------------
    Auto-grouping
 
-   When `autoGroupEnabled` is on, any domain that has accumulated 2+ tabs not
-   already in some Chrome tab group gets swept into a new one, titled after
-   that domain — see `core/auto-group.ts#planAutoGroups`. Debounced, since
-   opening several tabs of the same site in quick succession (a handful of
-   search results, say) would otherwise fire this once per tab.
+   When `autoGroupEnabled` is on, every ungrouped tab whose domain already has
+   a Chrome tab group joins it, and any domain that has accumulated 2+ tabs
+   with no group yet gets one — see `core/auto-group.ts#planTabGrouping`.
+   Debounced, since opening several tabs of the same site in quick succession
+   (a handful of search results, say) would otherwise fire this once per tab.
    ---------------------------------------------------------------- */
 
 let autoGroupTimer: ReturnType<typeof setTimeout> | undefined;
@@ -151,17 +153,52 @@ const scheduleAutoGroup = (): void => {
   if (autoGroupTimer !== undefined) clearTimeout(autoGroupTimer);
   autoGroupTimer = setTimeout(() => {
     autoGroupTimer = undefined;
-    void (async () => {
-      try {
-        const settings = await settingsStore.load();
-        await tabActions.runAutoGroup(settings);
-      } catch {
-        // Best-effort — a missed sweep just leaves those tabs ungrouped for
-        // now; the next qualifying tab event tries again.
-      }
-    })();
+    void runAutoGroupSweep();
   }, 1000);
 };
+
+/**
+ * Serialises sweeps so two of them can never overlap.
+ *
+ * The debounce above only collapses events that arrive *before* a timer
+ * fires. Once one fires, the sweep it starts is asynchronous — and if a
+ * second burst of tab events (restoring a session, say) schedules another
+ * timer that fires while the first sweep is still awaiting storage or
+ * `chrome.tabs.group()`, both sweeps query the same tab list before either
+ * has grouped anything and each creates its own group for the same domain.
+ * That is exactly how one site ended up with two groups.
+ *
+ * A sweep that is asked to run while another is in flight is not dropped:
+ * `autoGroupQueued` makes the running sweep repeat once it finishes, so the
+ * tabs that arrived mid-sweep still get grouped.
+ */
+let autoGroupInFlight = false;
+let autoGroupQueued = false;
+
+async function runAutoGroupSweep(): Promise<void> {
+  if (autoGroupInFlight) {
+    autoGroupQueued = true;
+    return;
+  }
+
+  autoGroupInFlight = true;
+  try {
+    do {
+      autoGroupQueued = false;
+      const settings = await settingsStore.load();
+      await tabActions.runAutoGroup(settings);
+      // Terminates: grouping only ever removes tabs from the ungrouped set
+      // the plan is built from, so a repeat pass finds nothing left to do
+      // unless a genuine tab event arrived meanwhile.
+    } while (autoGroupQueued);
+  } catch {
+    // Best-effort — a missed sweep just leaves those tabs ungrouped for now;
+    // the next qualifying tab event tries again.
+  } finally {
+    autoGroupInFlight = false;
+    autoGroupQueued = false;
+  }
+}
 
 chrome.tabs.onCreated.addListener(scheduleAutoGroup);
 chrome.tabs.onUpdated.addListener((_tabId, change) => {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  chromeGroupedTabIds,
   desiredTabOrder,
   findFocusTarget,
   needsSorting,
@@ -108,15 +109,42 @@ describe('tab ordering', () => {
   it('flattens groups into tab-bar order, scoped to one window', () => {
     const groups = [
       {
+        kind: 'domain' as const,
         tabs: [
           tab('https://a.com/2', { id: 2, index: 5, windowId: 1 }),
           tab('https://a.com/1', { id: 1, index: 2, windowId: 1 }),
           tab('https://a.com/3', { id: 3, index: 0, windowId: 2 }),
         ],
       },
-      { tabs: [tab('https://b.com/', { id: 4, index: 1, windowId: 1 })] },
+      { kind: 'domain' as const, tabs: [tab('https://b.com/', { id: 4, index: 1, windowId: 1 })] },
     ];
     expect(desiredTabOrder(groups, 1)).toEqual([1, 2, 4]);
+  });
+
+  it('excludes a Chrome-tab-group card entirely, leaving that group exactly where it already is', () => {
+    const groups = [
+      { kind: 'domain' as const, tabs: [tab('https://a.com/', { id: 1, index: 0, windowId: 1 })] },
+      {
+        kind: 'chrome-group' as const,
+        tabs: [
+          tab('https://b.com/', { id: 2, index: 1, windowId: 1 }),
+          tab('https://c.com/', { id: 3, index: 2, windowId: 1 }),
+        ],
+      },
+      { kind: 'domain' as const, tabs: [tab('https://d.com/', { id: 4, index: 3, windowId: 1 })] },
+    ];
+    expect(desiredTabOrder(groups, 1)).toEqual([1, 4]);
+  });
+
+  it('collects every tab id rendered under a Chrome-tab-group card', () => {
+    const groups = [
+      { kind: 'domain' as const, tabs: [tab('https://a.com/', { id: 1 })] },
+      {
+        kind: 'chrome-group' as const,
+        tabs: [tab('https://b.com/', { id: 2 }), tab('https://c.com/', { id: 3 })],
+      },
+    ];
+    expect(chromeGroupedTabIds(groups)).toEqual(new Set([2, 3]));
   });
 
   it('detects a mismatch, ignoring lists too short to have an order', () => {

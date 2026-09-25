@@ -17,7 +17,7 @@ import type { TabGroup, TabOutSettings } from '../types';
 import { buildDashboardModel } from '../core/grouping';
 import { filterHistory } from '../core/history';
 import { clampSelection, searchTabsAndHistory, type SearchResult } from '../core/search';
-import { desiredTabOrder, needsSorting } from '../core/selection';
+import { desiredTabOrder, chromeGroupedTabIds, needsSorting } from '../core/selection';
 import { selectTidyTabIds } from '../core/tidy';
 import { createDefaultSettings } from '../config/defaults';
 import { getDateDisplay, getGreeting } from '../core/time';
@@ -229,8 +229,9 @@ export class Dashboard {
     try {
       const windowId = await this.deps.browser.currentWindowId();
       const desired = desiredTabOrder(model.orderedGroups, windowId);
+      const chromeGrouped = chromeGroupedTabIds(model.orderedGroups);
       const actual = model.realTabs
-        .filter((tab) => tab.windowId === windowId)
+        .filter((tab) => tab.windowId === windowId && !chromeGrouped.has(tab.id))
         .sort((a, b) => a.index - b.index)
         .map((tab) => tab.id);
 
