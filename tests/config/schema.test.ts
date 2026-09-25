@@ -18,7 +18,7 @@ describe('normalizeSettings', () => {
       pinnedEnabled: false,
       pinnedSites: [{ url: 'https://example.com/', label: 'Example' }],
       disposableEnabled: false,
-      disposableRules: [{ hostname: 'x.com', pathExact: ['/home'] }],
+      disposableRules: [{ pattern: 'https://x.com/home' }],
       maxHistoryItems: 250,
       autoSortTabs: false,
       searchShortcut: { key: 'k', ctrl: true, meta: false, alt: false, shift: true },
@@ -67,24 +67,17 @@ describe('normalizeSettings', () => {
   });
 
   describe('rules', () => {
-    it('requires a hostname constraint on disposable rules', () => {
-      const { settings, issues } = normalizeSettings({ disposableRules: [{ pathPrefix: '/' }] });
+    it('requires a non-empty pattern on disposable rules', () => {
+      const { settings, issues } = normalizeSettings({ disposableRules: [{ pattern: '' }] });
       expect(settings.disposableRules).toEqual([]);
-      expect(issues[0]!.message).toMatch(/hostname/);
+      expect(issues[0]!.message).toMatch(/pattern/);
     });
 
-    it('repairs pasted schemes and missing leading slashes', () => {
+    it('trims the pattern', () => {
       const { settings } = normalizeSettings({
-        disposableRules: [
-          { hostname: 'https://x.com', pathPrefix: 'home', pathExact: ['feed'], urlNotContains: ['', ' ', '#inbox/'] },
-        ],
+        disposableRules: [{ pattern: '  https://x.com/*  ' }],
       });
-      expect(settings.disposableRules[0]).toEqual({
-        hostname: 'x.com',
-        pathPrefix: '/home',
-        pathExact: ['/feed'],
-        urlNotContains: ['#inbox/'],
-      });
+      expect(settings.disposableRules[0]).toEqual({ pattern: 'https://x.com/*' });
     });
   });
 
@@ -167,7 +160,7 @@ describe('normalizeSettings', () => {
     const v1Blob = {
       version: 1,
       pinnedSites: [{ url: 'https://a.com/' }],
-      landingPatterns: [{ hostname: 'x.com', pathExact: ['/home'] }],
+      landingPatterns: [{ pattern: 'https://x.com/home' }],
       customGroups: [],
       maxHistoryItems: 250,
       autoSortTabs: false,
@@ -175,7 +168,7 @@ describe('normalizeSettings', () => {
 
     it('reads rules from the old "landingPatterns" key', () => {
       const { settings, issues } = normalizeSettings(v1Blob);
-      expect(settings.disposableRules).toEqual([{ hostname: 'x.com', pathExact: ['/home'] }]);
+      expect(settings.disposableRules).toEqual([{ pattern: 'https://x.com/home' }]);
       expect(settings.pinnedSites).toEqual([{ url: 'https://a.com/' }]);
       expect(issues).toEqual([]);
     });
@@ -190,9 +183,9 @@ describe('normalizeSettings', () => {
     it('prefers the new key when both are somehow present', () => {
       const { settings } = normalizeSettings({
         ...v1Blob,
-        disposableRules: [{ hostname: 'new.com' }],
+        disposableRules: [{ pattern: 'https://new.com/' }],
       });
-      expect(settings.disposableRules).toEqual([{ hostname: 'new.com' }]);
+      expect(settings.disposableRules).toEqual([{ pattern: 'https://new.com/' }]);
     });
   });
 });

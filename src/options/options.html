@@ -74,19 +74,22 @@
       </div>
       <p>
         Tabs matching these rules are safe to close, because reopening them costs
-        nothing &mdash; either a site's own homepage (Gmail inbox, X feed, GitHub
-        front page), or a spent one-off page like the screen a Zoom meeting leaves
-        behind once the call has already opened in the app. They're collected into
-        one <strong>Disposable</strong> card, and count toward the dashboard's
+        nothing &mdash; either a site's own homepage (X feed, GitHub front page),
+        or a spent one-off page like the screen a Zoom meeting leaves behind once
+        the call has already opened in the app. They're collected into one
+        <strong>Disposable</strong> card, and count toward the dashboard's
         "Tidy up" button. Turning this off stops applying the rules without
         deleting them.
       </p>
       <p class="pattern-hint">
-        <strong>Path pattern:</strong> <code>/j/*</code> matches that path and
-        everything under it &middot; <code>/home</code> matches only that exact
-        path &middot; <code>!#inbox/</code> excludes any URL containing that text
-        &middot; combine with commas, e.g. <code>/*, !#inbox/</code> &middot;
-        leave blank to match only the site's root.
+        <strong>Pattern:</strong> matched against the tab's whole URL,
+        scheme included. <code>*</code> matches any characters, including
+        <code>/</code> &middot; <code>https://github.com/*</code> matches
+        every page on GitHub &middot; <code>https://github.com/*/issues/*</code>
+        matches any issue page on any repo &middot; <code>*.google.com/*</code>
+        matches any page on any Google subdomain &middot;
+        <code>file:///Users/me/notes/*</code> matches every local file under
+        that folder &middot; a bare <code>*</code> matches every URL.
       </p>
     </div>
     <div class="rows" id="disposableRows"></div>

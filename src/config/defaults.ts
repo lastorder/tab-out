@@ -53,13 +53,12 @@ export const DEFAULT_PINNED_ENABLED = true;
  *   - a spent one-off page, like the screen Zoom leaves behind after a
  *     meeting has already opened in the desktop app
  *
- * Note the Gmail rule: it matches every Gmail path (`pathPrefix: '/'`) but is
- * vetoed for URLs containing a thread fragment, so reading an email keeps its
- * own card — the shared "google.com" domain card, since `mail.google.com` and
- * `calendar.google.com` share a registrable domain. Disposable rules are
- * checked first, so only the vetoed (non-disposable) Gmail tabs ever reach
- * domain grouping. This is why the rule format is declarative rather than a
- * hard-coded predicate function.
+ * Each rule is a single glob `pattern` matched against the tab's whole URL —
+ * `*` matches any characters, including `/` (see `core/matching.ts`). There
+ * used to be a default Gmail rule that tried to match the inbox but not an
+ * individual thread; that distinction needs a veto/exclude the glob syntax
+ * doesn't have, so it's gone — add your own narrower pattern if that
+ * distinction matters to you.
  *
  * Google Meet and Microsoft Teams meeting URLs are deliberately **not**
  * included here: unlike Zoom's post-join page, the call itself runs inside
@@ -67,16 +66,12 @@ export const DEFAULT_PINNED_ENABLED = true;
  * them yourself only if that's genuinely safe for how you use them.
  */
 export const DEFAULT_DISPOSABLE_RULES: readonly DisposableRule[] = Object.freeze([
-  {
-    hostname: 'mail.google.com',
-    pathPrefix: '/',
-    urlNotContains: ['#inbox/', '#sent/', '#search/'],
-  },
-  { hostname: 'x.com', pathExact: ['/home'] },
-  { hostname: 'www.linkedin.com', pathExact: ['/', '/feed/'] },
-  { hostname: 'github.com', pathExact: ['/'] },
-  { hostname: 'www.youtube.com', pathExact: ['/'] },
-  { hostnameEndsWith: '.zoom.us', pathPrefix: '/j/' },
+  { pattern: 'https://x.com/home' },
+  { pattern: 'https://www.linkedin.com/' },
+  { pattern: 'https://www.linkedin.com/feed/' },
+  { pattern: 'https://github.com/' },
+  { pattern: 'https://www.youtube.com/' },
+  { pattern: 'https://*.zoom.us/j/*' },
 ]);
 
 /** Whether disposable rules are applied by default. */

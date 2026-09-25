@@ -168,8 +168,7 @@ body {
 .row:hover { border-color: #d8d0c6; }
 
 .row-pinned     { grid-template-columns: 1.4fr 1fr auto; }
-.row-disposable { grid-template-columns: 1fr 1.4fr auto; }
-.row-custom     { grid-template-columns: 0.8fr 1fr 1fr 0.7fr auto; }
+.row-disposable { grid-template-columns: 1fr auto; }
 
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 
@@ -390,8 +389,7 @@ body {
 /* ---- Responsive ---- */
 @media (max-width: 780px) {
   .row-pinned,
-  .row-disposable,
-  .row-custom { grid-template-columns: 1fr; }
+  .row-disposable { grid-template-columns: 1fr; }
 
   .row-controls { justify-content: flex-end; }
   .options-header { flex-direction: column; }

@@ -41,8 +41,11 @@ const SECTIONS: Record<SectionName, SectionSpec> = {
   disposable: {
     empty: 'No disposable rules — the Disposable card will stay empty.',
     fields: [
-      { field: 'hostname', label: 'Hostname', placeholder: 'x.com or .zoom.us' },
-      { field: 'pattern', label: 'Path pattern', placeholder: '/j/*, !#inbox/' },
+      {
+        field: 'pattern',
+        label: 'Pattern',
+        placeholder: 'https://github.com/* or file:///path/* — * matches anything',
+      },
     ],
   },
 };
@@ -64,14 +67,27 @@ function renderField(
     </div>`;
 }
 
-/** Move-up / move-down / delete buttons for one row. */
+/**
+ * Move-up / move-down / delete buttons for one row.
+ *
+ * Only `pinned` rows are reorderable — pinned-card order is meaningful (see
+ * `buildPinnedPriorities()`), while a disposable rule's position never
+ * affects anything (`isDisposable()` is an unordered `.some()`), so that
+ * table just gets a delete button.
+ */
 function renderControls(section: SectionName, index: number, total: number): string {
+  const reorderable = section === 'pinned';
   return `
     <div class="row-controls">
+      ${
+        reorderable
+          ? `
       <button class="icon-action" title="Move up" data-action="move-up"
               data-section="${section}" data-index="${index}" ${index === 0 ? 'disabled' : ''}>&uarr;</button>
       <button class="icon-action" title="Move down" data-action="move-down"
-              data-section="${section}" data-index="${index}" ${index === total - 1 ? 'disabled' : ''}>&darr;</button>
+              data-section="${section}" data-index="${index}" ${index === total - 1 ? 'disabled' : ''}>&darr;</button>`
+          : ''
+      }
       <button class="icon-action danger" title="Remove" data-action="remove"
               data-section="${section}" data-index="${index}">&times;</button>
     </div>`;

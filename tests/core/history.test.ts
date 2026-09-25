@@ -89,7 +89,7 @@ describe('filterHistory', () => {
 });
 
 describe('shouldRecordClosedTab', () => {
-  const rules = [{ hostname: 'github.com', pathExact: ['/'] }];
+  const rules = [{ pattern: 'https://github.com/' }];
 
   it('skips a disposable URL while disposable rules are enabled', () => {
     expect(

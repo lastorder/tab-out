@@ -1,52 +1,59 @@
 import { describe, expect, it } from 'vitest';
-import { isDisposable, isDisposableDomain, matchesDisposableRule } from '@/core/matching';
+import { isDisposable, matchesDisposableRule } from '@/core/matching';
 import { DEFAULT_DISPOSABLE_RULES } from '@/config/defaults';
 
 describe('matchesDisposableRule', () => {
-  it('matches only the site root when no path constraint is given', () => {
-    const rule = { hostname: 'github.com' };
+  it('matches an exact URL with no wildcard', () => {
+    const rule = { pattern: 'https://github.com/' };
     expect(matchesDisposableRule(rule, 'https://github.com/')).toBe(true);
     expect(matchesDisposableRule(rule, 'https://github.com/acme/app')).toBe(false);
   });
 
-  it('supports exact paths, path prefixes, and subdomain suffixes', () => {
+  it('lets * match any characters, including /', () => {
+    expect(matchesDisposableRule({ pattern: 'https://github.com/*' }, 'https://github.com/')).toBe(
+      true,
+    );
     expect(
-      matchesDisposableRule({ hostname: 'x.com', pathExact: ['/home'] }, 'https://x.com/home'),
-    ).toBe(true);
-    expect(
-      matchesDisposableRule({ hostname: 'e.com', pathPrefix: '/docs' }, 'https://e.com/docs/intro'),
+      matchesDisposableRule({ pattern: 'https://github.com/*' }, 'https://github.com/acme/app'),
     ).toBe(true);
     expect(
       matchesDisposableRule(
-        { hostnameEndsWith: '.atlassian.net', pathPrefix: '/' },
-        'https://acme.atlassian.net/jira',
+        { pattern: 'https://github.com/*/issues/*' },
+        'https://github.com/acme/app/issues/1',
       ),
     ).toBe(true);
+    expect(
+      matchesDisposableRule(
+        { pattern: 'https://github.com/*/issues/*' },
+        'https://github.com/acme/app/pull/1',
+      ),
+    ).toBe(false);
   });
 
-  it('lets urlNotContains veto an otherwise matching URL', () => {
-    // This is what makes "the Gmail inbox is disposable, an email isn't" work
-    // as data rather than code.
-    const rule = { hostname: 'mail.google.com', pathPrefix: '/', urlNotContains: ['#inbox/'] };
-    expect(matchesDisposableRule(rule, 'https://mail.google.com/mail/u/0/#inbox')).toBe(true);
-    expect(matchesDisposableRule(rule, 'https://mail.google.com/mail/u/0/#inbox/AbC123')).toBe(false);
+  it('supports a subdomain wildcard', () => {
+    expect(matchesDisposableRule({ pattern: '*.google.com/*' }, 'https://mail.google.com/x')).toBe(
+      true,
+    );
+    expect(matchesDisposableRule({ pattern: '*.google.com/*' }, 'https://example.com/x')).toBe(
+      false,
+    );
   });
 
-  it('never matches a rule with no hostname constraint', () => {
+  it('a bare * matches every URL', () => {
+    expect(matchesDisposableRule({ pattern: '*' }, 'https://anything.com/')).toBe(true);
+    expect(matchesDisposableRule({ pattern: '*' }, 'nonsense')).toBe(true);
+  });
+
+  it('never matches an empty pattern', () => {
     // A half-filled options form must not capture every tab on the internet.
-    expect(matchesDisposableRule({ pathPrefix: '/' }, 'https://anything.com/')).toBe(false);
-  });
-
-  it('returns false for malformed URLs', () => {
-    expect(matchesDisposableRule({ hostname: 'x.com' }, 'nonsense')).toBe(false);
+    expect(matchesDisposableRule({ pattern: '' }, 'https://anything.com/')).toBe(false);
   });
 });
 
 describe('isDisposable with the shipped defaults', () => {
   it.each([
-    ['https://mail.google.com/mail/u/0/#inbox', true],
-    ['https://mail.google.com/mail/u/0/#inbox/FMfcgz123', false],
     ['https://x.com/home', true],
+    ['https://www.linkedin.com/', true],
     ['https://www.linkedin.com/feed/', true],
     ['https://github.com/', true],
     ['https://github.com/acme/app/pull/1', false],
@@ -57,24 +64,5 @@ describe('isDisposable with the shipped defaults', () => {
     ['https://example.com/', false],
   ])('%s → %s', (url, expected) => {
     expect(isDisposable(url, DEFAULT_DISPOSABLE_RULES)).toBe(expected);
-  });
-});
-
-describe('isDisposableDomain', () => {
-  it('recognises hostnames and suffixes mentioned by any rule', () => {
-    expect(isDisposableDomain('github.com', DEFAULT_DISPOSABLE_RULES)).toBe(true);
-    expect(isDisposableDomain('example.com', DEFAULT_DISPOSABLE_RULES)).toBe(false);
-    expect(isDisposableDomain('acme.atlassian.net', [{ hostnameEndsWith: '.atlassian.net' }])).toBe(true);
-  });
-
-  it('matches a registrable domain against an exact-hostname rule on a subdomain', () => {
-    // `mail.google.com`'s registrable domain is `google.com` — the same key
-    // `groupKeyOf` would produce for that tab's card.
-    expect(isDisposableDomain('google.com', DEFAULT_DISPOSABLE_RULES)).toBe(true);
-  });
-
-  it('matches a bare registrable domain against a suffix rule', () => {
-    // `zoom.us` itself (no subdomain) still counts as "mentioned by" `.zoom.us`.
-    expect(isDisposableDomain('zoom.us', DEFAULT_DISPOSABLE_RULES)).toBe(true);
   });
 });

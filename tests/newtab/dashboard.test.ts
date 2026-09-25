@@ -219,7 +219,7 @@ describe('Dashboard.render', () => {
 
     await dashboard.deps.settingsStore.save(
       emptySettings({
-        disposableRules: [{ hostname: 'acme.net', pathExact: ['/x'] }],
+        disposableRules: [{ pattern: 'https://acme.net/x' }],
       }),
     );
     await dashboard.render();
@@ -424,7 +424,7 @@ describe('Dashboard Tidy button', () => {
   it('appears for a disposable tab, describing why in its tooltip', async () => {
     const { dashboard } = await buildDashboard(
       [tab('https://github.com/')],
-      { disposableEnabled: true, disposableRules: [{ hostname: 'github.com', pathExact: ['/'] }] },
+      { disposableEnabled: true, disposableRules: [{ pattern: 'https://github.com/' }] },
     );
     await dashboard.render();
 
@@ -477,7 +477,7 @@ describe('Dashboard Tidy button', () => {
   it('disappears again once disposableEnabled is turned off', async () => {
     const { dashboard } = await buildDashboard(
       [tab('https://github.com/')],
-      { disposableEnabled: false, disposableRules: [{ hostname: 'github.com', pathExact: ['/'] }] },
+      { disposableEnabled: false, disposableRules: [{ pattern: 'https://github.com/' }] },
     );
     await dashboard.render();
     expect(sectionCount()).not.toContain('data-action="tidy-tabs"');

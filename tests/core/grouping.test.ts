@@ -75,7 +75,7 @@ describe('groupTabs', () => {
     // Off means "stop applying", not "forget" — the rule stays configured.
     const settings = emptySettings({
       disposableEnabled: false,
-      disposableRules: [{ hostname: 'github.com', pathExact: ['/'] }],
+      disposableRules: [{ pattern: 'https://github.com/' }],
     });
     const result = groupTabs(tabs('https://github.com/'), settings);
     expect(result).toEqual([{ key: 'github.com', kind: 'domain', tabs: expect.any(Array) }]);

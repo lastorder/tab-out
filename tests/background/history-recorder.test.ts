@@ -99,7 +99,7 @@ describe('recordTabRemoved', () => {
     await recordTabRemoved(5, {
       ...deps,
       getSettings: async () =>
-        emptySettings({ disposableRules: [{ hostname: 'github.com', pathExact: ['/'] }] }),
+        emptySettings({ disposableRules: [{ pattern: 'https://github.com/' }] }),
     });
 
     expect(await deps.historyService.list()).toEqual([]);
@@ -114,7 +114,7 @@ describe('recordTabRemoved', () => {
       getSettings: async () =>
         emptySettings({
           disposableEnabled: false,
-          disposableRules: [{ hostname: 'github.com', pathExact: ['/'] }],
+          disposableRules: [{ pattern: 'https://github.com/' }],
         }),
     });
 
@@ -127,7 +127,7 @@ describe('recordTabRemoved', () => {
     await recordTabRemoved(5, {
       ...deps,
       getSettings: async () =>
-        emptySettings({ disposableRules: [{ hostname: 'github.com', pathExact: ['/'] }] }),
+        emptySettings({ disposableRules: [{ pattern: 'https://github.com/' }] }),
     });
 
     expect(await deps.snapshotCache.consume(5)).toBeNull();

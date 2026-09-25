@@ -22,17 +22,10 @@ export interface PinnedRow {
 
 /** One row of the "Disposable tabs" table. */
 export interface DisposableRow {
-  /** Hostname. A leading dot means "match any subdomain": `.example.com`. */
-  hostname: string;
   /**
-   * A single field expressing what {@link DisposableRule}'s `pathPrefix`,
-   * `pathExact` and `urlNotContains` split across three. Comma-separated
-   * terms, each one of:
-   *   - `/j/*`   — prefix match: matches that path and everything under it
-   *   - `/home`  — exact match: matches only that exact path
-   *   - `!#inbox/` — veto: excludes any URL containing that substring
-   * Blank means "match only the site root", same as leaving all three empty
-   * did before. See {@link patternToField} / {@link patternFromField}.
+   * A single glob pattern matched against the tab's whole URL. `*` matches
+   * any characters, including `/`, e.g. `https://github.com/*`. See
+   * {@link DisposableRule}.
    */
   pattern: string;
 }
@@ -72,94 +65,9 @@ export function joinList(values: readonly string[] | undefined): string {
   return (values ?? []).join(', ');
 }
 
-/**
- * Renders a hostname constraint as a single form value.
- * Suffix rules are shown with a leading dot, which is how users type them.
- */
-export function hostnameToField(rule: {
-  hostname?: string;
-  hostnameEndsWith?: string;
-}): string {
-  if (rule.hostname) return rule.hostname;
-  if (rule.hostnameEndsWith) {
-    return rule.hostnameEndsWith.startsWith('.')
-      ? rule.hostnameEndsWith
-      : `.${rule.hostnameEndsWith}`;
-  }
-  return '';
-}
-
-/** Parses the hostname form field back into the exact/suffix pair. */
-export function hostnameFromField(value: string): {
-  hostname?: string;
-  hostnameEndsWith?: string;
-} {
-  const trimmed = value.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-  if (!trimmed) return {};
-  if (trimmed.startsWith('.')) return { hostnameEndsWith: trimmed };
-  return { hostname: trimmed };
-}
-
-/** The path-matching subset of {@link DisposableRule}. */
-type PathConstraint = Pick<DisposableRule, 'pathPrefix' | 'pathExact' | 'urlNotContains'>;
-
-/**
- * Renders a rule's path constraints as one "pattern" field: a comma-separated
- * mix of prefix (`/j/*`), exact (`/home`) and veto (`!#inbox/`) terms. This is
- * the single-field form of what three separate fields used to collect.
- */
-export function patternToField(rule: PathConstraint): string {
-  const parts: string[] = [];
-  if (rule.pathPrefix) parts.push(`${rule.pathPrefix}*`);
-  parts.push(...(rule.pathExact ?? []));
-  parts.push(...(rule.urlNotContains ?? []).map((veto) => `!${veto}`));
-  return parts.join(', ');
-}
-
-/**
- * Parses the "pattern" field back into `pathPrefix` / `pathExact` /
- * `urlNotContains`. Blank input yields `{}` — the matcher's own "no
- * constraint given" default is "match only the site root", so there's
- * nothing to encode for that case.
- *
- * Only one prefix term is kept (the rule shape only has room for one); a
- * second `*`-suffixed term is silently ignored rather than reported, since a
- * user is far more likely to have meant "also match this exact path" and
- * mistyped a trailing `*` than to need two independent prefixes.
- */
-export function patternFromField(value: string): PathConstraint {
-  const exact: string[] = [];
-  const veto: string[] = [];
-  let pathPrefix: string | undefined;
-
-  for (const term of splitList(value)) {
-    if (term.startsWith('!')) {
-      const needle = term.slice(1).trim();
-      if (needle) veto.push(needle);
-      continue;
-    }
-    if (term.endsWith('*')) {
-      if (pathPrefix !== undefined) continue;
-      const stripped = term.slice(0, -1).trim();
-      pathPrefix = stripped ? (stripped.startsWith('/') ? stripped : `/${stripped}`) : '/';
-      continue;
-    }
-    exact.push(term.startsWith('/') ? term : `/${term}`);
-  }
-
-  const result: PathConstraint = {};
-  if (pathPrefix !== undefined) result.pathPrefix = pathPrefix;
-  if (exact.length > 0) result.pathExact = exact;
-  if (veto.length > 0) result.urlNotContains = veto;
-  return result;
-}
-
 /** Converts one disposable rule into its editable row form. */
 function disposableRuleToRow(rule: DisposableRule): DisposableRow {
-  return {
-    hostname: hostnameToField(rule),
-    pattern: patternToField(rule),
-  };
+  return { pattern: rule.pattern };
 }
 
 /** Converts stored settings into editable form rows. */
@@ -192,10 +100,7 @@ export function draftToSettings(draft: DraftState): NormalizeResult {
 
   const disposableRules = draft.disposable
     .filter((row) => isRowFilled(row))
-    .map((row) => ({
-      ...hostnameFromField(row.hostname),
-      ...patternFromField(row.pattern),
-    }));
+    .map((row) => ({ pattern: row.pattern.trim() }));
 
   return normalizeSettings({
     version: SETTINGS_VERSION,
@@ -262,4 +167,4 @@ export function addSuggestedDisposableRules(
 
 /** A blank row for each table. */
 export const EMPTY_PINNED_ROW: PinnedRow = { url: '', label: '' };
-export const EMPTY_DISPOSABLE_ROW: DisposableRow = { hostname: '', pattern: '' };
+export const EMPTY_DISPOSABLE_ROW: DisposableRow = { pattern: '' };

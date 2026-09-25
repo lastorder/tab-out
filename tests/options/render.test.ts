@@ -33,11 +33,17 @@ describe('renderSection', () => {
     expect(html).toContain('value="https://b.com/"');
   });
 
-  it('renders the disposable rule fields, using the shipped Gmail default', () => {
+  it('renders the disposable rule fields, using a shipped default', () => {
     const html = renderSection('disposable', draft);
-    expect(html).toContain('data-field="hostname"');
     expect(html).toContain('data-field="pattern"');
-    expect(html).toContain('value="mail.google.com"');
+    expect(html).toContain('value="https://x.com/home"');
+  });
+
+  it('gives a disposable row only a remove button, since rule order is meaningless', () => {
+    const html = renderSection('disposable', draft);
+    expect(html).not.toContain('data-action="move-up"');
+    expect(html).not.toContain('data-action="move-down"');
+    expect(html.match(/data-action="remove"/g)?.length).toBe(draft.disposable.length);
   });
 
   it('disables move-up on the first row and move-down on the last', () => {

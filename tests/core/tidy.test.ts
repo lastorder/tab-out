@@ -4,7 +4,7 @@ import { resetTabIds, tab } from '../helpers/factories';
 
 beforeEach(() => resetTabIds());
 
-const RULES = [{ hostname: 'github.com', pathExact: ['/'] }];
+const RULES = [{ pattern: 'https://github.com/' }];
 
 describe('selectTidyTabIds', () => {
   it('closes a disposable tab, attributing it to "disposable"', () => {

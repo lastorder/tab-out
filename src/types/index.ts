@@ -51,20 +51,14 @@ export interface PinnedSite {
  * Rules are fully serialisable — no functions — so they can live in
  * `chrome.storage` and be edited from the options page.
  *
- * Matching order: the hostname must match, then the first path constraint
- * present is applied, then `urlNotContains` can veto the match.
+ * `pattern` is matched against the tab's whole URL, scheme included. `*`
+ * matches any run of characters, including `/`, e.g. `https://github.com/*`
+ * matches every page on GitHub, and `file:///Users/me/notes/*` matches every
+ * local file under that folder. Everything else in the pattern is matched
+ * literally. See `core/matching.ts`.
  */
 export interface DisposableRule {
-  /** Exact hostname match, e.g. `mail.google.com`. */
-  hostname?: string;
-  /** Suffix hostname match, e.g. `.atlassian.net`. */
-  hostnameEndsWith?: string;
-  /** Match when the pathname is exactly one of these. */
-  pathExact?: string[];
-  /** Match when the pathname starts with this. Use `/` to match any path. */
-  pathPrefix?: string;
-  /** Veto the match when the full URL contains any of these substrings. */
-  urlNotContains?: string[];
+  pattern: string;
 }
 
 /** A single key combination: one non-modifier key plus whichever modifiers matter. */

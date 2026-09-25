@@ -48,18 +48,6 @@ function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function asStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.map(asTrimmedString).filter((item) => item.length > 0);
-}
-
-/** Ensures a path constraint looks like a path (`/foo`), not a bare word. */
-function asPath(value: unknown): string {
-  const str = asTrimmedString(value);
-  if (!str) return '';
-  return str.startsWith('/') ? str : `/${str}`;
-}
-
 /**
  * Coerces a settings field to a boolean, falling back to `defaultValue` and
  * reporting why whenever the raw value isn't actually a boolean. Shared by
@@ -98,28 +86,9 @@ export function normalizePinnedSite(raw: unknown, path: string, issues: Validati
 }
 
 /**
- * Parses the hostname constraint used by disposable rules. Returns `null`
- * when neither form is present — a rule that constrains no hostname would
- * match every tab on the internet, which is never what a half-filled form
- * meant.
- */
-function normalizeHostnameConstraint(
-  raw: Record<string, unknown>,
-  path: string,
-  issues: ValidationIssue[],
-): { hostname?: string; hostnameEndsWith?: string } | null {
-  const hostname = asTrimmedString(raw['hostname']).replace(/^https?:\/\//, '');
-  const hostnameEndsWith = asTrimmedString(raw['hostnameEndsWith']);
-  if (!hostname && !hostnameEndsWith) {
-    issues.push({ path, message: 'Needs either "hostname" or "hostnameEndsWith".' });
-    return null;
-  }
-  return hostname ? { hostname } : { hostnameEndsWith };
-}
-
-/**
- * A disposable rule must constrain the hostname somehow. Without that it
- * would match every tab on the internet, which is never what the user meant.
+ * A disposable rule is a single glob `pattern` string. Empty/missing means
+ * the rule would match every tab on the internet, which is never what a
+ * half-filled form meant, so it's dropped instead.
  */
 export function normalizeDisposableRule(
   raw: unknown,
@@ -131,21 +100,13 @@ export function normalizeDisposableRule(
     return null;
   }
 
-  const host = normalizeHostnameConstraint(raw, path, issues);
-  if (!host) return null;
+  const pattern = asTrimmedString(raw['pattern']);
+  if (!pattern) {
+    issues.push({ path, message: 'Needs a non-empty "pattern".' });
+    return null;
+  }
 
-  const pattern: DisposableRule = { ...host };
-
-  const pathPrefix = asPath(raw['pathPrefix']);
-  if (pathPrefix) pattern.pathPrefix = pathPrefix;
-
-  const pathExact = asStringArray(raw['pathExact']).map((p) => (p.startsWith('/') ? p : `/${p}`));
-  if (pathExact.length > 0) pattern.pathExact = pathExact;
-
-  const urlNotContains = asStringArray(raw['urlNotContains']);
-  if (urlNotContains.length > 0) pattern.urlNotContains = urlNotContains;
-
-  return pattern;
+  return { pattern };
 }
 
 /**
