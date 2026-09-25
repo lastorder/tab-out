@@ -41,6 +41,45 @@ describe('planTabGrouping', () => {
     ]);
   });
 
+  it('still adopts into a group the user has renamed, because adoption reads the tabs, not the title', () => {
+    // A group auto-created as "Thoughtworks" and then renamed to "Work" is
+    // still the thoughtworks.com group: `domainGroupsByWindowDomain` derives
+    // a group's domain from its member tabs' URLs, never from its title, so
+    // renaming can't silently stop later tabs joining it.
+    const actions = planTabGrouping(
+      [
+        tab('https://thoughtworks.com/a', { groupId: 7 }),
+        tab('https://thoughtworks.com/b', { groupId: 7 }),
+        tab('https://thoughtworks.com/c'),
+      ],
+      emptySettings(),
+    );
+
+    expect(actions).toEqual([
+      { kind: 'adopt', key: 'thoughtworks.com', groupId: 7, windowId: 1, tabIds: [3] },
+    ]);
+  });
+
+  it('stops adopting once the user repurposes that group by adding another site to it', () => {
+    // The flip side of reading the tabs rather than the title: a group the
+    // user has turned into a mixed-site group is no longer anyone's domain
+    // group, so it is left alone (and, with no group of its own, the domain
+    // falls back to the normal create threshold).
+    const actions = planTabGrouping(
+      [
+        tab('https://thoughtworks.com/a', { groupId: 7 }),
+        tab('https://other.com/a', { groupId: 7 }),
+        tab('https://thoughtworks.com/b'),
+        tab('https://thoughtworks.com/c'),
+      ],
+      emptySettings(),
+    );
+
+    expect(actions).toEqual([
+      { kind: 'create', key: 'thoughtworks.com', title: 'Thoughtworks', windowId: 1, tabIds: [3, 4] },
+    ]);
+  });
+
   it('never seeds a second group for a domain that already has one', () => {
     // The regression this guards: counting only *ungrouped* tabs made two
     // fresh tabs of an already-grouped domain look like a brand-new domain,
