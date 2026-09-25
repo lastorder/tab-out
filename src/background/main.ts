@@ -11,6 +11,9 @@
  * 3. Keep the dashboard pinned to the rightmost tab of its window, so any
  *    newly opened page lands to its left. Decision logic lives in
  *    `core/position.ts`, behind `TabActions.moveDashboardToEnd`.
+ * 4. When enabled, automatically create a real Chrome tab group for any
+ *    domain that has accumulated 2+ ungrouped tabs. Decision logic lives in
+ *    `core/auto-group.ts`, behind `TabActions.runAutoGroup`.
  *
  * This file is only wiring: it constructs the concrete adapters and forwards
  * `chrome.tabs` events to the testable functions above.
@@ -122,6 +125,50 @@ const keepDashboardAtEnd = (): void => {
 chrome.tabs.onCreated.addListener(keepDashboardAtEnd);
 
 /* ----------------------------------------------------------------
+   Auto-grouping
+
+   When `autoGroupEnabled` is on, any domain that has accumulated 2+ tabs not
+   already in some Chrome tab group gets swept into a new one, titled after
+   that domain — see `core/auto-group.ts#planAutoGroups`. Debounced, since
+   opening several tabs of the same site in quick succession (a handful of
+   search results, say) would otherwise fire this once per tab.
+   ---------------------------------------------------------------- */
+
+let autoGroupTimer: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * `autoGroupTimer` is a live variable, which looks like it violates "service
+ * workers must not hold state" — but nothing here needs to survive the
+ * worker being killed: losing a pending timer just means one qualifying
+ * batch of tabs waits for the *next* tab event to get swept instead of this
+ * one, not that it's silently skipped forever. The 1s delay is short enough
+ * that `chrome.alarms` (whose granularity is coarse, historically ~30s)
+ * would make the debounce feel laggy for no correctness benefit; plain
+ * `setTimeout` for a sub-second debounce is the same tradeoff
+ * `newtab/controller.ts`'s `RenderScheduler` already makes.
+ */
+const scheduleAutoGroup = (): void => {
+  if (autoGroupTimer !== undefined) clearTimeout(autoGroupTimer);
+  autoGroupTimer = setTimeout(() => {
+    autoGroupTimer = undefined;
+    void (async () => {
+      try {
+        const settings = await settingsStore.load();
+        await tabActions.runAutoGroup(settings);
+      } catch {
+        // Best-effort — a missed sweep just leaves those tabs ungrouped for
+        // now; the next qualifying tab event tries again.
+      }
+    })();
+  }, 1000);
+};
+
+chrome.tabs.onCreated.addListener(scheduleAutoGroup);
+chrome.tabs.onUpdated.addListener((_tabId, change) => {
+  if (change.url || change.status === 'complete') scheduleAutoGroup();
+});
+
+/* ----------------------------------------------------------------
    Global keyboard shortcuts
 
    Only one custom command remains: `global-dashboard`, declared in
@@ -188,11 +235,13 @@ chrome.runtime.onInstalled.addListener(() => {
   refreshBadge();
   void seedSnapshots();
   keepDashboardAtEnd();
+  scheduleAutoGroup();
 });
 chrome.runtime.onStartup.addListener(() => {
   refreshBadge();
   void seedSnapshots();
   keepDashboardAtEnd();
+  scheduleAutoGroup();
 });
 chrome.tabs.onCreated.addListener(refreshBadge);
 chrome.tabs.onRemoved.addListener(refreshBadge);
@@ -203,3 +252,4 @@ chrome.tabs.onUpdated.addListener(refreshBadge);
 refreshBadge();
 void seedSnapshots();
 keepDashboardAtEnd();
+scheduleAutoGroup();

@@ -5,11 +5,29 @@ import {
   needsSorting,
   selectStaleDashboardTabIds,
   selectTabIdsByExactUrl,
+  selectTabIdsByGroupId,
   selectTabIdsByHostname,
 } from '@/core/selection';
 import { resetTabIds, tab } from '../helpers/factories';
 
 beforeEach(() => resetTabIds());
+
+describe('selectTabIdsByGroupId', () => {
+  it('selects every tab currently in the given Chrome tab group', () => {
+    const list = [
+      tab('https://a.com/', { id: 1, groupId: 5 }),
+      tab('https://b.com/', { id: 2, groupId: 5 }),
+      tab('https://c.com/', { id: 3, groupId: 6 }),
+      tab('https://d.com/', { id: 4 }),
+    ];
+    expect(selectTabIdsByGroupId(list, 5)).toEqual([1, 2]);
+  });
+
+  it('treats a missing groupId the same as -1 (ungrouped)', () => {
+    const list = [tab('https://a.com/', { id: 1 })];
+    expect(selectTabIdsByGroupId(list, -1)).toEqual([1]);
+  });
+});
 
 /**
  * These decide which tabs get closed, so they carry the most risk in the

@@ -6,7 +6,7 @@
  */
 
 import type { BrowserTabs } from '@/platform/browser';
-import type { TabInfo } from '@/types';
+import type { ChromeGroupInfo, TabInfo } from '@/types';
 
 export interface FakeBrowser extends BrowserTabs {
   /** Current tabs, in tab-bar order. */
@@ -19,6 +19,10 @@ export interface FakeBrowser extends BrowserTabs {
   readonly moved: { tabId: number; index: number }[];
   /** The most recently activated tab, if any. */
   readonly activated: { tabId: number; windowId: number } | null;
+  /** Chrome tab groups, keyed by id. */
+  readonly groups: Map<number, ChromeGroupInfo>;
+  /** `{ tabIds, title, groupId }` calls passed to `createGroup()`, in call order. */
+  readonly createdGroups: { tabIds: number[]; title: string; groupId: number }[];
   /** Fires the tab-change listeners. */
   emitChange(): void;
 }
@@ -39,6 +43,9 @@ export function createFakeBrowser(
     created: [] as { url: string; index?: number }[],
     moved: [] as { tabId: number; index: number }[],
     activated: null as { tabId: number; windowId: number } | null,
+    groups: new Map<number, ChromeGroupInfo>(),
+    createdGroups: [] as { tabIds: number[]; title: string; groupId: number }[],
+    nextGroupId: 1,
   };
   const listeners = new Set<() => void>();
   const currentWindowId = options.currentWindowId ?? 1;
@@ -59,6 +66,12 @@ export function createFakeBrowser(
     },
     get activated() {
       return state.activated;
+    },
+    get groups() {
+      return state.groups;
+    },
+    get createdGroups() {
+      return state.createdGroups;
     },
 
     async queryAll() {
@@ -99,6 +112,19 @@ export function createFakeBrowser(
     onChanged(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
+    },
+
+    async queryGroups() {
+      return [...state.groups.values()];
+    },
+
+    async createGroup(tabIds, title) {
+      const groupId = state.nextGroupId++;
+      state.groups.set(groupId, { id: groupId, title, color: 'grey' });
+      state.createdGroups.push({ tabIds: [...tabIds], title, groupId });
+      const ids = new Set(tabIds);
+      state.tabs = state.tabs.map((tab) => (ids.has(tab.id) ? { ...tab, groupId } : tab));
+      return groupId;
     },
 
     emitChange() {

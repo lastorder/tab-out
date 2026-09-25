@@ -9,6 +9,18 @@ import type { TabInfo } from '../types';
 import { hostnameOf } from './url';
 
 /**
+ * Selects tabs to close for a Chrome-tab-group card: every currently open
+ * tab whose live `groupId` matches, not the snapshot the card was rendered
+ * with — a tab could have joined or left the group since the last render.
+ */
+export function selectTabIdsByGroupId(
+  tabs: readonly TabInfo[],
+  chromeGroupId: number,
+): number[] {
+  return tabs.filter((tab) => (tab.groupId ?? -1) === chromeGroupId).map((tab) => tab.id);
+}
+
+/**
  * Selects tabs to close for a domain card.
  *
  * Hostname matching is intentional here: closing the "GitHub" card should take

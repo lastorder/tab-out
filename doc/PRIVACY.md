@@ -1,12 +1,13 @@
 Tab Out 2 — Privacy Policy
 
-Last updated: 2026-09-12
+Last updated: 2026-11-01
 
 Tab Out 2 is a Chrome extension that replaces the new tab page with a dashboard for the tabs you have open. It is designed to work entirely on your device.
 
 WHAT THE EXTENSION HANDLES
 
 - The URL, title and window of each open tab. The extension reads these to group your tabs by site and draw the new tab page. They are processed in your browser and are never sent to us.
+- The title, colour and membership of any Chrome tab group you've created. The extension reads this to show your group as its own card on the dashboard, and — only if you turn on the optional auto-grouping setting — writes it to create a new group for 2 or more tabs on the same site. Processed in your browser and never sent to us.
 - Your settings, your "saved for later" list, and your history of closed tabs. The extension writes these itself so they survive a restart. Settings are stored in chrome.storage.sync, which Chrome may sync across your signed-in devices under your own Google account; the other two are stored in chrome.storage.local and stay on this device.
 
 WHERE YOUR DATA GOES

@@ -119,6 +119,11 @@ function render(): void {
     autoSortInput.checked = draft.autoSortTabs;
   }
 
+  const autoGroupInput = byId<HTMLInputElement>('autoGroupEnabled');
+  if (autoGroupInput && autoGroupInput.checked !== draft.autoGroupEnabled) {
+    autoGroupInput.checked = draft.autoGroupEnabled;
+  }
+
   const shortcutInput = byId<HTMLInputElement>('searchShortcut');
   if (shortcutInput) {
     shortcutInput.value = formatShortcut(draft.searchShortcut, IS_MAC);
@@ -207,6 +212,11 @@ document.addEventListener('input', (event) => {
   // Plain booleans, not row tables.
   if (input.id === 'autoSortTabs') {
     draft = { ...draft, autoSortTabs: input.checked };
+    updateStatus();
+    return;
+  }
+  if (input.id === 'autoGroupEnabled') {
+    draft = { ...draft, autoGroupEnabled: input.checked };
     updateStatus();
     return;
   }

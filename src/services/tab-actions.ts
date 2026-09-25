@@ -7,7 +7,8 @@
  */
 
 import type { BrowserTabs } from '../platform/browser';
-import type { PinnedSite, TabGroup, TabInfo } from '../types';
+import type { PinnedSite, TabGroup, TabInfo, TabOutSettings } from '../types';
+import { planAutoGroups } from '../core/auto-group';
 import { selectDuplicateTabIds } from '../core/duplicates';
 import { pinnedInsertIndex } from '../core/grouping';
 import { findDashboardTabNeedingMove } from '../core/dashboard';
@@ -15,6 +16,7 @@ import {
   findFocusTarget,
   selectStaleDashboardTabIds,
   selectTabIdsByExactUrl,
+  selectTabIdsByGroupId,
   selectTabIdsByHostname,
 } from '../core/selection';
 import { hostnameOf, isInternalUrl } from '../core/url';
@@ -50,12 +52,21 @@ export class TabActions {
    * Closes an entire group.
    *
    * The Disposable card matches by exact URL, because its key is not a real
-   * hostname and a hostname sweep would take unrelated tabs with it. Plain
+   * hostname and a hostname sweep would take unrelated tabs with it. A
+   * Chrome-tab-group card matches by the live `groupId`, since two tabs can
+   * share a hostname but sit in different (or no) Chrome group. Plain
    * domain cards match by hostname, which is the whole point of the card.
    */
   async closeGroup(group: TabGroup): Promise<number> {
-    const urls = group.tabs.map((tab) => tab.url);
     const tabs = await this.#browser.queryAll();
+
+    if (group.kind === 'chrome-group' && group.chromeGroupId !== undefined) {
+      const ids = selectTabIdsByGroupId(tabs, group.chromeGroupId);
+      await this.#browser.close(ids);
+      return ids.length;
+    }
+
+    const urls = group.tabs.map((tab) => tab.url);
     const useExact = group.kind === 'disposable';
     const ids = useExact
       ? selectTabIdsByExactUrl(tabs, urls)
@@ -183,6 +194,23 @@ export class TabActions {
     } catch {
       return 0;
     }
+  }
+
+  /**
+   * When auto-grouping is enabled, creates a real Chrome tab group for any
+   * ungrouped domain card that now has 2+ tabs (see `core/auto-group.ts`).
+   * A no-op (never queries or touches the browser) when the setting is off.
+   *
+   * @returns how many new groups were created.
+   */
+  async runAutoGroup(settings: Pick<TabOutSettings, 'autoGroupEnabled' | 'disposableEnabled' | 'disposableRules'>): Promise<number> {
+    if (!settings.autoGroupEnabled) return 0;
+    const tabs = await this.#browser.queryAll();
+    const plans = planAutoGroups(tabs, settings);
+    for (const plan of plans) {
+      await this.#browser.createGroup(plan.tabIds, plan.title);
+    }
+    return plans.length;
   }
 
   /**

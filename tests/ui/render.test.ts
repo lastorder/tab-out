@@ -25,6 +25,21 @@ describe('groupTitle', () => {
 });
 
 describe('group cards', () => {
+  it('renders a Chrome tab group card with a decorative, accessibility-hidden colour dot', () => {
+    const chromeGroup: TabGroup = {
+      key: '__chrome-group-3__',
+      kind: 'chrome-group',
+      label: 'Research',
+      chromeGroupId: 3,
+      chromeGroupColor: 'blue',
+      tabs: [tab('https://a.com/')],
+    };
+    const html = card(chromeGroup);
+    expect(html).toContain('chrome-group-card');
+    expect(html).toContain('Research');
+    expect(html).toMatch(/<span class="chrome-group-dot" aria-hidden="true" style="background-color:blue">/);
+  });
+
   it('pluralises the tab count', () => {
     expect(card()).toContain('1 tab open');
     expect(card(group([tab('https://github.com/a'), tab('https://github.com/b')]))).toContain(

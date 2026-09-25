@@ -19,7 +19,7 @@ const IS_MAC =
   typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || navigator.userAgent || '');
 
 /** Bumped whenever the stored shape changes; drives migrations. */
-export const SETTINGS_VERSION = 5;
+export const SETTINGS_VERSION = 6;
 
 /**
  * Sites always pinned for quick access.
@@ -89,6 +89,16 @@ export const DEFAULT_MAX_HISTORY_ITEMS = 100;
 export const DEFAULT_AUTO_SORT_TABS = true;
 
 /**
+ * Whether opening 2+ tabs that would share one domain card automatically
+ * creates a real Chrome tab group for them.
+ *
+ * Off by default: grouping tabs in the actual Chrome tab bar is a much more
+ * visible, opinionated change than anything else Tab Out defaults to on, so
+ * it's opt-in.
+ */
+export const DEFAULT_AUTO_GROUP_ENABLED = false;
+
+/**
  * The default Search-overlay shortcut: Cmd+F on macOS, Ctrl+F elsewhere —
  * whichever key survives per-platform "find on page" muscle memory, since
  * the overlay works like an omnibox-style find across tabs and history.
@@ -105,6 +115,7 @@ export function createDefaultSettings(): TabOutSettings {
     disposableRules: DEFAULT_DISPOSABLE_RULES.map((rule) => ({ ...rule })),
     maxHistoryItems: DEFAULT_MAX_HISTORY_ITEMS,
     autoSortTabs: DEFAULT_AUTO_SORT_TABS,
+    autoGroupEnabled: DEFAULT_AUTO_GROUP_ENABLED,
     searchShortcut: { ...DEFAULT_SEARCH_SHORTCUT },
   };
 }

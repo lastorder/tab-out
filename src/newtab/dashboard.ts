@@ -109,13 +109,18 @@ export class Dashboard {
   async render(): Promise<void> {
     this.#renderHeader();
 
-    const [settings, tabs] = await Promise.all([
+    const [settings, tabs, chromeGroups] = await Promise.all([
       this.deps.settingsStore.load(),
       this.deps.browser.queryAll(),
+      this.deps.browser.queryGroups(),
     ]);
     this.#settings = settings;
 
-    const model = buildDashboardModel(tabs, settings);
+    const model = buildDashboardModel(
+      tabs,
+      settings,
+      new Map(chromeGroups.map((group) => [group.id, group])),
+    );
     this.#model = model;
 
     this.#tidySelection = selectTidyTabIds(model.realTabs, {

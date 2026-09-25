@@ -7,7 +7,7 @@
  * testable with plain objects.
  */
 
-import type { PinnedSite, TabGroup, TabInfo, TabOutSettings } from '../types';
+import type { ChromeGroupInfo, PinnedSite, TabGroup, TabInfo, TabOutSettings } from '../types';
 import { friendlyDomain } from './domain';
 import { isDisposable } from './matching';
 import { groupKeyOf, hostnameOf, isInternalUrl, pathnameOf, registrableDomainOf } from './url';
@@ -17,6 +17,19 @@ export const DISPOSABLE_GROUP_KEY = '__disposable__';
 
 /** Display name for the synthetic "Disposable" card. */
 export const DISPOSABLE_GROUP_LABEL = 'Disposable';
+
+/** Fallback label for a Chrome tab group the user never gave a title. */
+export const UNTITLED_CHROME_GROUP_LABEL = 'Group';
+
+/** The `TabGroup.key` used for a Chrome tab group with this id — see {@link groupTabs}. */
+export function chromeGroupKey(groupId: number): string {
+  return `__chrome-group-${groupId}__`;
+}
+
+/** `tab.groupId`, treating a missing value the same as "ungrouped" (`-1`). */
+function groupIdOf(tab: Pick<TabInfo, 'groupId'>): number {
+  return tab.groupId ?? -1;
+}
 
 /**
  * A pinned site with no currently-open tab, surfaced as a grayed,
@@ -77,13 +90,22 @@ export function getRealTabs(tabs: readonly TabInfo[]): TabInfo[] {
 /**
  * Buckets tabs into groups.
  *
- * Precedence per tab: disposable rules win, then a plain registrable-domain
- * bucket (subdomains of the same site share one card — see
- * `core/url.ts`'s `groupKeyOf`). Disposable tabs are pulled out first so
+ * Precedence per tab: a real Chrome tab group the user created wins first —
+ * that's an explicit, manual signal stronger than anything Tab Out infers on
+ * its own — then disposable rules, then a plain registrable-domain bucket
+ * (subdomains of the same site share one card — see `core/url.ts`'s
+ * `groupKeyOf`). Disposable tabs are pulled out before domain grouping so
  * that closing the "Disposable" card never takes content tabs from the same
  * domain with it. When `disposableEnabled` is off, that step is skipped
- * entirely and every tab groups by domain as if no rule existed — the rules
- * themselves are left untouched in storage, just not applied.
+ * entirely and every remaining tab groups by domain as if no rule existed —
+ * the rules themselves are left untouched in storage, just not applied.
+ *
+ * `chromeGroups` (empty when there are none, or the browser doesn't support
+ * `chrome.tabGroups`) maps a Chrome tab group id to its title/colour, so a
+ * card can be labelled and coloured to match what the user named it in the
+ * real tab bar. A tab whose `groupId` isn't in this map (stale/removed
+ * group) falls through to disposable/domain grouping as if it were
+ * ungrouped.
  *
  * Unsorted — callers sort with {@link sortGroups} once placeholders (if any)
  * have been attached, so pinned-site priority can be taken into account too.
@@ -91,12 +113,32 @@ export function getRealTabs(tabs: readonly TabInfo[]): TabInfo[] {
 export function groupTabs(
   tabs: readonly TabInfo[],
   settings: Pick<TabOutSettings, 'disposableEnabled' | 'disposableRules'>,
+  chromeGroups: ReadonlyMap<number, ChromeGroupInfo> = new Map(),
 ): TabGroup[] {
   const { disposableEnabled, disposableRules } = settings;
   const byKey = new Map<string, TabGroup>();
   const disposableTabs: TabInfo[] = [];
 
   for (const tab of tabs) {
+    const chromeGroup = chromeGroups.get(groupIdOf(tab));
+    if (chromeGroup) {
+      const key = chromeGroupKey(chromeGroup.id);
+      let group = byKey.get(key);
+      if (!group) {
+        group = {
+          key,
+          kind: 'chrome-group',
+          label: chromeGroup.title || UNTITLED_CHROME_GROUP_LABEL,
+          tabs: [],
+          chromeGroupId: chromeGroup.id,
+          chromeGroupColor: chromeGroup.color,
+        };
+        byKey.set(key, group);
+      }
+      group.tabs.push(tab);
+      continue;
+    }
+
     if (disposableEnabled && isDisposable(tab.url, disposableRules)) {
       disposableTabs.push(tab);
       continue;
@@ -127,7 +169,8 @@ export function groupTabs(
 /** The display name for a group: explicit label, else a friendly hostname. */
 export function groupDisplayTitle(group: Pick<TabGroup, 'key' | 'label'>): string {
   if (group.key === DISPOSABLE_GROUP_KEY) return group.label ?? DISPOSABLE_GROUP_LABEL;
-  return group.label ?? friendlyDomain(group.key);
+  if (group.label !== undefined) return group.label;
+  return friendlyDomain(group.key);
 }
 
 /**
@@ -287,13 +330,17 @@ export function matchPinnedSite(
  * When `pinnedEnabled` is off, no placeholders are attached and nothing gets
  * pinned priority or a preferred label — every group and chip renders and
  * sorts exactly as if pinning didn't exist.
+ *
+ * `chromeGroups` (empty when there are none) lets real Chrome tab groups take
+ * priority over domain grouping — see {@link groupTabs}.
  */
 export function buildDashboardModel(
   tabs: readonly TabInfo[],
   settings: TabOutSettings,
+  chromeGroups: ReadonlyMap<number, ChromeGroupInfo> = new Map(),
 ): DashboardModel {
   const realTabs = getRealTabs(tabs);
-  const baseGroups = groupTabs(realTabs, settings);
+  const baseGroups = groupTabs(realTabs, settings, chromeGroups);
 
   const { groups: withPlaceholders, placeholders } = settings.pinnedEnabled
     ? attachPinnedPlaceholders(baseGroups, realTabs, settings.pinnedSites)

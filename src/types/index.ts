@@ -13,19 +13,43 @@ export interface TabInfo {
   windowId: number;
   active: boolean;
   index: number;
+  /**
+   * The id of the Chrome tab group this tab belongs to, or `-1` (or absent)
+   * when it isn't in one. Mirrors `chrome.tabs.Tab.groupId` /
+   * `chrome.tabGroups.TAB_GROUP_ID_NONE`. Optional so every existing
+   * `TabInfo` fixture across the test suite doesn't need to grow this field
+   * just to mean "ungrouped" — `core/grouping.ts` treats a missing value the
+   * same as `-1`.
+   */
+  groupId?: number;
 }
 
 /** How a group of tabs came to exist. */
-export type GroupKind = 'domain' | 'disposable';
+export type GroupKind = 'domain' | 'disposable' | 'chrome-group';
 
 /** A rendered card's worth of tabs. */
 export interface TabGroup {
-  /** Registrable domain (see `core/url.ts`'s `registrableDomainOf`), or `DISPOSABLE_GROUP_KEY` (from `core/grouping.ts`). */
+  /**
+   * Registrable domain (see `core/url.ts`'s `registrableDomainOf`),
+   * `DISPOSABLE_GROUP_KEY` (from `core/grouping.ts`), or — for `kind ===
+   * 'chrome-group'` — a synthetic key derived from the Chrome tab group id.
+   */
   key: string;
   /** Human-facing name. Falls back to a friendly form of `key` when absent. */
   label?: string;
   kind: GroupKind;
   tabs: TabInfo[];
+  /** Set only for `kind === 'chrome-group'`: the real Chrome tab group id, for closing/matching. */
+  chromeGroupId?: number;
+  /** Set only for `kind === 'chrome-group'`: Chrome's colour for this group, for the card's accent. */
+  chromeGroupColor?: string;
+}
+
+/** The bit of info Chrome tracks about a tab group, beyond which tabs are in it. */
+export interface ChromeGroupInfo {
+  id: number;
+  title: string;
+  color: string;
 }
 
 /**
@@ -105,6 +129,14 @@ export interface TabOutSettings {
    * with a manual "Sort tabs" button instead.
    */
   autoSortTabs: boolean;
+  /**
+   * When true, opening 2 or more tabs that would share one domain card
+   * (see `core/grouping.ts`) automatically creates a real Chrome tab group
+   * for them, named after that domain. Off by default — grouping the user's
+   * tab bar is a bigger, more visible change than anything else Tab Out does
+   * automatically, so it opts in rather than out.
+   */
+  autoGroupEnabled: boolean;
   /**
    * The keyboard shortcut that opens/closes the Search overlay. Only active
    * on the Tab Out page itself — it's registered with a plain `keydown`

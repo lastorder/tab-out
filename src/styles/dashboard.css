@@ -360,6 +360,17 @@ header {
   letter-spacing: -0.2px;
 }
 
+/* Chrome tab group card: a small colour dot mirroring the group's own colour
+   in the real tab bar, so the dashboard card is recognisable at a glance. */
+.chrome-group-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+
 .mission-tag {
   font-size: 10px;
   text-transform: uppercase;

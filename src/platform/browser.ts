@@ -7,7 +7,7 @@
  * stubbing at all.
  */
 
-import type { TabInfo } from '../types';
+import type { ChromeGroupInfo, TabInfo } from '../types';
 
 /** Everything Tab Out does to the browser, in one interface. */
 export interface BrowserTabs {
@@ -29,6 +29,10 @@ export interface BrowserTabs {
   currentTabId(): Promise<number>;
   /** Subscribes to tab open/close/navigate events. Returns an unsubscribe fn. */
   onChanged(listener: () => void): () => void;
+  /** Every Chrome tab group that currently exists, across all windows. */
+  queryGroups(): Promise<ChromeGroupInfo[]>;
+  /** Puts the given tabs into a new Chrome tab group titled `title`, returning its id. */
+  createGroup(tabIds: readonly number[], title: string): Promise<number>;
 }
 
 /** Converts Chrome's tab object into our narrower {@link TabInfo}. */
@@ -40,6 +44,7 @@ export function toTabInfo(tab: chrome.tabs.Tab): TabInfo {
     windowId: tab.windowId ?? -1,
     active: tab.active ?? false,
     index: tab.index ?? 0,
+    groupId: tab.groupId ?? -1,
   };
 }
 
@@ -102,6 +107,17 @@ export function createChromeBrowserTabs(): BrowserTabs {
         chrome.tabs.onRemoved.removeListener(onRemoved);
         chrome.tabs.onUpdated.removeListener(onUpdated);
       };
+    },
+
+    async queryGroups(): Promise<ChromeGroupInfo[]> {
+      const groups = await chrome.tabGroups.query({});
+      return groups.map((group) => ({ id: group.id, title: group.title ?? '', color: group.color }));
+    },
+
+    async createGroup(tabIds: readonly number[], title: string): Promise<number> {
+      const groupId = await chrome.tabs.group({ tabIds: [...tabIds] });
+      await chrome.tabGroups.update(groupId, { title });
+      return groupId;
     },
   };
 }

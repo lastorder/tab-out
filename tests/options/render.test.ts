@@ -11,6 +11,7 @@ const emptyDraft = {
   disposable: [],
   maxHistoryItems: '100',
   autoSortTabs: true,
+  autoGroupEnabled: false,
   searchShortcut: { key: 'f', ctrl: true, meta: false, alt: false, shift: false },
 };
 

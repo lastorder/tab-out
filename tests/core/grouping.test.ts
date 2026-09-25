@@ -97,6 +97,43 @@ describe('groupTabs', () => {
     expect(result[0]).toMatchObject({ key: 'google.com', kind: 'domain' });
     expect(result[0]!.tabs).toHaveLength(3);
   });
+
+  it('puts a tab already in a Chrome tab group into its own card, ahead of domain/disposable rules', () => {
+    const chromeGroups = new Map([[7, { id: 7, title: 'Research', color: 'blue' }]]);
+    const grouped = tab('https://github.com/', { groupId: 7 });
+    const ungrouped = tab('https://github.com/acme/app');
+
+    const result = groupTabs([grouped, ungrouped], defaultSettings(), chromeGroups);
+
+    const chromeCard = result.find((g) => g.kind === 'chrome-group')!;
+    expect(chromeCard.label).toBe('Research');
+    expect(chromeCard.chromeGroupId).toBe(7);
+    expect(chromeCard.chromeGroupColor).toBe('blue');
+    expect(chromeCard.tabs.map((t) => t.url)).toEqual(['https://github.com/']);
+
+    // The disposable github.com/ rule would normally claim this URL, but the
+    // real Chrome group wins first.
+    const disposable = result.find((g) => g.key === DISPOSABLE_GROUP_KEY);
+    expect(disposable).toBeUndefined();
+
+    const github = result.find((g) => g.key === 'github.com')!;
+    expect(github.tabs.map((t) => t.url)).toEqual(['https://github.com/acme/app']);
+  });
+
+  it('falls back to a friendly placeholder label for an untitled Chrome group', () => {
+    const chromeGroups = new Map([[1, { id: 1, title: '', color: 'grey' }]]);
+    const result = groupTabs([tab('https://example.com/', { groupId: 1 })], emptySettings(), chromeGroups);
+    expect(result[0]!.label).toBe('Group');
+  });
+
+  it('ignores a groupId that has no matching entry in chromeGroups (stale/removed group)', () => {
+    const result = groupTabs(
+      [tab('https://example.com/', { groupId: 99 })],
+      emptySettings(),
+      new Map(),
+    );
+    expect(result).toEqual([{ key: 'example.com', kind: 'domain', tabs: expect.any(Array) }]);
+  });
 });
 
 describe('sortGroups', () => {
@@ -390,6 +427,24 @@ describe('buildDashboardModel', () => {
       { hostname: 'second.example', pathPrefix: '', pinnedIndex: 0, label: 'Second Pin' },
       { hostname: 'first.example', pathPrefix: '', pinnedIndex: 1, label: 'First Pin' },
     ]);
+  });
+
+  it('renders a real Chrome tab group as its own card, ahead of the domain card that would otherwise claim its tabs', () => {
+    const chromeGroups = new Map([[3, { id: 3, title: 'Trip planning', color: 'green' }]]);
+    const model = buildDashboardModel(
+      tabs('https://example.com/a', 'https://example.com/b').map((t, i) =>
+        i === 0 ? { ...t, groupId: 3 } : t,
+      ),
+      emptySettings(),
+      chromeGroups,
+    );
+
+    const chromeCard = model.orderedGroups.find((g) => g.kind === 'chrome-group')!;
+    expect(chromeCard.label).toBe('Trip planning');
+    expect(chromeCard.tabs.map((t) => t.url)).toEqual(['https://example.com/a']);
+
+    const domainCard = model.orderedGroups.find((g) => g.key === 'example.com')!;
+    expect(domainCard.tabs.map((t) => t.url)).toEqual(['https://example.com/b']);
   });
 });
 

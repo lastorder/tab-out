@@ -19,6 +19,7 @@ import {
   SETTINGS_VERSION,
   DEFAULT_MAX_HISTORY_ITEMS,
   DEFAULT_AUTO_SORT_TABS,
+  DEFAULT_AUTO_GROUP_ENABLED,
   DEFAULT_PINNED_ENABLED,
   DEFAULT_DISPOSABLE_ENABLED,
   DEFAULT_SEARCH_SHORTCUT,
@@ -138,6 +139,11 @@ export function normalizeAutoSortTabs(raw: unknown, issues: ValidationIssue[]): 
   return normalizeBoolean(raw, 'autoSortTabs', DEFAULT_AUTO_SORT_TABS, issues);
 }
 
+/** Coerces the "auto-group tabs" field to a boolean, defaulting to off. */
+export function normalizeAutoGroupEnabled(raw: unknown, issues: ValidationIssue[]): boolean {
+  return normalizeBoolean(raw, 'autoGroupEnabled', DEFAULT_AUTO_GROUP_ENABLED, issues);
+}
+
 /** Coerces the "pinned sites enabled" field to a boolean, defaulting to on. */
 export function normalizePinnedEnabled(raw: unknown, issues: ValidationIssue[]): boolean {
   return normalizeBoolean(raw, 'pinnedEnabled', DEFAULT_PINNED_ENABLED, issues);
@@ -245,6 +251,7 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
   const disposableEnabled = normalizeDisposableEnabled(raw['disposableEnabled'], issues);
   const maxHistoryItems = normalizeMaxHistoryItems(raw['maxHistoryItems'], issues);
   const autoSortTabs = normalizeAutoSortTabs(raw['autoSortTabs'], issues);
+  const autoGroupEnabled = normalizeAutoGroupEnabled(raw['autoGroupEnabled'], issues);
   const searchShortcut = normalizeSearchShortcut(raw['searchShortcut'], issues);
 
   return {
@@ -256,6 +263,7 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
       disposableRules,
       maxHistoryItems,
       autoSortTabs,
+      autoGroupEnabled,
       searchShortcut,
     },
     issues,
@@ -285,7 +293,10 @@ export function normalizeSettings(raw: unknown): NormalizeResult {
  * `manifest.json`'s native `_execute_action`) are just always on now. This
  * function only stamps the version number — but the hook exists so a future
  * shape change that isn't just "renamed/dropped and defaulted" has an
- * obvious home.
+ * obvious home. v6 adds `autoGroupEnabled`, defaulting to `false` when
+ * absent (same "don't hand an upgrading user new automatic behaviour"
+ * reasoning as v4) — handled entirely by `normalizeAutoGroupEnabled`, no
+ * migration step needed.
  */
 export function migrateSettings(settings: TabOutSettings): TabOutSettings {
   if (settings.version === SETTINGS_VERSION) return settings;

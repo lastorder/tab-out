@@ -69,6 +69,7 @@ Tabs are grouped by site — mail.google.com and calendar.google.com land on one
 WHAT YOU GET
 
 • Every open tab at a glance, grouped by site on a single grid
+• Chrome tab groups — a group you've created yourself is shown as its own card, named and coloured to match; an optional setting auto-groups 2+ same-site tabs for you
 • Disposable tabs — your own rules for what is safe to close, with a one-click Tidy up
 • History — every tab you close is remembered, searchable, and one click from coming back
 • Pinned sites — the sites you always want at hand, always visible in their own card
@@ -146,12 +147,18 @@ Tab Out 2 replaces Chrome's new tab page with a dashboard for managing the tabs 
 
 ### 6.2 Permissions justification
 
-The manifest requests exactly two permissions; both fields are required.
+The manifest requests exactly three permissions; all fields are required.
 
 **`tabs` → paste**
 
 ```
 Tab Out 2 is a tab manager, so it needs to read the tabs that are open. Each tab's URL, title and window are used to group tabs by site and draw the new tab page, and to close, focus, reopen or reorder tabs when the user asks. All of this is processed on the user's device to render the page; none of it is transmitted to the developer or to any third party.
+```
+
+**`tabGroups` → paste**
+
+```
+Tab Out 2 shows tab groups the user created in Chrome's own tab bar as cards on the dashboard, named and coloured to match. It also offers an optional, off-by-default setting that automatically groups 2 or more tabs from the same site. Group names, colours and membership are read and written only to draw and organise the page; none of it is transmitted to the developer or to any third party.
 ```
 
 **`storage` → paste**
@@ -160,8 +167,8 @@ Tab Out 2 is a tab manager, so it needs to read the tabs that are open. Each tab
 Used to persist the user's own data across sessions: their settings (chrome.storage.sync, so they follow the user's Chrome profile) and their saved-for-later list and closed-tab history (chrome.storage.local, which stay on the device). No data is sent to the developer.
 ```
 
-If the dashboard ever lists a third permission, it is a leftover — remove it from the manifest,
-upload a new version, and try again. The current manifest declares only `tabs` and `storage`.
+If the dashboard ever lists a fourth permission, it is a leftover — remove it from the manifest,
+upload a new version, and try again. The current manifest declares `tabs`, `tabGroups` and `storage`.
 
 ### 6.3 Remote code
 
@@ -183,6 +190,7 @@ What Tab Out 2 actually does:
 | Data | Read? | Stored? | Sent to the developer? |
 |------|-------|---------|------------------------|
 | Open tabs: URL, title, window | Yes, to draw the dashboard | No | No |
+| Chrome tab group: title, colour, membership | Yes, to draw and (optionally) create group cards | No | No |
 | Closed-tab history | Written by the extension itself | Yes — `chrome.storage.local` | No |
 | Saved-for-later list | Written by the extension itself | Yes — `chrome.storage.local` | No |
 | Settings | Written by the extension itself | Yes — `chrome.storage.sync` | No |
@@ -223,6 +231,7 @@ Tab Out 2 is a Chrome extension that replaces the new tab page with a dashboard 
 WHAT THE EXTENSION HANDLES
 
 - The URL, title and window of each open tab. The extension reads these to group your tabs by site and draw the new tab page. They are processed in your browser and are never sent to us.
+- The title, colour and membership of any Chrome tab group you've created. The extension reads this to show your group as its own card on the dashboard, and — only if you turn on the optional auto-grouping setting — writes it to create a new group for 2+ tabs on the same site. Processed in your browser and never sent to us.
 - Your settings, your "saved for later" list, and your history of closed tabs. The extension writes these itself so they survive a restart. Settings are stored in chrome.storage.sync, which Chrome may sync across your signed-in devices under your own Google account; the other two are stored in chrome.storage.local and stay on this device.
 
 WHERE YOUR DATA GOES
@@ -267,7 +276,7 @@ No account, login or setup is needed.
 1. Install the extension and open a new tab — the dashboard is the extension's only UI.
 2. Open a handful of tabs (for example github.com, mail.google.com, and two copies of the same page) and return to a new tab. Tabs are grouped by site, and the duplicate shows a "(2x)" badge.
 3. The extension does not collect or transmit user data. It reads open tabs to draw the page, and stores the user's own settings, saved tabs and closed-tab history in Chrome's extension storage. The only outbound requests are site icons from Google's public favicon service, and the interface web fonts from Google Fonts — see the privacy policy.
-4. Permissions: "tabs" is required to read, group, close and reorder tabs; "storage" persists the user's settings, saved tabs and history.
+4. Permissions: "tabs" is required to read, group, close and reorder tabs; "tabGroups" is required to show/create Chrome tab groups on the dashboard; "storage" persists the user's settings, saved tabs and history.
 ```
 
 ## 9. Before you submit — checklist

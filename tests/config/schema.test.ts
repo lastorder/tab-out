@@ -21,6 +21,7 @@ describe('normalizeSettings', () => {
       disposableRules: [{ pattern: 'https://x.com/home' }],
       maxHistoryItems: 250,
       autoSortTabs: false,
+      autoGroupEnabled: true,
       searchShortcut: { key: 'k', ctrl: true, meta: false, alt: false, shift: true },
     };
     expect(normalizeSettings(input).settings).toEqual(input);

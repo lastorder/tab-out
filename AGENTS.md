@@ -18,6 +18,7 @@ You're installing **Tab Out** for the user. Set it up *and* get them excited abo
 > **Tab Out 2** replaces your new tab page with a clean dashboard of everything you have open, grouped by domain.
 >
 > - **See all your open tabs at a glance** grouped by registrable domain on a grid — subdomains of the same site (like `mail.google.com` and `calendar.google.com`) share one card automatically
+> - **Chrome tab groups take priority** — a group you made yourself in Chrome's tab bar shows up as its own card, named and coloured to match; an optional setting automatically groups 2+ tabs from the same site for you
 > - **Disposable tabs group** collects tabs that are safe to close — a site's own homepage (Gmail, X, GitHub) and spent one-off pages like a Zoom post-join screen — with a one-click **Tidy up** button that also clears duplicates and already-saved tabs
 > - **Close tabs with style** — satisfying swoosh + confetti burst
 > - **Duplicate detection** flags when the same page is open twice
@@ -68,15 +69,16 @@ Once the extension is loaded:
 > You're all set! Open a **new tab** and you'll see Tab Out.
 >
 > 1. **Your open tabs are grouped by registrable domain** — `mail.google.com` and `calendar.google.com` land in the same card, since they're the same site underneath.
-> 2. **Disposable tabs** (Gmail inbox, X home, YouTube, a spent Zoom page…) sit in their own group at the bottom — safe to close because reopening them costs nothing.
-> 3. **Click any tab title** to jump to it, even in another window; **click X** to close just that one (swoosh + confetti); **"Close all N tabs"** closes a whole group.
-> 4. **Duplicate tabs** get an amber "(2x)" badge — "Close duplicates" keeps one copy.
-> 5. **Save a tab for later** with the bookmark icon before closing it; saved tabs appear in the sidebar.
-> 6. **"Tidy up"** appears next to "Close all" whenever something is safe to close in one click — duplicates, disposable tabs, or tabs already on the saved-for-later list.
-> 7. **Only one Tab Out page stays open** — opening a new one auto-closes the others, and it always sits on the rightmost tab.
-> 8. **History** — the clock icon lists every tab you've recently closed, however you closed it, and reopens one with a click. Disposable tabs (Gmail inbox, a site homepage…) are left out on purpose, since they're safe to lose. It updates live, no refresh needed.
-> 9. **Your tab bar quietly reorders itself** to match the dashboard — on by default; turn it off in Settings for a manual "Sort tabs" banner.
-> 10. **Pinned sites live inside their own domain card**: an open pinned tab looks like any other tab, and one with no open tab still shows up there as a grayed-out, click-to-open placeholder chip.
+> 2. **A Chrome tab group you made yourself shows up as its own card first** — named and coloured to match the real tab bar. Turn on **Auto-grouping** in Settings and Tab Out will do this for you: any 2+ tabs that would share one domain card become a real Chrome tab group automatically.
+> 3. **Disposable tabs** (Gmail inbox, X home, YouTube, a spent Zoom page…) sit in their own group at the bottom — safe to close because reopening them costs nothing.
+> 4. **Click any tab title** to jump to it, even in another window; **click X** to close just that one (swoosh + confetti); **"Close all N tabs"** closes a whole group.
+> 5. **Duplicate tabs** get an amber "(2x)" badge — "Close duplicates" keeps one copy.
+> 6. **Save a tab for later** with the bookmark icon before closing it; saved tabs appear in the sidebar.
+> 7. **"Tidy up"** appears next to "Close all" whenever something is safe to close in one click — duplicates, disposable tabs, or tabs already on the saved-for-later list.
+> 8. **Only one Tab Out page stays open** — opening a new one auto-closes the others, and it always sits on the rightmost tab.
+> 9. **History** — the clock icon lists every tab you've recently closed, however you closed it, and reopens one with a click. Disposable tabs (Gmail inbox, a site homepage…) are left out on purpose, since they're safe to lose. It updates live, no refresh needed.
+> 10. **Your tab bar quietly reorders itself** to match the dashboard — on by default; turn it off in Settings for a manual "Sort tabs" banner.
+> 11. **Pinned sites live inside their own domain card**: an open pinned tab looks like any other tab, and one with no open tab still shows up there as a grayed-out, click-to-open placeholder chip.
 
 ## Step 4 — Point them at the settings page
 
@@ -86,6 +88,7 @@ Most people miss this, so mention it explicitly:
 >
 > - **Pinned sites** — live inside each site's own domain card (see above). Has its own on/off switch.
 > - **Disposable tabs** — which tabs are safe to close into the shared Disposable card. Also switchable off.
+> - **Auto-grouping** — off by default. Turn it on and any 2+ tabs that would share one domain card become a real Chrome tab group, named after that domain; a tab already in a Chrome tab group is never re-grouped or moved.
 > - **Tab sorting** — turn auto-sort off if you'd rather sort manually via a banner.
 > - **History** — how many recently closed tabs to remember (default 100).
 > - **Global shortcuts** — `Cmd+Shift+O` (Mac) works anywhere in Chrome and opens the Tab Out search box over whatever page you're on (press it again to close the box) — this is Chrome's own "activate the extension" shortcut. `Cmd+Shift+T` (Mac) opens the dashboard even if Tab Out isn't your new tab page. Both are already on by default with these keys; to change either one, use the button that opens Chrome's own shortcut settings — there's nothing to toggle on this page, since the key itself is entirely Chrome's to bind.
@@ -195,6 +198,8 @@ newtab/ options/ background/ popup/    Entry points — thin wiring only
 - **Group cards are addressed by index** via `data-group-index`, not by a slugified name — string-derived DOM ids collide.
 - **Closing by hostname vs exact URL is a real distinction.** Domain cards close by hostname; the Disposable card closes by exact URL so it doesn't take unrelated tabs with it. See `TabActions.closeGroup`.
 - **`isInternalUrl()` excludes as little as it can get away with.** `chrome://extensions`, `chrome://settings`, `edge://…`, `brave://…` are real user-managed tabs that group, close and enter history like any other page. Only `chrome://newtab/`, `chrome-extension://`, `about:` and `devtools://` are excluded. Don't broaden this back to a blanket `chrome://` match.
+- **A real Chrome tab group takes priority over everything else in `groupTabs()`.** A tab whose `groupId` resolves (via the `chromeGroups: ReadonlyMap<number, ChromeGroupInfo>` passed in) to an actual Chrome tab group becomes its own `kind: 'chrome-group'` card — ahead of disposable rules and domain grouping — labelled with the group's title (falling back to `UNTITLED_CHROME_GROUP_LABEL` for an untitled one) and coloured with `chromeGroupColor`. This is a stronger signal than a disposable rule or a pinned site: the user grouped these tabs on purpose, so Tab Out never second-guesses it. `chrome-group` cards close by live `groupId` (`selectTabIdsByGroupId`), not by hostname or exact URL — see `TabActions.closeGroup`.
+- **Auto-grouping is a separate opt-in effect, not part of `groupTabs()`'s decision.** `core/auto-group.ts#planAutoGroups` is the pure decision — which *ungrouped* (`groupId === -1`), non-disposable, non-internal domain cards have 2+ tabs and should become a new Chrome tab group — and `TabActions.runAutoGroup()` is the one place that calls `BrowserTabs.createGroup()` to act on it. It never touches a tab already in some Chrome tab group. Wired from `background/main.ts`, debounced on `chrome.tabs.onCreated`/`onUpdated` and re-run once at worker boot/install, gated behind `settings.autoGroupEnabled` (default off).
 
 **Background and rendering**
 
@@ -250,6 +255,6 @@ Don't "restore" these — their absence is the design:
 ## Key facts
 
 - Pure Chrome extension. No server, no telemetry, no external API calls (favicons come from Google's public favicon service).
-- Manifest V3, permissions: `tabs`, `storage`.
+- Manifest V3, permissions: `tabs`, `tabGroups`, `storage`.
 - Zero runtime dependencies — everything shipped in `dist/` is first-party code.
 - `dist/` is what gets loaded into Chrome, and it is gitignored.

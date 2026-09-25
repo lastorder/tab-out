@@ -235,14 +235,26 @@ export function renderGroupCard(
           </button>`
       : '';
 
+  // Purely decorative: it repeats information the visible label text and the
+  // "Chrome tab group" text elsewhere on the card already convey, and colour
+  // is never the *only* signal here — so it's hidden from the accessibility
+  // tree rather than announced as an unlabelled swatch.
+  const groupColorDot =
+    group.kind === 'chrome-group' && group.chromeGroupColor
+      ? `<span class="chrome-group-dot" aria-hidden="true" style="background-color:${escapeHtml(
+          group.chromeGroupColor,
+        )}"></span>`
+      : '';
+
   return `
     <div class="mission-card domain-card ${hasDuplicates ? 'has-amber-bar' : 'has-neutral-bar'}${
     tabCount === 0 ? ' pinned-only-card' : ''
-  }"
+  }${group.kind === 'chrome-group' ? ' chrome-group-card' : ''}"
          data-group-index="${index}">
       <div class="status-bar"></div>
       <div class="mission-content">
         <div class="mission-top">
+          ${groupColorDot}
           <span class="mission-name">${escapeHtml(groupTitle(group))}</span>
           ${tabsBadge}
           ${dupeBadge}

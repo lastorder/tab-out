@@ -40,6 +40,60 @@ describe('TabActions.closeGroup', () => {
 
     expect(browser.tabs.map((t) => t.id)).toEqual([2]);
   });
+
+  it('closes a Chrome-tab-group card by live groupId, not by the snapshot it was rendered with', async () => {
+    const browser = createFakeBrowser([
+      tab('https://a.com/', { id: 1, groupId: 9 }),
+      tab('https://b.com/', { id: 2, groupId: 9 }),
+      tab('https://c.com/', { id: 3, groupId: 10 }),
+    ]);
+
+    const closed = await new TabActions(browser).closeGroup({
+      key: '__chrome-group-9__',
+      kind: 'chrome-group',
+      chromeGroupId: 9,
+      label: 'Research',
+      tabs: [tab('https://a.com/', { id: 1, groupId: 9 })],
+    });
+
+    expect(closed).toBe(2);
+    expect(browser.tabs.map((t) => t.id)).toEqual([3]);
+  });
+});
+
+describe('TabActions.runAutoGroup', () => {
+  it('does nothing when autoGroupEnabled is off', async () => {
+    const browser = createFakeBrowser([
+      tab('https://example.com/a', { id: 1 }),
+      tab('https://example.com/b', { id: 2 }),
+    ]);
+
+    const created = await new TabActions(browser).runAutoGroup({
+      autoGroupEnabled: false,
+      disposableEnabled: true,
+      disposableRules: [],
+    });
+
+    expect(created).toBe(0);
+    expect(browser.createdGroups).toEqual([]);
+  });
+
+  it('creates a Chrome tab group for a qualifying domain when enabled', async () => {
+    const browser = createFakeBrowser([
+      tab('https://example.com/a', { id: 1 }),
+      tab('https://example.com/b', { id: 2 }),
+    ]);
+
+    const created = await new TabActions(browser).runAutoGroup({
+      autoGroupEnabled: true,
+      disposableEnabled: true,
+      disposableRules: [],
+    });
+
+    expect(created).toBe(1);
+    expect(browser.createdGroups).toEqual([{ tabIds: [1, 2], title: 'Example', groupId: 1 }]);
+    expect(browser.tabs.every((t) => t.groupId === 1)).toBe(true);
+  });
 });
 
 describe('TabActions closing', () => {
