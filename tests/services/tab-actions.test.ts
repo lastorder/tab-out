@@ -260,13 +260,16 @@ describe('TabActions.openOrFocusTab', () => {
 });
 
 describe('TabActions.sortTabs', () => {
-  it('moves each tab to its target position in order', async () => {
+  it('performs exactly the moves it is handed, in order, and reports how many', async () => {
     const browser = createFakeBrowser([]);
-    await new TabActions(browser).sortTabs([7, 3, 9]);
+    const moved = await new TabActions(browser).sortTabs([
+      { tabId: 7, index: 4 },
+      { tabId: 3, index: 0 },
+    ]);
+    expect(moved).toBe(2);
     expect(browser.moved).toEqual([
-      { tabId: 7, index: 0 },
-      { tabId: 3, index: 1 },
-      { tabId: 9, index: 2 },
+      { tabId: 7, index: 4 },
+      { tabId: 3, index: 0 },
     ]);
   });
 });

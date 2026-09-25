@@ -7,6 +7,7 @@
  */
 
 import type { BrowserTabs } from '../platform/browser';
+import type { TabMove } from '../core/selection';
 import type { PinnedSite, TabGroup, TabInfo, TabOutSettings } from '../types';
 import { planTabGrouping } from '../core/auto-group';
 import { selectDuplicateTabIds } from '../core/duplicates';
@@ -137,11 +138,22 @@ export class TabActions {
     await this.#browser.create(site.url, index);
   }
 
-  /** Rearranges the tab bar to match the dashboard's card order. */
-  async sortTabs(orderedTabIds: readonly number[]): Promise<void> {
-    for (let i = 0; i < orderedTabIds.length; i++) {
-      await this.#browser.move(orderedTabIds[i]!, i);
+  /**
+   * Applies an already-computed sort plan.
+   *
+   * The plan comes from `core/selection.ts#planTabSort`, which is what
+   * guarantees no pinned or grouped tab is ever moved and no fixed block's
+   * position is ever disturbed — this method just performs the effects in
+   * order. Don't reintroduce "move each tab to index i" here: that absolute
+   * -index form is what used to shove Chrome groups out of the way.
+   *
+   * @returns how many tabs were actually moved.
+   */
+  async sortTabs(moves: readonly TabMove[]): Promise<number> {
+    for (const move of moves) {
+      await this.#browser.move(move.tabId, move.index);
     }
+    return moves.length;
   }
 
   /**

@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  chromeGroupedTabIds,
   desiredTabOrder,
   findFocusTarget,
-  needsSorting,
+  planTabSort,
   selectStaleDashboardTabIds,
   selectTabIdsByExactUrl,
   selectTabIdsByGroupId,
@@ -136,22 +135,96 @@ describe('tab ordering', () => {
     expect(desiredTabOrder(groups, 1)).toEqual([1, 4]);
   });
 
-  it('collects every tab id rendered under a Chrome-tab-group card', () => {
+  it('excludes pinned tabs, which Chrome keeps in a region no sort may disturb', () => {
     const groups = [
-      { kind: 'domain' as const, tabs: [tab('https://a.com/', { id: 1 })] },
       {
-        kind: 'chrome-group' as const,
-        tabs: [tab('https://b.com/', { id: 2 }), tab('https://c.com/', { id: 3 })],
+        kind: 'domain' as const,
+        tabs: [
+          tab('https://a.com/', { id: 1, index: 0, windowId: 1, pinned: true }),
+          tab('https://a.com/2', { id: 2, index: 3, windowId: 1 }),
+        ],
       },
     ];
-    expect(chromeGroupedTabIds(groups)).toEqual(new Set([2, 3]));
+    expect(desiredTabOrder(groups, 1)).toEqual([2]);
+  });
+});
+
+describe('planTabSort', () => {
+  const move = (tabId: number, index: number) => ({ tabId, index });
+
+  it('reorders movable tabs that sit next to each other', () => {
+    const windowTabs = [
+      tab('https://github.com/', { id: 1, index: 0, windowId: 1 }),
+      tab('https://example.com/', { id: 2, index: 1, windowId: 1 }),
+    ];
+    // Dashboard wants example.com first.
+    expect(planTabSort(windowTabs, 1, [2, 1])).toEqual([move(2, 0)]);
   });
 
-  it('detects a mismatch, ignoring lists too short to have an order', () => {
-    expect(needsSorting([1, 2, 3], [1, 2, 3])).toBe(false);
-    expect(needsSorting([3, 2, 1], [1, 2, 3])).toBe(true);
-    expect(needsSorting([1, 2], [1, 2, 3])).toBe(true);
-    expect(needsSorting([], [])).toBe(false);
-    expect(needsSorting([1], [1])).toBe(false);
+  it('never moves a tab that is in a Chrome group, and never changes where the group sits', () => {
+    // Group occupies 0-1. The loose tab at 2 must be sorted *within its own
+    // run*, so a plan that would put it at index 0 — shoving the group — is
+    // exactly what this guards against.
+    const windowTabs = [
+      tab('https://a.com/1', { id: 1, index: 0, windowId: 1, groupId: 9 }),
+      tab('https://a.com/2', { id: 2, index: 1, windowId: 1, groupId: 9 }),
+      tab('https://example.com/', { id: 3, index: 2, windowId: 1 }),
+    ];
+    expect(planTabSort(windowTabs, 1, [3])).toEqual([]);
+  });
+
+  it('sorts loose tabs inside the gap between two groups without touching either group', () => {
+    // Group A at 0-1, loose 2-3, group B at 4-5.
+    const windowTabs = [
+      tab('https://a.com/1', { id: 1, index: 0, windowId: 1, groupId: 9 }),
+      tab('https://a.com/2', { id: 2, index: 1, windowId: 1, groupId: 9 }),
+      tab('https://b.com/', { id: 3, index: 2, windowId: 1 }),
+      tab('https://example.com/', { id: 4, index: 3, windowId: 1 }),
+      tab('https://c.com/1', { id: 5, index: 4, windowId: 1, groupId: 8 }),
+      tab('https://c.com/2', { id: 6, index: 5, windowId: 1, groupId: 8 }),
+    ];
+    // Dashboard wants example.com before b.com — both loose, both in the run {2,3}.
+    expect(planTabSort(windowTabs, 1, [4, 3])).toEqual([move(4, 2)]);
+  });
+
+  it('sorts each run only against itself, never dragging a tab across a group', () => {
+    // A loose tab alone at index 0, a group at 1-2, two loose tabs at 3-4.
+    const windowTabs = [
+      tab('https://zzz.com/', { id: 1, index: 0, windowId: 1 }),
+      tab('https://a.com/1', { id: 2, index: 1, windowId: 1, groupId: 9 }),
+      tab('https://a.com/2', { id: 3, index: 2, windowId: 1, groupId: 9 }),
+      tab('https://mmm.com/', { id: 4, index: 3, windowId: 1 }),
+      tab('https://bbb.com/', { id: 5, index: 4, windowId: 1 }),
+    ];
+    // Dashboard order is alphabetical: bbb, mmm, zzz. The lone tab in run
+    // {0} has nothing to swap with, so it stays put; run {3,4} sorts its own
+    // members. The group is never crossed and never moved.
+    expect(planTabSort(windowTabs, 1, [5, 4, 1])).toEqual([move(5, 3)]);
+  });
+
+  it('leaves pinned tabs alone', () => {
+    const windowTabs = [
+      tab('https://a.com/', { id: 1, index: 0, windowId: 1, pinned: true }),
+      tab('https://b.com/', { id: 2, index: 1, windowId: 1 }),
+      tab('https://c.com/', { id: 3, index: 2, windowId: 1 }),
+    ];
+    expect(planTabSort(windowTabs, 1, [3, 2])).toEqual([move(3, 1)]);
+  });
+
+  it('is a no-op when the window is already in order', () => {
+    const windowTabs = [
+      tab('https://example.com/', { id: 1, index: 0, windowId: 1 }),
+      tab('https://github.com/', { id: 2, index: 1, windowId: 1 }),
+    ];
+    expect(planTabSort(windowTabs, 1, [1, 2])).toEqual([]);
+  });
+
+  it('ignores tabs from other windows', () => {
+    const windowTabs = [
+      tab('https://example.com/', { id: 1, index: 0, windowId: 1 }),
+      tab('https://github.com/', { id: 2, index: 1, windowId: 1 }),
+      tab('https://other.com/', { id: 3, index: 0, windowId: 2 }),
+    ];
+    expect(planTabSort(windowTabs, 1, [1, 2])).toEqual([]);
   });
 });

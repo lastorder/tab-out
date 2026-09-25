@@ -112,15 +112,52 @@ export function selectStaleDashboardTabIds(
 }
 
 /**
+ * Whether Tab Out may reposition this tab in the tab bar.
+ *
+ * Two kinds of tab are off limits, and for the same underlying reason — the
+ * user has already placed them deliberately, and Chrome enforces structure
+ * around them that a naive `chrome.tabs.move()` would break:
+ *
+ *   - **pinned** tabs live in a reserved region at the front of the tab bar
+ *     that cannot interleave with ordinary tabs; Chrome clamps any attempt to
+ *     move one out of it, so a move plan that includes them is meaningless.
+ *   - **grouped** tabs are kept contiguous and ordered by Chrome itself. The
+ *     group is the user's own arrangement, and moving a member would either
+ *     be refused or would drag the whole group.
+ */
+export function isMovableTab(tab: Pick<TabInfo, 'pinned' | 'groupId'>): boolean {
+  return tab.pinned !== true && (tab.groupId ?? -1) === -1;
+}
+
+/** One repositioning: put `tabId` at `index`. */
+export interface TabMove {
+  tabId: number;
+  index: number;
+}
+
+/**
+ * Every movable tab in a window, in tab-bar order.
+ *
+ * These are the only tabs {@link planTabSort} will ever move, and their
+ * current indices are the only positions it will ever move them *to*.
+ */
+export function movableTabsInWindow(
+  windowTabs: readonly TabInfo[],
+  windowId: number,
+): TabInfo[] {
+  return windowTabs
+    .filter((tab) => tab.windowId === windowId && isMovableTab(tab))
+    .sort((a, b) => a.index - b.index);
+}
+
+/**
  * Computes the desired tab-bar order from the dashboard's group order,
  * restricted to one window.
  *
- * Chrome-tab-group cards are skipped entirely: those tabs are already
- * ordered and kept contiguous by Chrome itself, and the user arranged that
- * group on purpose. Folding them into the auto-sort/"Sort tabs" move plan
- * would mean issuing `chrome.tabs.move()` calls that shuffle a group's tabs
- * to match the dashboard's card order (alphabetical-ish, not the user's own
- * arrangement) — actively fighting the group instead of leaving it alone.
+ * Chrome-tab-group cards are skipped entirely, and so are pinned tabs — see
+ * {@link isMovableTab}. Both are the user's own arrangement, and neither can
+ * be reordered by `chrome.tabs.move()` without fighting Chrome's own rules
+ * about where they may sit.
  */
 export function desiredTabOrder(
   groups: readonly Pick<TabGroup, 'kind' | 'tabs'>[],
@@ -130,7 +167,7 @@ export function desiredTabOrder(
   for (const group of groups) {
     if (group.kind === 'chrome-group') continue;
     const windowTabs = group.tabs
-      .filter((tab) => tab.windowId === windowId)
+      .filter((tab) => tab.windowId === windowId && isMovableTab(tab))
       .sort((a, b) => a.index - b.index);
     order.push(...windowTabs.map((tab) => tab.id));
   }
@@ -138,25 +175,76 @@ export function desiredTabOrder(
 }
 
 /**
- * Ids of every tab currently rendered under a Chrome-tab-group card.
+ * Turns "these movable tabs, in this order" into the concrete list of moves
+ * that gets there — **without ever moving a pinned or grouped tab, and
+ * without ever changing the index range any of them occupies.**
  *
- * Used to keep the "actual tab order" side of the sort-mismatch check
- * consistent with {@link desiredTabOrder}, which leaves those same tabs out
- * of the desired side — comparing a filtered list against an unfiltered one
- * would report a mismatch (and re-trigger auto-sort) for no reason.
+ * The tab bar is treated as a series of fixed blocks (Chrome's pinned region,
+ * each tab group) separated by *runs* of movable tabs. A run is a maximal set
+ * of consecutive indices held by movable tabs. Sorting only ever permutes a
+ * run's **own members** among the positions that run already occupies:
+ *
+ *   - a move targets a position inside the run the tab came from, so the
+ *     shift it causes is confined to that run — fixed blocks outside it are
+ *     never touched, and their positions are bit-for-bit unchanged. That is
+ *     what stops a group being "pushed aside" by a sort, which is exactly
+ *     what the old absolute-index version of this did;
+ *   - a run's membership is therefore also fixed. A tab is never moved
+ *     *across* a fixed block, even when the dashboard would rather it led the
+ *     whole tab bar — reaching that position would mean dragging it past a
+ *     group, which is the thing being avoided.
+ *
+ * The cost is that each run is sorted only relative to itself: a loose tab
+ * stranded on its own before a group stays before that group, however late
+ * it falls in dashboard order. The benefit is that the tab bar's skeleton is
+ * entirely the user's, and sorting can never surprise them by rearranging
+ * their groups.
+ *
+ * Returns `[]` when nothing needs to move, which is also the caller's
+ * "in order" signal — there is no separate mismatch test, because the only
+ * order this function can reach is the one it just computed, and comparing
+ * against anything else would report a difference that could never be fixed
+ * (and so would re-sort forever).
  */
-export function chromeGroupedTabIds(groups: readonly Pick<TabGroup, 'kind' | 'tabs'>[]): Set<number> {
-  const ids = new Set<number>();
-  for (const group of groups) {
-    if (group.kind !== 'chrome-group') continue;
-    for (const tab of group.tabs) ids.add(tab.id);
-  }
-  return ids;
-}
+export function planTabSort(
+  windowTabs: readonly TabInfo[],
+  windowId: number,
+  desiredIds: readonly number[],
+): TabMove[] {
+  const movable = movableTabsInWindow(windowTabs, windowId);
+  if (movable.length <= 1) return [];
 
-/** True when the real tab-bar order differs from the dashboard's order. */
-export function needsSorting(actual: readonly number[], desired: readonly number[]): boolean {
-  if (desired.length <= 1) return false;
-  if (actual.length !== desired.length) return true;
-  return actual.some((id, i) => id !== desired[i]);
+  const desiredPosition = new Map(desiredIds.map((id, i) => [id, i]));
+  const rankOf = (id: number): number => desiredPosition.get(id) ?? Number.MAX_SAFE_INTEGER;
+
+  // Split the movable tabs' indices into maximal consecutive runs.
+  const runs: TabInfo[][] = [];
+  for (const tab of movable) {
+    const current = runs[runs.length - 1];
+    if (current && current[current.length - 1]!.index === tab.index - 1) current.push(tab);
+    else runs.push([tab]);
+  }
+
+  const moves: TabMove[] = [];
+  for (const run of runs) {
+    if (run.length <= 1) continue; // a lone tab has no run-mate to swap with
+
+    // The ids in this run, in the order they currently sit in.
+    const currentIds = run.map((tab) => tab.id);
+    const orderedIds = [...currentIds].sort((a, b) => rankOf(a) - rankOf(b));
+
+    for (let i = 0; i < run.length; i++) {
+      const wantedId = orderedIds[i]!;
+      if (currentIds[i] === wantedId) continue;
+
+      moves.push({ tabId: wantedId, index: run[i]!.index });
+      // Replay the move locally: pull the tab out of its current slot in the
+      // run and drop it into position `i`. Everything after `i` is still
+      // unsettled, so this is the whole bookkeeping needed.
+      currentIds.splice(currentIds.indexOf(wantedId), 1);
+      currentIds.splice(i, 0, wantedId);
+    }
+  }
+
+  return moves;
 }

@@ -47,6 +47,7 @@ export function toTabInfo(tab: chrome.tabs.Tab): TabInfo {
     active: tab.active ?? false,
     index: tab.index ?? 0,
     groupId: tab.groupId ?? -1,
+    pinned: tab.pinned ?? false,
   };
 }
 

@@ -168,7 +168,7 @@ describe('Dashboard.render', () => {
     );
     await dashboard.render();
     expect(banner()).toBe('flex');
-    expect(dashboard.desiredOrder.length).toBe(3);
+    expect(dashboard.sortPlan.length).toBeGreaterThan(0);
 
     // Now in matching order.
     const ordered = await buildDashboard(
@@ -192,12 +192,11 @@ describe('Dashboard.render', () => {
     await dashboard.render();
 
     expect(document.getElementById('tabSortBanner')!.style.display).toBe('none');
-    // example.com sorts ahead of github.com alphabetically.
-    expect(browser.moved).toEqual([
-      { tabId: 3, index: 0 },
-      { tabId: 1, index: 1 },
-      { tabId: 2, index: 2 },
-    ]);
+    // example.com sorts ahead of github.com alphabetically. Only the tab that
+    // is actually out of place is moved — the other two are already in the
+    // positions the sort wants them in, so re-issuing moves for them (as the
+    // old absolute-index version did) would just be busywork.
+    expect(browser.moved).toEqual([{ tabId: 3, index: 0 }]);
   });
 
   it('does not move anything when auto-sort is on but the order already matches', async () => {
@@ -232,6 +231,41 @@ describe('Dashboard.render', () => {
     // comparison entirely, not flagged as a mismatch to fix.
     expect(document.getElementById('tabSortBanner')!.style.display).toBe('none');
     expect(browser.moved).toEqual([]);
+  });
+
+  it('never shoves a Chrome tab group aside to put a loose tab at the front', async () => {
+    // The reported bug: a group at index 0-1 plus one loose tab at 2. The old
+    // absolute-index sort moved that loose tab to index 0, pushing the group
+    // to 1-2 — the group visibly moved, triggered by something as ordinary as
+    // opening a pinned tab.
+    const { dashboard, browser } = await buildDashboard([
+      tab('https://b.com/', { id: 1, index: 0, windowId: 1, groupId: 9 }),
+      tab('https://a.com/', { id: 2, index: 1, windowId: 1, groupId: 9 }),
+      tab('https://example.com/', { id: 3, index: 2, windowId: 1 }),
+    ]);
+    browser.groups.set(9, { id: 9, title: 'My Group', color: 'blue' });
+    await dashboard.render();
+
+    // Nothing to do: the single loose tab has no run-mate to be ordered
+    // against, so the group stays exactly where the user put it.
+    expect(browser.moved).toEqual([]);
+    expect(document.getElementById('tabSortBanner')!.style.display).toBe('none');
+  });
+
+  it('sorts the loose tabs around a group without ever moving a tab into or across it', async () => {
+    const { dashboard, browser } = await buildDashboard([
+      tab('https://a.com/1', { id: 1, index: 0, windowId: 1, groupId: 9 }),
+      tab('https://a.com/2', { id: 2, index: 1, windowId: 1, groupId: 9 }),
+      tab('https://github.com/', { id: 3, index: 2, windowId: 1 }),
+      tab('https://example.com/', { id: 4, index: 3, windowId: 1 }),
+    ]);
+    browser.groups.set(9, { id: 9, title: 'My Group', color: 'blue' });
+    await dashboard.render();
+
+    // example.com sorts before github.com; both are loose and sit in the run
+    // {2,3}, so only those two positions are ever involved.
+    expect(browser.moved).toEqual([{ tabId: 4, index: 2 }]);
+    expect(browser.moved.some((m) => m.tabId === 1 || m.tabId === 2)).toBe(false);
   });
 
   it('picks up settings changes on the next render', async () => {

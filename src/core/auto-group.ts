@@ -135,6 +135,9 @@ export function planTabGrouping(
 
   for (const tab of realTabs) {
     if ((tab.groupId ?? -1) !== -1) continue;
+    // A pinned tab must never be swept into a group: Chrome un-pins a tab the
+    // moment it joins one, so grouping it would silently undo the user's pin.
+    if (tab.pinned === true) continue;
     if (settings.disposableEnabled && isDisposable(tab.url, settings.disposableRules)) continue;
 
     const key = groupKeyOf(tab.url);

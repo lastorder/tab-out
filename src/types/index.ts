@@ -22,6 +22,16 @@ export interface TabInfo {
    * same as `-1`.
    */
   groupId?: number;
+  /**
+   * Whether Chrome has pinned this tab. Mirrors `chrome.tabs.Tab.pinned`.
+   *
+   * Tab Out never repositions a pinned tab and never puts one in a Chrome
+   * tab group — pinned tabs live in a reserved region at the front of the
+   * tab bar that cannot interleave with ordinary tabs, and Chrome un-pins a
+   * tab the moment it joins a group. Optional for the same reason
+   * {@link TabInfo.groupId} is: a missing value means "not pinned".
+   */
+  pinned?: boolean;
 }
 
 /** How a group of tabs came to exist. */

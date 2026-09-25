@@ -34,6 +34,18 @@ export interface FakeBrowserOptions {
   currentTabId?: number;
 }
 
+/**
+ * Moves a tab into a Chrome tab group.
+ *
+ * Mirrors a real Chrome rule that the tests depend on: a pinned tab cannot
+ * be in a tab group, so joining one clears its pinned flag. Encoding it here
+ * means a plan that wrongly groups a pinned tab fails loudly instead of
+ * quietly looking fine.
+ */
+function joinGroup(tab: TabInfo, groupId: number): TabInfo {
+  return { ...tab, groupId, pinned: false };
+}
+
 /** Creates a fake browser preloaded with `initialTabs`. */
 export function createFakeBrowser(
   initialTabs: TabInfo[] = [],
@@ -128,16 +140,14 @@ export function createFakeBrowser(
       const groupId = state.nextGroupId++;
       state.groups.set(groupId, { id: groupId, title, color: 'grey' });
       state.createdGroups.push({ tabIds: [...tabIds], title, groupId });
-      const ids = new Set(tabIds);
-      state.tabs = state.tabs.map((tab) => (ids.has(tab.id) ? { ...tab, groupId } : tab));
+      state.tabs = state.tabs.map((tab) => (tabIds.includes(tab.id) ? joinGroup(tab, groupId) : tab));
       return groupId;
     },
 
     async addToGroup(tabIds, groupId) {
       if (tabIds.length === 0) return;
       state.addedToGroups.push({ tabIds: [...tabIds], groupId });
-      const ids = new Set(tabIds);
-      state.tabs = state.tabs.map((tab) => (ids.has(tab.id) ? { ...tab, groupId } : tab));
+      state.tabs = state.tabs.map((tab) => (tabIds.includes(tab.id) ? joinGroup(tab, groupId) : tab));
     },
 
     emitChange() {

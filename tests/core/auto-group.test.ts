@@ -111,6 +111,36 @@ describe('planTabGrouping', () => {
     expect(actions).toEqual([]);
   });
 
+  it('never groups a pinned tab, and never counts one toward the threshold', () => {
+    // Grouping a pinned tab would un-pin it (Chrome treats pinning and
+    // grouping as mutually exclusive), silently undoing the user's pin.
+    const actions = planTabGrouping(
+      [
+        tab('https://example.com/a', { pinned: true }),
+        tab('https://example.com/b', { pinned: true }),
+        tab('https://example.com/c'),
+      ],
+      emptySettings(),
+    );
+
+    // The two pinned tabs are invisible to the sweep, leaving just one
+    // ungrouped tab — below the threshold, so nothing happens at all.
+    expect(actions).toEqual([]);
+  });
+
+  it('does not adopt a pinned tab into its domain\'s existing group', () => {
+    const actions = planTabGrouping(
+      [
+        tab('https://example.com/a', { groupId: 5 }),
+        tab('https://example.com/b', { groupId: 5 }),
+        tab('https://example.com/pinned', { pinned: true }),
+      ],
+      emptySettings(),
+    );
+
+    expect(actions).toEqual([]);
+  });
+
   it('does not treat a mixed-domain group the user built by hand as anyone\'s domain group', () => {
     // A hand-made group is the user's own arrangement; a fresh tab that
     // merely shares a domain with one of its members must not be moved in.

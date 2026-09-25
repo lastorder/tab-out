@@ -74,7 +74,7 @@ WHAT YOU GET
 • History — every tab you close is remembered, searchable, and one click from coming back
 • Pinned sites — the sites you always want at hand, always visible in their own card
 • Search — one shortcut (Cmd/Ctrl+F) searches your open tabs and your history
-• Auto-sorted tabs — your tab bar reorders itself to match the dashboard
+• Auto-sorted tabs — plain tabs tidy themselves to match the dashboard, while your Chrome tab groups and pinned tabs stay exactly where you put them
 • Save for later — bookmark tabs to a checklist before closing them, with an archive
 • Duplicate detection — an amber "(2x)" badge when the same page is open twice
 • Close tabs with style — a swoosh sound and a confetti burst

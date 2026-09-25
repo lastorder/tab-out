@@ -201,7 +201,7 @@ export function attachController(
       }
 
       case 'sort-tabs': {
-        await tabActions.sortTabs(dashboard.desiredOrder);
+        await tabActions.sortTabs(dashboard.sortPlan);
         dismissBanner('tabSortBanner');
         showToast('Tabs sorted to match dashboard');
         return;

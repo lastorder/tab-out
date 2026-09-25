@@ -17,7 +17,7 @@ import type { TabGroup, TabOutSettings } from '../types';
 import { buildDashboardModel } from '../core/grouping';
 import { filterHistory } from '../core/history';
 import { clampSelection, searchTabsAndHistory, type SearchResult } from '../core/search';
-import { desiredTabOrder, chromeGroupedTabIds, needsSorting } from '../core/selection';
+import { desiredTabOrder, planTabSort, type TabMove } from '../core/selection';
 import { selectTidyTabIds } from '../core/tidy';
 import { createDefaultSettings } from '../config/defaults';
 import { getDateDisplay, getGreeting } from '../core/time';
@@ -76,8 +76,8 @@ export class Dashboard {
   /** The most recent render model; click handlers read groups from here. */
   #model: DashboardModel | null = null;
   #settings: TabOutSettings = createDefaultSettings();
-  /** Tab ids in dashboard order, for the "Sort tabs" action. */
-  #desiredOrder: number[] = [];
+  /** Moves that would bring the tab bar's movable tabs into dashboard order. */
+  #sortPlan: TabMove[] = [];
   /** What "Tidy up" would close, for the "tidy-tabs" action. */
   #tidySelection: TidySelection = EMPTY_TIDY_SELECTION;
   /** Current Search overlay results and selection, for the controller's keyboard handling. */
@@ -92,8 +92,8 @@ export class Dashboard {
     return this.#settings;
   }
 
-  get desiredOrder(): readonly number[] {
-    return this.#desiredOrder;
+  get sortPlan(): readonly TabMove[] {
+    return this.#sortPlan;
   }
 
   get tidySelection(): TidySelection {
@@ -219,34 +219,37 @@ export class Dashboard {
   /**
    * Keeps the tab bar in sync with the dashboard's order.
    *
-   * When auto-sort is on (the default), a mismatch is corrected silently and
-   * the banner stays hidden. When it's off, the banner appears instead and
-   * the user sorts manually via the "Sort tabs" button.
+   * The plan comes from `core/selection.ts#planTabSort`, which only ever
+   * permutes *movable* tabs (not pinned, not grouped) inside the contiguous
+   * runs they already occupy — so a Chrome tab group's position is never
+   * disturbed, whatever the dashboard's card order says. A non-empty plan is
+   * itself the "out of order" signal: there is no separate mismatch test,
+   * because the only order reachable is the one the plan just computed.
+   *
+   * When auto-sort is on (the default) the plan is applied silently and the
+   * banner stays hidden. When it's off, the banner appears instead and the
+   * user applies the same plan with the "Sort tabs" button.
    */
   async #renderSortBanner(model: DashboardModel): Promise<void> {
     const banner = byId('tabSortBanner');
 
     try {
       const windowId = await this.deps.browser.currentWindowId();
+      const windowTabs = model.realTabs.filter((tab) => tab.windowId === windowId);
       const desired = desiredTabOrder(model.orderedGroups, windowId);
-      const chromeGrouped = chromeGroupedTabIds(model.orderedGroups);
-      const actual = model.realTabs
-        .filter((tab) => tab.windowId === windowId && !chromeGrouped.has(tab.id))
-        .sort((a, b) => a.index - b.index)
-        .map((tab) => tab.id);
+      const plan = planTabSort(windowTabs, windowId, desired);
 
-      this.#desiredOrder = desired;
-      const mismatched = needsSorting(actual, desired);
+      this.#sortPlan = plan;
 
-      if (mismatched && this.#settings.autoSortTabs) {
-        await this.deps.tabActions.sortTabs(desired);
+      if (plan.length > 0 && this.#settings.autoSortTabs) {
+        await this.deps.tabActions.sortTabs(plan);
         if (banner) banner.style.display = 'none';
         return;
       }
 
-      if (banner) banner.style.display = mismatched ? 'flex' : 'none';
+      if (banner) banner.style.display = plan.length > 0 ? 'flex' : 'none';
     } catch {
-      this.#desiredOrder = [];
+      this.#sortPlan = [];
       if (banner) banner.style.display = 'none';
     }
   }
